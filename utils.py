@@ -203,69 +203,136 @@ def Crear_Transformacion_UI():
 
     # --- REGLA O MATRIZ ---
     st.subheader("4. Definición de la Transformación")
-    metodo = st.radio("Definir a partir de:", ["Regla de Correspondencia", "Matriz Asociada"], horizontal=True)
-
-    if metodo == "Matriz Asociada":
-        # Llamamos al generador de matrices que hicimos arriba
-        Matriz_Asociada = Crear_Matriz_Simbolica_UI("T_Asociada")
-
-        if Matriz_Asociada:
-            if Matriz_Asociada.shape != (dim_w, dim_v):
-                st.error(f"La matriz debe ser de dimensiones ({dim_w} x {dim_v}).")
-            else:
-                vector_variables = sp.Matrix(variables_simbolicas)
-                Matriz_Regla = Matriz_Asociada * vector_variables
-
-                st.success("Transformación válida.")
-                st.write("Regla de Correspondencia resultante:")
-                imprimir_matriz_simbolica(Matriz_Regla)
-
-                nombre_tl = st.text_input("Guardar transformación como (Ej. T1):")
-                if st.button("Guardar en Memoria"):
-                    st.session_state.mis_transformaciones[nombre_tl] = {
-                        "dim_V": dim_v,
-                        "dim_W": dim_w,
-                        "variables": variables_simbolicas,
-                        "matriz_asociada": Matriz_Asociada,
-                        "regla": Matriz_Regla,
-                        "base_dominio": Base1,
-                        "base_codominio": Base2
-                    }
-                    st.toast("¡Transformación guardada!")
-
-    elif metodo == "Regla de Correspondencia":
-        st.write("Ingrese los componentes del vector resultante:")
-        with st.form("form_regla"):
-            eqs_input = []
-            for i in range(dim_w):
-                eq = st.text_input(f"Componente {i + 1}:", key=f"comp_{i}")
-                eqs_input.append(eq)
-            sub = st.form_submit_button("Procesar Regla")
-
-        if sub:
-            vector_columna = []
-            error = False
-            for val in eqs_input:
-                obj = leer_expresion_st(val)
-                if obj is None:
-                    error = True;
-                    break
-                vector_columna.append(obj)
-
-            if not error:
+    
+    # Si el dominio y codominio son polinomios, activamos el Motor de Operadores
+    if tipo_dom == "Polinomios (Pn)" and tipo_cod == "Polinomios (Pn)":
+        st.info("💡 **Modo de Operador Diferencial/Integral Activado**")
+        st.markdown("""
+        Escriba la regla matemática aplicando operaciones sobre el polinomio **`p`**. Use **`x`** como variable y **`t`** como variable auxiliar de integración.
+        * **Derivada ($p'(x)$):** `diff(p, x)` o `diff(p, x, 2)` para la segunda derivada.
+        * **Integral Indefinida ($\int p(x)dx$):** `integrate(p, x)`
+        * **Integral Definida ($\int_0^x p(t)dt$):** `integrate(p.subs(x, t), (t, 0, x))`
+        * **Multiplicación ($x \cdot p(x)$):** `x * p`
+        """)
+        
+        # El ejemplo exacto que pediste como valor por defecto
+        regla_str = st.text_input(
+            "Ingrese el operador $T(p) = $", 
+            value="2*diff(p, x, 2) + 3*integrate(p.subs(x, t), (t, 0, x))"
+        )
+        
+        if st.button("Construir Matriz del Operador"):
+            x, t = sp.symbols('x t')
+            
+            # 1. Construimos el polinomio abstracto p(x) basado en la dimensión
+            # Usamos la convención de mayor a menor grado: c2*x^2 + c1*x + c0
+            variables_simbolicas = sp.symbols(f'c{dim_v-1}:-1:-1') 
+            p = sum(variables_simbolicas[i] * x**(dim_v - 1 - i) for i in range(dim_v))
+            
+            # 2. Diccionario de contexto para que SymPy entienda los comandos de cálculo
+            diccionario_local = {
+                'p': p, 'x': x, 't': t,
+                'diff': sp.diff, 'integrate': sp.integrate
+            }
+            
+            try:
+                # 3. Evaluamos la regla ingresada por el usuario
+                expr_evaluada = parse_expr(regla_str, local_dict=diccionario_local)
+                expr_expandida = sp.expand(expr_evaluada)
+                
+                st.success("Operador evaluado con éxito:")
+                st.latex(f"T(p(x)) = {sp.latex(expr_expandida)}")
+                
+                # 4. Extracción de coordenadas para el codominio
+                vector_columna = []
+                for grado in range(dim_w - 1, 0, -1):
+                    vector_columna.append(expr_expandida.coeff(x, grado))
+                vector_columna.append(expr_expandida.subs(x, 0)) # El término independiente
+                
                 Matriz_Regla = sp.Matrix(vector_columna)
+                
+                # 5. Calculamos la Matriz Asociada derivando (Jacobiano) respecto a c2, c1, c0
+                Matriz_Asociada = Matriz_Regla.jacobian(variables_simbolicas)
+                
+                st.write("**Matriz Asociada a la Transformación Lineal:**")
+                imprimir_matriz_simbolica(Matriz_Asociada)
+                
+                # Guardado en memoria
+                nombre_tl = st.text_input("Guardar transformación como (Ej. T_Int):").upper().strip()
+                if st.button("💾 Guardar Operador en Memoria"):
+                    if nombre_tl:
+                        st.session_state.mis_transformaciones[nombre_tl] = {
+                            "dim_V": dim_v,
+                            "dim_W": dim_w,
+                            "variables": variables_simbolicas,
+                            "matriz_asociada": Matriz_Asociada,
+                            "regla": Matriz_Regla,
+                            "base_dominio": Base1, # Previamente extraídas del bloque superior
+                            "base_codominio": Base2
+                        }
+                        st.rerun()
+                    else:
+                        st.error("Debe proporcionar un nombre válido.")
+                        
+            except Exception as e:
+                st.error(f"Error al analizar la regla de cálculo: Revisa la sintaxis. Detalle: {e}")
 
-                # Verificación Linealidad Simple (T(0)=0)
-                sustitucion_cero = {v: 0 for v in variables_simbolicas}
-                evaluacion_cero = Matriz_Regla.subs(sustitucion_cero)
-                es_cero = all(e == 0 for e in evaluacion_cero)
-
-                if not es_cero:
-                    st.error("La transformación NO es lineal: T(0) ≠ 0")
+    # --- FLUJO ESTÁNDAR PARA R^n Y MATRICES ---
+    else:
+        metodo = st.radio("Definir a partir de:", ["Regla de Correspondencia", "Matriz Asociada"], horizontal=True)
+        
+        if metodo == "Matriz Asociada":
+            Matriz_Asociada = Crear_Matriz_Simbolica_UI("T_Asociada")
+            
+            if Matriz_Asociada:
+                if Matriz_Asociada.shape != (dim_w, dim_v):
+                    st.error(f"La matriz debe ser de dimensiones ({dim_w} x {dim_v}).")
                 else:
-                    Jacobiano = Matriz_Regla.jacobian(variables_simbolicas)
-                    st.success("¡La transformación es Lineal!")
-                    st.write("Matriz Asociada calculada:")
-                    imprimir_matriz_simbolica(Jacobiano)
-
-                    # (Se omitió el botón de guardar por brevedad, es igual al bloque superior)
+                    vector_variables = sp.Matrix(variables_simbolicas)
+                    Matriz_Regla = Matriz_Asociada * vector_variables
+                    
+                    st.success("Transformación válida.")
+                    st.write("Regla de Correspondencia resultante:")
+                    imprimir_matriz_simbolica(Matriz_Regla)
+                    
+                    nombre_tl = st.text_input("Guardar transformación como (Ej. T1):").upper().strip()
+                    if st.button("Guardar en Memoria"):
+                        st.session_state.mis_transformaciones[nombre_tl] = {
+                            "dim_V": dim_v,
+                            "dim_W": dim_w,
+                            "variables": variables_simbolicas,
+                            "matriz_asociada": Matriz_Asociada,
+                            "regla": Matriz_Regla,
+                            "base_dominio": Base1,
+                            "base_codominio": Base2
+                        }
+                        st.rerun()
+                        
+        elif metodo == "Regla de Correspondencia":
+            st.write("Ingrese los componentes del vector resultante:")
+            with st.form("form_regla"):
+                eqs_input = []
+                for i in range(dim_w):
+                    eq = st.text_input(f"Componente {i+1}:", key=f"comp_{i}")
+                    eqs_input.append(eq)
+                sub = st.form_submit_button("Procesar Regla")
+                
+            if sub:
+                vector_columna = []
+                error = False
+                for val in eqs_input:
+                    obj = leer_expresion_st(val)
+                    if obj is None:
+                        error = True; break
+                    vector_columna.append(obj)
+                    
+                if not error:
+                    Matriz_Regla = sp.Matrix(vector_columna)
+                    sustitucion_cero = {v: 0 for v in variables_simbolicas}
+                    evaluacion_cero = Matriz_Regla.subs(sustitucion_cero)
+                    es_cero = all(e == 0 for e in evaluacion_cero)
+                    
+                    if not es_cero:
+                        st.error("La transformación NO es lineal: T(0) ≠ 0")
+                    else:
+                        Jacobiano = Matriz_Regla.jacobian(variables_simbolicas)
