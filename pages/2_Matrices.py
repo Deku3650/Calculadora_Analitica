@@ -216,9 +216,8 @@ else:
 
         # Jacobiana
         st.markdown("**2. Matriz Jacobiana** (A partir de un vector o matriz)")
-        mat_jac_nombre = st.selectbox("Seleccione Matriz/Vector base:", list(st.session_state.mis_matrices.keys()),
-                                      key="jac_mat")
-
+        mat_jac_nombre = st.selectbox("Seleccione Matriz/Vector base:", list(st.session_state.mis_matrices.keys()), key="jac_mat")
+        
         if st.button("Calcular Jacobiana"):
             M_jac = st.session_state.mis_matrices[mat_jac_nombre]
             variables = list(M_jac.free_symbols)
@@ -226,15 +225,15 @@ else:
                 st.error("La matriz seleccionada no contiene variables simbólicas.")
             else:
                 variables.sort(key=lambda v: v.name)
-                # En SymPy, jacobian requiere un vector (matriz nx1), por lo que
-                # comprobamos sus dimensiones para evitar crash.
                 try:
                     J = M_jac.jacobian(variables)
                     st.success(f"Jacobiana evaluada respecto a: {variables}")
                     imprimir_matriz_simbolica(J)
+                except TypeError:
+                     st.error(f"Error Matemático: La matriz Jacobiana está definida para vectores columna o fila. La matriz que elegiste tiene dimensión {M_jac.shape[0]}x{M_jac.shape[1]}.")
                 except AttributeError:
-                    st.error("Error: Para la Jacobiana en SymPy, la entrada debe ser un vector columna.")
-
+                     st.error("Error: Ocurrió un problema con el formato de la matriz.")
+                    
     # --------------------------------------------------------------------------
     # PESTAÑA 4: Análisis Espectral
     # --------------------------------------------------------------------------
