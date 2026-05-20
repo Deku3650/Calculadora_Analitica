@@ -355,7 +355,8 @@ def Crear_Transformacion_UI():
         else:
             st.warning("No hay ninguna matriz guardada en el inventario actual de la sesión. Vaya al módulo de Matrices y cree una primero.")
 
-    def mostrar_detalle_tl(nombre, tl_data):
+
+def mostrar_detalle_tl(nombre, tl_data):
     """Muestra un resumen profesional de la transformación."""
     st.info(f"### Detalles: {nombre}")
     col1, col2 = st.columns(2)
@@ -369,7 +370,7 @@ def Crear_Transformacion_UI():
     st.latex(sp.latex(tl_data['regla']))
     st.write("**Matriz Asociada:**")
     imprimir_matriz_simbolica(tl_data['matriz_asociada'])
-
+    
     # ==============================================================================
     # 4. BLOQUE DE CONFIRMACIÓN Y GUARDADO PERSISTENTE
     # ==============================================================================
