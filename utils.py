@@ -244,15 +244,36 @@ def Crear_Transformacion_UI():
                 submit_regla = st.form_submit_button("Procesar Regla de Correspondencia")
             
             if submit_regla:
-                try:
-                    vector_columna = [parse_expr(eq) for eq in eqs_input]
-                    matriz_regla_calculada = sp.Matrix(vector_columna)
-                    matriz_asociada_calculada = matriz_regla_calculada.jacobian(variables_simbolicas)
-                    
-                    st.session_state.temp_tl_mat = matriz_asociada_calculada
-                    st.session_state.temp_tl_reg = matriz_regla_calculada
-                except Exception as e:
-                    st.error(f"Error al analizar las componentes vectoriales: {e}")
+                vector_columna = []
+                error_parsing = False
+                
+                # 1. Usamos nuestra función blindada en lugar de parse_expr crudo
+                for eq in eqs_input:
+                    val = leer_expresion_st(eq)
+                    if val is None:
+                        error_parsing = True
+                        break
+                    vector_columna.append(val)
+                
+                if not error_parsing:
+                    try:
+                        matriz_regla_calculada = sp.Matrix(vector_columna)
+                        
+                        # 2. Verificamos linealidad básica: T(0) = 0
+                        sustitucion_cero = {v: 0 for v in variables_simbolicas}
+                        eval_cero = matriz_regla_calculada.subs(sustitucion_cero)
+                        
+                        if not all(e == 0 for e in eval_cero):
+                            st.error("Error Matemático: La transformación NO es lineal (T(0) ≠ 0). Revise si agregó constantes sueltas.")
+                        else:
+                            # 3. Calculamos la Jacobiana
+                            matriz_asociada_calculada = matriz_regla_calculada.jacobian(variables_simbolicas)
+                            
+                            st.session_state.temp_tl_mat = matriz_asociada_calculada
+                            st.session_state.temp_tl_reg = matriz_regla_calculada
+                            
+                    except Exception as e:
+                        st.error(f"Error matemático al construir la matriz: {e}")
 
     # --- OPCIÓN 2: DEFINIR MATRIZ NUEVA ---
     elif "2. Definir una Matriz Nueva" in metodo:
