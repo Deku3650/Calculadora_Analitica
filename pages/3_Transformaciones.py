@@ -29,37 +29,6 @@ with st.sidebar:
 
     st.divider()
 
-    # Puente A: Importar Matriz a T.L.
-    st.subheader("Importar desde Matrices")
-    if st.session_state.mis_matrices:
-        matriz_importar = st.selectbox("Seleccione Matriz:", list(st.session_state.mis_matrices.keys()), key="imp_mat")
-        nombre_nueva_tl = st.text_input("Nombre para la nueva T.L.:").upper().strip()
-
-        if st.button("Convertir a T.L."):
-            A = st.session_state.mis_matrices[matriz_importar]
-            filas, columnas = A.shape
-
-            # Generamos variables genéricas x1, x2, x3...
-            vars_input = sp.symbols(f'x1:{columnas + 1}')
-            vector_x = sp.Matrix(vars_input)
-            regla_correspondencia = A * vector_x
-
-            st.session_state.mis_transformaciones[nombre_nueva_tl] = {
-                "matriz_asociada": A,
-                "regla": regla_correspondencia,
-                "variables": vars_input,
-                "dim_V": columnas,
-                "dim_W": filas,
-                "base_dominio": sp.eye(columnas),
-                "base_codominio": sp.eye(filas)
-            }
-            st.success(f"T.L. '{nombre_nueva_tl}' creada.")
-            st.rerun()
-    else:
-        st.caption("No hay matrices disponibles para importar.")
-
-    st.divider()
-
     # Puente B: Exportar T.L. a Matriz
     st.subheader("Exportar a Matrices")
     if st.session_state.mis_transformaciones:
