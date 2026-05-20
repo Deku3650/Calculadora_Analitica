@@ -11,6 +11,7 @@ import sympy as sp
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application, \
     convert_xor
 import streamlit as st
+import re
 
 # ==============================================================================
 # 1. CONFIGURACIÓN INICIAL DE LA PÁGINA Y MEMORIA (SESSION STATE)
@@ -138,7 +139,6 @@ def Crear_Matriz_Simbolica_UI(nombre_clave):
             return matriz_sympy
     return None
 
-
 def Crear_Transformacion_UI():
     st.header("⚙️ Definir Transformación Lineal")
     
@@ -168,10 +168,6 @@ def Crear_Transformacion_UI():
         m2 = st.number_input("Filas m (Codominio):", min_value=1, value=2, key="tl_m2")
         n2 = st.number_input("Columnas n (Codominio):", min_value=1, value=2, key="tl_n2")
         dim_w = m2 * n2
-
-    # Definimos bases canónicas estables para este flujo inicial
-    Base1 = sp.eye(dim_v)
-    Base2 = sp.eye(dim_w)
 
     st.divider()
 
@@ -221,12 +217,17 @@ def Crear_Transformacion_UI():
             st.write("Base Codominio (W):")
             b2_input = st.text_area("Vectores (ej: [1,0,0], [0,1,0], [0,0,1])", value="[1,0,0], [0,1,0], [0,0,1]", key="base_w")
             
-        # Parseo rápido
+        # Parseo seguro con Expresiones Regulares (Evita el error de las comas)
         try:
-            Base1 = sp.Matrix([parse_expr(v) for v in b1_input.split(',')]).T
-            Base2 = sp.Matrix([parse_expr(v) for v in b2_input.split(',')]).T
-            st.success("Bases vinculadas correctamente.")
-        except:
+            vecs_b1 = re.findall(r'\[(.*?)\]', b1_input)
+            Base1 = sp.Matrix([[parse_expr(c) for c in v.split(',')] for v in vecs_b1]).T if vecs_b1 else sp.eye(dim_v)
+            
+            vecs_b2 = re.findall(r'\[(.*?)\]', b2_input)
+            Base2 = sp.Matrix([[parse_expr(c) for c in v.split(',')] for v in vecs_b2]).T if vecs_b2 else sp.eye(dim_w)
+            
+            if vecs_b1 and vecs_b2:
+                st.success("Bases vinculadas correctamente.")
+        except Exception as e:
             st.error("Error en formato de vectores. Usando canónica.")
             Base1 = sp.eye(dim_v)
             Base2 = sp.eye(dim_w)
@@ -240,10 +241,6 @@ def Crear_Transformacion_UI():
         ["1. Dar Regla de Correspondencia / Operador", "2. Definir una Matriz Nueva", "3. Importar una Matriz Preexistente"],
         key="tl_metodo_def"
     )
-
-    # Inicializamos estados de cálculo vacíos
-    matriz_asociada_calculada = None
-    matriz_regla_calculada = None
 
     # --- OPCIÓN 1: REGLA DE CORRESPONDENCIA / OPERADOR ---
     if "1. Dar Regla de Correspondencia" in metodo:
@@ -270,10 +267,10 @@ def Crear_Transformacion_UI():
                     vector_columna.append(expr_evaluada.subs(x_sym, 0))
                     
                     matriz_regla_calculada = sp.Matrix(vector_columna)
-                    matriz_asociada_calculada = matriz_regla_calculada.jacobian(variables_simbolicas)
-                    
-                    st.session_state.temp_tl_mat = matriz_asociada_calculada
+                    st.session_state.temp_tl_mat = matriz_regla_calculada.jacobian(variables_simbolicas)
                     st.session_state.temp_tl_reg = matriz_regla_calculada
+                    st.session_state.temp_b1 = Base1
+                    st.session_state.temp_b2 = Base2
                 except Exception as e:
                     st.error(f"Error de sintaxis en el operador: {e}")
         else:
@@ -286,7 +283,6 @@ def Crear_Transformacion_UI():
                 vector_columna = []
                 error_parsing = False
                 
-                # 1. Usamos nuestra función blindada en lugar de parse_expr crudo
                 for eq in eqs_input:
                     val = leer_expresion_st(eq)
                     if val is None:
@@ -298,19 +294,16 @@ def Crear_Transformacion_UI():
                     try:
                         matriz_regla_calculada = sp.Matrix(vector_columna)
                         
-                        # 2. Verificamos linealidad básica: T(0) = 0
                         sustitucion_cero = {v: 0 for v in variables_simbolicas}
                         eval_cero = matriz_regla_calculada.subs(sustitucion_cero)
                         
                         if not all(e == 0 for e in eval_cero):
                             st.error("Error Matemático: La transformación NO es lineal (T(0) ≠ 0). Revise si agregó constantes sueltas.")
                         else:
-                            # 3. Calculamos la Jacobiana
-                            matriz_asociada_calculada = matriz_regla_calculada.jacobian(variables_simbolicas)
-                            
-                            st.session_state.temp_tl_mat = matriz_asociada_calculada
+                            st.session_state.temp_tl_mat = matriz_regla_calculada.jacobian(variables_simbolicas)
                             st.session_state.temp_tl_reg = matriz_regla_calculada
-                            
+                            st.session_state.temp_b1 = Base1
+                            st.session_state.temp_b2 = Base2
                     except Exception as e:
                         st.error(f"Error matemático al construir la matriz: {e}")
 
@@ -325,36 +318,7 @@ def Crear_Transformacion_UI():
                 for j in range(dim_v):
                     with cols_input[j]:
                         valor = st.text_input(f"M({i+1},{j+1})", value="0", key=f"mat_tl_{i}_{j}")
-                        fila_actual.append(valor)
-                matriz_elementos.append(fila_actual)
-            submit_mat = st.form_submit_button("Generar Transformación desde Matriz")
-            
-        if submit_mat:
-            try:
-                matriz_asociada_calculada = sp.Matrix([[parse_expr(cell) for cell in row] for row in matriz_elementos])
-                matriz_regla_calculada = matriz_asociada_calculada * sp.Matrix(variables_simbolicas)
-                st.session_state.temp_tl_mat = matriz_asociada_calculada
-                st.session_state.temp_tl_reg = matriz_regla_calculada
-            except Exception as e:
-                st.error(f"Error al parsear los elementos de la matriz: {e}")
-
-    # --- OPCIÓN 3: IMPORTAR MATRIZ PREEXISTENTE ---
-    elif "3. Importar una Matriz Preexistente" in metodo:
-        if st.session_state.mis_matrices:
-            mat_seleccionada = st.selectbox("Seleccione una matriz de su inventario global:", list(st.session_state.mis_matrices.keys()))
-            M_imp = st.session_state.mis_matrices[mat_seleccionada]
-            
-            # Validación estricta antes de importar
-            if M_imp.shape != (dim_w, dim_v):
-                st.error(f"Incompatibilidad de dimensiones: La matriz '{mat_seleccionada}' mide {M_imp.shape[0]}x{M_imp.shape[1]}, pero el espacio configurado requiere una matriz de {dim_w}x{dim_v}.")
-            else:
-                if st.button("Vincular Matriz Seleccionada"):
-                    st.session_state.temp_tl_mat = M_imp
-                    st.session_state.temp_tl_reg = M_imp * sp.Matrix(variables_simbolicas)
-                    st.success(f"Matriz '{mat_seleccionada}' vinculada correctamente como matriz asociada.")
-        else:
-            st.warning("No hay ninguna matriz guardada en el inventario actual de la sesión. Vaya al módulo de Matrices y cree una primero.")
-
+                        fila
 
 def mostrar_detalle_tl(nombre, tl_data):
     """Muestra un resumen profesional de la transformación."""
