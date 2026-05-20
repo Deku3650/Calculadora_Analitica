@@ -318,8 +318,67 @@ def Crear_Transformacion_UI():
                 for j in range(dim_v):
                     with cols_input[j]:
                         valor = st.text_input(f"M({i+1},{j+1})", value="0", key=f"mat_tl_{i}_{j}")
-                        fila
+                        fila_actual.append(valor)
+                matriz_elementos.append(fila_actual)
+            submit_mat = st.form_submit_button("Generar Transformación desde Matriz")
+            
+        if submit_mat:
+            try:
+                matriz_asoc = sp.Matrix([[parse_expr(cell) for cell in row] for row in matriz_elementos])
+                st.session_state.temp_tl_mat = matriz_asoc
+                st.session_state.temp_tl_reg = matriz_asoc * sp.Matrix(variables_simbolicas)
+                st.session_state.temp_b1 = Base1
+                st.session_state.temp_b2 = Base2
+            except Exception as e:
+                st.error(f"Error al parsear los elementos de la matriz: {e}")
 
+    # --- OPCIÓN 3: IMPORTAR MATRIZ PREEXISTENTE ---
+    elif "3. Importar una Matriz Preexistente" in metodo:
+        if st.session_state.mis_matrices:
+            mat_seleccionada = st.selectbox("Seleccione una matriz de su inventario global:", list(st.session_state.mis_matrices.keys()))
+            M_imp = st.session_state.mis_matrices[mat_seleccionada]
+            
+            if M_imp.shape != (dim_w, dim_v):
+                st.error(f"Incompatibilidad de dimensiones: La matriz '{mat_seleccionada}' mide {M_imp.shape[0]}x{M_imp.shape[1]}, pero el espacio requiere {dim_w}x{dim_v}.")
+            else:
+                if st.button("Vincular Matriz Seleccionada"):
+                    st.session_state.temp_tl_mat = M_imp
+                    st.session_state.temp_tl_reg = M_imp * sp.Matrix(variables_simbolicas)
+                    st.session_state.temp_b1 = Base1
+                    st.session_state.temp_b2 = Base2
+                    st.success(f"Matriz '{mat_seleccionada}' vinculada correctamente.")
+        else:
+            st.warning("No hay ninguna matriz guardada en el inventario actual. Vaya al módulo de Matrices y cree una primero.")
+
+    # ==============================================================================
+    # 4. BLOQUE DE CONFIRMACIÓN Y GUARDADO PERSISTENTE
+    # ==============================================================================
+    if 'temp_tl_mat' in st.session_state:
+        st.divider()
+        st.write("**Matriz Asociada resultante:**")
+        imprimir_matriz_simbolica(st.session_state.temp_tl_mat)
+        st.write("**Regla de correspondencia analítica:**")
+        imprimir_matriz_simbolica(st.session_state.temp_tl_reg)
+        
+        nombre_tl = st.text_input("Asigne un nombre para guardar esta T.L. (Ej. T1):", key="save_tl_final").upper().strip()
+        if st.button("💾 Almacenar Transformación Lineal"):
+            if nombre_tl:
+                st.session_state.mis_transformaciones[nombre_tl] = {
+                    "dim_V": dim_v,
+                    "dim_W": dim_w,
+                    "variables": variables_simbolicas,
+                    "matriz_asociada": st.session_state.temp_tl_mat,
+                    "regla": st.session_state.temp_tl_reg,
+                    "base_dominio": st.session_state.temp_b1,
+                    "base_codominio": st.session_state.temp_b2
+                }
+                # Limpiamos las variables temporales
+                for temp_var in ['temp_tl_mat', 'temp_tl_reg', 'temp_b1', 'temp_b2']:
+                    del st.session_state[temp_var]
+                st.success(f"¡Transformación '{nombre_tl}' guardada con éxito!")
+                st.rerun()
+            else:
+                st.error("Por favor proporcione un nombre válido antes de guardar.")
 def mostrar_detalle_tl(nombre, tl_data):
     """Muestra un resumen profesional de la transformación."""
     st.info(f"### Detalles: {nombre}")
