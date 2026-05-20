@@ -185,9 +185,12 @@ with tab_graficas:
 
 with tab_sistemas:
     st.subheader("Resolución de Sistemas de Ecuaciones Lineales")
-    n_vars = st.number_input("Número de incógnitas:", min_value=2, max_value=10, value=3)
-
-    st.write(f"Ingrese la matriz aumentada $[A|b]$ de tamaño ${n_vars} \\times {n_vars + 1}$:")
+    
+    # Aseguramos que sea entero y forzamos el step para evitar floats
+    n_vars = int(st.number_input("Número de incógnitas:", min_value=2, max_value=10, value=3, step=1))
+    
+    st.write(f"Ingrese la matriz aumentada $[A|b]$ de tamaño ${n_vars} \\times {n_vars+1}$:")
+    
     with st.form("form_sistema"):
         elementos = []
         for i in range(n_vars):
@@ -195,9 +198,46 @@ with tab_sistemas:
             fila = []
             for j in range(n_vars + 1):
                 with cols[j]:
-                    label = f"x_{j + 1}" if j < n_vars else "b"
-                    fila.append(st.text_input(label, value="0", key=f"sys_{i}_{j}"))
+                    label = f"x_{j+1}" if j < n_vars else "b"
+                    # CLAVE: Añadir n_vars a la key evita conflictos al cambiar el tamaño del sistema
+                    fila.append(st.text_input(label, value="0", key=f"sys_{n_vars}_{i}_{j}"))
             elementos.append(fila)
-
+            
         if st.form_submit_button("Resolver Sistema"):
             M_aug = sp.zeros(n_vars, n_vars + 1)
+            error_parser = False
+            
+            # 1. Validación de entradas (Atrapamos los "None")
+            for i in range(n_vars):
+                for j in range(n_vars + 1):
+                    val = leer_expresion_st(elementos[i][j])
+                    if val is None:
+                        error_parser = True
+                    else:
+                        M_aug[i, j] = val
+                        
+            # 2. Ejecución matemática
+            if not error_parser:
+                A = M_aug[:, :-1]
+                rango_A = A.rank()
+                rango_Aug = M_aug.rank()
+                
+                st.write("**Matriz Aumentada:**")
+                imprimir_matriz_simbolica(M_aug)
+                
+                # Teorema de Rouché-Frobenius
+                if rango_A != rango_Aug:
+                    st.error("Sistema Incompatible (S.I.). No tiene solución (Los rangos no coinciden).")
+                else:
+                    variables = sp.symbols(f'x1:{n_vars+1}')
+                    solucion = sp.linsolve(M_aug, variables)
+                    
+                    if rango_A == n_vars:
+                        st.success("Sistema Compatible Determinado (S.C.D.). Solución única:")
+                        # solucion es un FiniteSet, lo pasamos a lista y sacamos la tupla
+                        sol_lista = list(solucion)[0]
+                        for i, var in enumerate(variables):
+                            st.latex(f"{var} = {sp.latex(sol_lista[i])}")
+                    else:
+                        st.warning("Sistema Compatible Indeterminado (S.C.I.). Infinitas soluciones paramétricas:")
+                        st.latex(sp.latex(solucion))
