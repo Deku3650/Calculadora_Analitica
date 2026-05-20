@@ -82,7 +82,7 @@ with tab_ops:
 
         if st.button("Calcular Operación"):
             v1 = st.session_state.mis_vectores[v1_nombre]
-            res = None  # Variable para atrapar resultados que sean vectores
+            res = None  
 
             if operacion == "Escalar * v":
                 try:
@@ -94,7 +94,7 @@ with tab_ops:
                     st.error("Escalar inválido.")
 
             elif operacion == "Norma":
-                st.latex(f"||{v1_nombre}|| = {sp.latex(sp.simplify(v1.norm()))}")
+                st.latex(rf"||{v1_nombre}|| = {sp.latex(sp.simplify(v1.norm()))}")
 
             elif operacion == "Gram-Schmidt (Vector unitario)":
                 v_ortho = sp.GramSchmidt([v1], orthonormal=True)
@@ -120,13 +120,13 @@ with tab_ops:
                 elif operacion == "Distancia":
                     if v1.shape == v2.shape:
                         dist = sp.simplify((v1 - v2).norm())
-                        st.latex(f"d({v1_nombre}, {v2_nombre}) = {sp.latex(dist)}")
+                        st.latex(rf"d({v1_nombre}, {v2_nombre}) = {sp.latex(dist)}")
                     else: st.error("Diferente dimensión.")
 
                 elif operacion == "Producto Punto":
                     if v1.shape == v2.shape:
                         dot = sp.simplify(v1.dot(v2.conjugate()))
-                        st.latex(f"{v1_nombre} \cdot {v2_nombre} = {sp.latex(dot)}")
+                        st.latex(rf"{v1_nombre} \cdot {v2_nombre} = {sp.latex(dot)}")
                     else: st.error("Diferente dimensión.")
 
                 elif operacion == "Producto Cruz (R3)":
@@ -139,7 +139,8 @@ with tab_ops:
                     if v1.shape == v2.shape:
                         cos_theta = sp.simplify(v1.dot(v2) / (v1.norm() * v2.norm()))
                         ang = sp.acos(cos_theta)
-                        st.latex(f"\\theta = {sp.latex(ang)} \\approx {sp.N(sp.deg(ang), 5)}^\circ")
+                        # raw f-string salva a Python de crashear por el \t y el \c
+                        st.latex(rf"\theta = {sp.latex(ang)} \approx {sp.N(ang * 180 / sp.pi, 5)}^\circ")
                     else: st.error("Diferente dimensión.")
 
                 elif operacion == "Proyección":
@@ -219,7 +220,7 @@ with tab_sistemas:
     st.subheader("Resolución de Sistemas de Ecuaciones Lineales")
     
     n_vars = int(st.number_input("Número de incógnitas:", min_value=2, max_value=10, value=3, step=1))
-    st.write(f"Ingrese la matriz aumentada $[A|b]$ de tamaño ${n_vars} \\times {n_vars+1}$:")
+    st.write(rf"Ingrese la matriz aumentada $[A|b]$ de tamaño ${n_vars} \times {n_vars+1}$:")
     
     with st.form("form_sistema"):
         elementos = []
@@ -233,4 +234,96 @@ with tab_sistemas:
             elementos.append(fila)
             
         if st.form_submit_button("Resolver Sistema"):
-            M_aug = sp.zeros(
+            M_aug = sp.zeros(n_vars, n_vars + 1)
+            error_parser = False
+            
+            for i in range(n_vars):
+                for j in range(n_vars + 1):
+                    val = leer_expresion_st(elementos[i][j])
+                    if val is None: error_parser = True
+                    else: M_aug[i, j] = val
+                        
+            if not error_parser:
+                A = M_aug[:, :-1]
+                rango_A = A.rank()
+                rango_Aug = M_aug.rank()
+                
+                st.write("**Matriz Aumentada:**")
+                imprimir_matriz_simbolica(M_aug)
+                
+                if rango_A != rango_Aug:
+                    st.error("Sistema Incompatible (S.I.). No tiene solución (Los rangos no coinciden).")
+                else:
+                    variables = sp.symbols(f'x1:{n_vars+1}')
+                    solucion = sp.linsolve(M_aug, variables)
+                    
+                    if rango_A == n_vars:
+                        st.success("Sistema Compatible Determinado (S.C.D.). Solución única:")
+                        sol_lista = list(solucion)[0]
+                        for i, var in enumerate(variables):
+                            st.latex(rf"{var} = {sp.latex(sol_lista[i])}")
+                    else:
+                        st.warning("Sistema Compatible Indeterminado (S.C.I.). Infinitas soluciones paramétricas:")
+                        st.latex(sp.latex(solucion))
+
+# ------------------------------------------------------------------------------
+# TAB 4: ANÁLISIS DE CONJUNTOS
+# ------------------------------------------------------------------------------
+with tab_analisis_conjunto:
+    st.subheader("Análisis de Conjuntos (L.I. y Bases)")
+    seleccion = st.multiselect("Seleccione vectores para analizar:", list(st.session_state.mis_vectores.keys()))
+    
+    if seleccion:
+        vectores = [st.session_state.mis_vectores[n] for n in seleccion]
+        mat_conjunto = sp.Matrix.hstack(*vectores)
+        
+        col_c1, col_c2 = st.columns(2)
+        with col_c1:
+            st.write("**Matriz formada:**")
+            imprimir_matriz_simbolica(mat_conjunto)
+        
+        with col_c2:
+            n_vecs = len(vectores)
+            dim = vectores[0].rows
+            rank = mat_conjunto.rank()
+            
+            es_li = (rank == n_vecs)
+            st.write(f"¿Es Linealmente Independiente?: {'✅ Sí' if es_li else '❌ No'}")
+            st.write(rf"¿Es Base para $\mathbb{{R}}^{{{dim}}}$?: {'✅ Sí' if (es_li and n_vecs == dim) else '❌ No'}")
+
+        st.write("---")
+        st.write("**Acciones sobre el conjunto:**")
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("Crear Matriz con estos vectores"):
+                nombre_mat = "MAT_" + "_".join(seleccion)[:10] 
+                st.session_state.mis_matrices[nombre_mat] = mat_conjunto
+                st.success(f"Guardado como '{nombre_mat}' en el Módulo de Matrices")
+        with col_btn2:
+            if st.button("Aplicar Gram-Schmidt al conjunto"):
+                try:
+                    base_ortho = sp.GramSchmidt(vectores, orthonormal=True)
+                    mat_ortho = sp.Matrix.hstack(*base_ortho)
+                    st.write("**Base Ortonormal resultante:**")
+                    imprimir_matriz_simbolica(mat_ortho)
+                    # Enviar a memoria temporal para guardar como matriz
+                    st.session_state.mis_matrices["GS_MAT"] = mat_ortho
+                    st.success("Se ha guardado temporalmente como 'GS_MAT' en Matrices.")
+                except Exception as e:
+                    st.error(f"Error al aplicar Gram-Schmidt: {e}")
+
+    st.divider()
+    st.subheader("Extraer filas/columnas como vectores")
+    if st.session_state.mis_matrices:
+        mat_nombre = st.selectbox("Elegir matriz:", list(st.session_state.mis_matrices.keys()))
+        if mat_nombre:
+            M = st.session_state.mis_matrices[mat_nombre]
+            tipo_ext = st.radio("Extraer:", ["Renglones", "Columnas"], horizontal=True)
+            if st.button("Extraer a Inventario de Vectores"):
+                for i in range(M.rows if tipo_ext == "Renglones" else M.cols):
+                    vec = M.row(i).T if tipo_ext == "Renglones" else M.col(i)
+                    nombre = f"{mat_nombre}_{tipo_ext[0]}{i+1}"
+                    st.session_state.mis_vectores[nombre] = vec
+                    st.write(f"Guardado: {nombre}")
+    else:
+        st.info("No hay matrices guardadas en el inventario global.")
