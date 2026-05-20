@@ -393,33 +393,3 @@ def mostrar_detalle_tl(nombre, tl_data):
     st.latex(sp.latex(tl_data['regla']))
     st.write("**Matriz Asociada:**")
     imprimir_matriz_simbolica(tl_data['matriz_asociada'])
-    
-    # ==============================================================================
-    # 4. BLOQUE DE CONFIRMACIÓN Y GUARDADO PERSISTENTE
-    # ==============================================================================
-    if 'temp_tl_mat' in st.session_state:
-        st.divider()
-        st.write("**Matriz Asociada resultante:**")
-        imprimir_matriz_simbolica(st.session_state.temp_tl_mat)
-        st.write("**Regla de correspondencia analítica:**")
-        imprimir_matriz_simbolica(st.session_state.temp_tl_reg)
-        
-        nombre_tl = st.text_input("Asigne un nombre para guardar esta T.L. (Ej. T1):", key="save_tl_final").upper().strip()
-        if st.button("💾 Almacenar Transformación Lineal"):
-            if nombre_tl:
-                st.session_state.mis_transformaciones[nombre_tl] = {
-                    "dim_V": dim_v,
-                    "dim_W": dim_w,
-                    "variables": variables_simbolicas,
-                    "matriz_asociada": st.session_state.temp_tl_mat,
-                    "regla": st.session_state.temp_tl_reg,
-                    "base_dominio": Base1,
-                    "base_codominio": Base2
-                }
-                # Limpieza de variables temporales para evitar duplicados en la UI
-                del st.session_state.temp_tl_mat
-                del st.session_state.temp_tl_reg
-                st.success(f"¡Transformación '{nombre_tl}' guardada con éxito!")
-                st.rerun()
-            else:
-                st.error("Por favor proporcione un nombre válido antes de guardar.")
