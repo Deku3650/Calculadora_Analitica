@@ -209,6 +209,29 @@ def Crear_Transformacion_UI():
     st.divider()
 
     # ==============================================================================
+    # 2.5. ENTRADA DIRECTA DE BASES (NUEVO)
+    # ==============================================================================
+    st.subheader("Bases no canónicas")
+    with st.expander("¿Desea usar bases no canónicas?"):
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            st.write("Base Dominio (V):")
+            b1_input = st.text_area("Vectores (ej: [1,0], [1,1])", value="[1,0], [0,1]", key="base_v")
+        with col_b2:
+            st.write("Base Codominio (W):")
+            b2_input = st.text_area("Vectores (ej: [1,0,0], [0,1,0], [0,0,1])", value="[1,0,0], [0,1,0], [0,0,1]", key="base_w")
+            
+        # Parseo rápido
+        try:
+            Base1 = sp.Matrix([parse_expr(v) for v in b1_input.split(',')]).T
+            Base2 = sp.Matrix([parse_expr(v) for v in b2_input.split(',')]).T
+            st.success("Bases vinculadas correctamente.")
+        except:
+            st.error("Error en formato de vectores. Usando canónica.")
+            Base1 = sp.eye(dim_v)
+            Base2 = sp.eye(dim_w)
+
+    # ==============================================================================
     # 3. MÉTODOS DE DEFINICIÓN (MENÚ PRINCIPAL DE 3 OPCIONES)
     # ==============================================================================
     st.subheader("4. Configuración de la Regla")
@@ -331,6 +354,21 @@ def Crear_Transformacion_UI():
                     st.success(f"Matriz '{mat_seleccionada}' vinculada correctamente como matriz asociada.")
         else:
             st.warning("No hay ninguna matriz guardada en el inventario actual de la sesión. Vaya al módulo de Matrices y cree una primero.")
+
+    def mostrar_detalle_tl(nombre, tl_data):
+    """Muestra un resumen profesional de la transformación."""
+    st.info(f"### Detalles: {nombre}")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"**Dominio:** R^{tl_data['dim_V']}")
+        st.write(f"**Codominio:** R^{tl_data['dim_W']}")
+    with col2:
+        st.write(f"**Variables:** {', '.join([str(v) for v in tl_data['variables']])}")
+    
+    st.write("**Regla de Correspondencia:**")
+    st.latex(sp.latex(tl_data['regla']))
+    st.write("**Matriz Asociada:**")
+    imprimir_matriz_simbolica(tl_data['matriz_asociada'])
 
     # ==============================================================================
     # 4. BLOQUE DE CONFIRMACIÓN Y GUARDADO PERSISTENTE
