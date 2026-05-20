@@ -97,11 +97,68 @@ with tab_composicion:
 
 with tab_bases:
     if st.session_state.mis_transformaciones:
-        tl = st.selectbox("Seleccionar:", list(st.session_state.mis_transformaciones.keys()), key="base_tl")
-        paq = st.session_state.mis_transformaciones[tl]
-        st.write("Base Dominio:", paq['base_dominio'])
-        st.write("Base Codominio:", paq['base_codominio'])
-        if st.button("Calcular Base Dual"):
-            imprimir_matriz_simbolica(paq['base_dominio'].inv())
+        tl_base = st.selectbox("Seleccione Transformación:", list(st.session_state.mis_transformaciones.keys()), key="base_tl")
+        paquete = st.session_state.mis_transformaciones[tl_base]
+        
+        st.subheader("Bases Actuales")
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            st.write("**Base del Dominio (V):**")
+            imprimir_matriz_simbolica(paquete['base_dominio'])
+        with col_b2:
+            st.write("**Base del Codominio (W):**")
+            imprimir_matriz_simbolica(paquete['base_codominio'])
+            
+        st.divider()
+        
+        st.subheader("Cambio de Base")
+        st.write("Ingrese los vectores de las nuevas bases (ej: `[1,0], [1,1]`). Si deja un campo vacío, se asumirá la base canónica.")
+        
+        with st.form("form_cambio_base"):
+            col_nb1, col_nb2 = st.columns(2)
+            with col_nb1:
+                nb1_input = st.text_area("Nueva Base Dominio (V):", value="", key="new_b1")
+            with col_nb2:
+                nb2_input = st.text_area("Nueva Base Codominio (W):", value="", key="new_b2")
+                
+            submit_bases = st.form_submit_button("Calcular Matriz en Nuevas Bases")
+            
+        if submit_bases:
+            import re  # Importación local de seguridad
+            def procesar_base(texto, dim):
+                if not texto.strip(): return sp.eye(dim)
+                bloques = re.findall(r'\[(.*?)\]', texto)
+                if not bloques: return sp.eye(dim)
+                matriz = []
+                for b in bloques:
+                    matriz.append([leer_expresion_st(c) for c in b.split(',')])
+                return sp.Matrix(matriz).T
+                
+            try:
+                B1_new = procesar_base(nb1_input, paquete["dim_V"])
+                B2_new = procesar_base(nb2_input, paquete["dim_W"])
+                
+                # Validación de Independencia Lineal (Determinante distinto de 0)
+                if B1_new.det() == 0 or B2_new.det() == 0:
+                    st.error("Error: Las bases ingresadas no son linealmente independientes (el determinante es 0).")
+                else:
+                    # La matriz_asociada en memoria es la Jacobiana (Base Canónica)
+                    A_can = paquete["matriz_asociada"]
+                    
+                    # Fórmula de cambio de base
+                    M_nueva = sp.simplify(B2_new.inv() * A_can * B1_new)
+                    
+                    st.success("¡Cambio de base matemático exitoso!")
+                    st.write("**Nueva Matriz Asociada:**")
+                    imprimir_matriz_simbolica(M_nueva)
+                    
+                    st.divider()
+                    st.subheader("Espacio Dual ($V^*$)")
+                    st.write("Matriz de Transición de la Base Dual (Asociada a la nueva base del dominio ingresada):")
+                    imprimir_matriz_simbolica(sp.simplify(B1_new.inv()))
+                    
+            except Exception as e:
+                st.error(f"Error al procesar el cambio de base. Verifique la sintaxis. Detalle: {e}")
+                
     else:
         st.info("Defina una transformación primero.")
