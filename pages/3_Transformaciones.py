@@ -103,23 +103,23 @@ with tab_bases:
         st.subheader("Bases Actuales")
         col_b1, col_b2 = st.columns(2)
         with col_b1:
-            st.write("**Base del Dominio (V):**")
+            st.write("**Base del Dominio ($\\beta$):**")
             imprimir_matriz_simbolica(paquete['base_dominio'])
         with col_b2:
-            st.write("**Base del Codominio (W):**")
+            st.write("**Base del Codominio ($\gamma$):**")
             imprimir_matriz_simbolica(paquete['base_codominio'])
             
         st.divider()
         
         st.subheader("Cambio de Base")
-        st.write("Ingrese los vectores de las nuevas bases (ej: `[1,0], [1,1]`). Si deja un campo vacío, se asumirá la base canónica.")
+        st.write("Ingrese los vectores de las nuevas bases. Ej: `[2,0,0], [0,-1,0], [0,0,-2]`. Si deja un campo vacío, se asumirá la base canónica.")
         
         with st.form("form_cambio_base"):
             col_nb1, col_nb2 = st.columns(2)
             with col_nb1:
-                nb1_input = st.text_area("Nueva Base Dominio (V):", value="", key="new_b1")
+                nb1_input = st.text_area("Nueva Base Dominio ($\\beta'$):", value="", key="new_b1")
             with col_nb2:
-                nb2_input = st.text_area("Nueva Base Codominio (W):", value="", key="new_b2")
+                nb2_input = st.text_area("Nueva Base Codominio ($\gamma'$):", value="", key="new_b2")
                 
             submit_bases = st.form_submit_button("Calcular Matriz en Nuevas Bases")
             
@@ -135,27 +135,45 @@ with tab_bases:
                 return sp.Matrix(matriz).T
                 
             try:
-                B1_new = procesar_base(nb1_input, paquete["dim_V"])
-                B2_new = procesar_base(nb2_input, paquete["dim_W"])
+                # Q = Matriz de transición del dominio, P = Matriz de transición del codominio
+                Q = procesar_base(nb1_input, paquete["dim_V"]) 
+                P = procesar_base(nb2_input, paquete["dim_W"]) 
                 
-                # Validación de Independencia Lineal (Determinante distinto de 0)
-                if B1_new.det() == 0 or B2_new.det() == 0:
+                if Q.det() == 0 or P.det() == 0:
                     st.error("Error: Las bases ingresadas no son linealmente independientes (el determinante es 0).")
                 else:
-                    # La matriz_asociada en memoria es la Jacobiana (Base Canónica)
-                    A_can = paquete["matriz_asociada"]
+                    A_can = paquete["matriz_asociada"] # [T] original
+                    P_inv = sp.simplify(P.inv())
                     
-                    # Fórmula de cambio de base
-                    M_nueva = sp.simplify(B2_new.inv() * A_can * B1_new)
+                    # Fórmula de cambio de base: P^-1 * A * Q
+                    M_nueva = sp.simplify(P_inv * A_can * Q)
                     
                     st.success("¡Cambio de base matemático exitoso!")
-                    st.write("**Nueva Matriz Asociada:**")
+                    
+                    st.write("### Desglose del Teorema de Cambio de Base")
+                    st.latex(r"[T]_{\beta'}^{\gamma'} = P^{-1} \cdot [T]_{\beta}^{\gamma} \cdot Q")
+                    
+                    col_mat1, col_mat2, col_mat3 = st.columns(3)
+                    with col_mat1:
+                        st.write("**Paso del Dominio ($Q$):**")
+                        imprimir_matriz_simbolica(Q)
+                    with col_mat2:
+                        st.write("**Paso del Codominio ($P$):**")
+                        imprimir_matriz_simbolica(P)
+                    with col_mat3:
+                        st.write("**Inversa de P ($P^{-1}$):**")
+                        imprimir_matriz_simbolica(P_inv)
+                        
+                    st.write("**Comprobación de la fórmula:**")
+                    st.latex(f"{sp.latex(P_inv)} \cdot {sp.latex(A_can)} \cdot {sp.latex(Q)} = {sp.latex(M_nueva)}")
+                    
+                    st.write("### Nueva Matriz Asociada $[T]_{\\beta'}^{\\gamma'}$:")
                     imprimir_matriz_simbolica(M_nueva)
                     
                     st.divider()
                     st.subheader("Espacio Dual ($V^*$)")
-                    st.write("Matriz de Transición de la Base Dual (Asociada a la nueva base del dominio ingresada):")
-                    imprimir_matriz_simbolica(sp.simplify(B1_new.inv()))
+                    st.write("Matriz de Transición de la Base Dual (Asociada a la nueva base del dominio $\\beta'$):")
+                    imprimir_matriz_simbolica(sp.simplify(Q.inv()))
                     
             except Exception as e:
                 st.error(f"Error al procesar el cambio de base. Verifique la sintaxis. Detalle: {e}")
