@@ -1,12 +1,14 @@
 import streamlit as st
-import sympy as sp
+import sys
+import os
 
-# Importamos las herramientas necesarias desde utils.py
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 try:
     from utils import imprimir_matriz_simbolica, leer_expresion_st, Crear_Transformacion_UI, mostrar_detalle_tl
 except ImportError:
-    st.error("Error al cargar utils.py. Verifica que el archivo exista en la raíz.")
-
+    st.error("Error: utils.py no fue encontrado en la raíz. Asegúrate de que el archivo existe.")
+    st.stop() # Detenemos la ejecución si no carga
 st.set_page_config(page_title="Transformaciones Lineales", layout="wide")
 
 # Inicialización de estados globales
