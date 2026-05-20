@@ -182,7 +182,8 @@ with tab_composicion:
 
         st.divider()
 
-        st.subheader("Composición $(S \circ T)(\vec{v})$")
+        st.subheader("Composición")
+        st.latex(r"(S \circ T)(\vec{v})")
         col_t, col_s = st.columns(2)
         with col_t:
             T_nombre = st.selectbox("1º Se aplica (T):", list(st.session_state.mis_transformaciones.keys()),
