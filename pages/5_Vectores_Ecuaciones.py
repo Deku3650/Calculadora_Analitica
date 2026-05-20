@@ -4,14 +4,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 try:
-    from utils import imprimir_matriz_simbolica, leer_expresion_st, Crear_Matriz_Simbolica_UI
+    from utils import imprimir_matriz_simbolica, leer_expresion_st
 except ImportError:
-    pass
+    st.error("Error al cargar utils.py. Asegúrate de ejecutar la aplicación desde la raíz.")
+    st.stop()
 
 st.set_page_config(page_title="Vectores y Sistemas", layout="wide")
 
 if 'mis_vectores' not in st.session_state:
     st.session_state.mis_vectores = {}
+if 'mis_matrices' not in st.session_state:
+    st.session_state.mis_matrices = {}
 
 st.title("↗️ Vectores y Sistemas de Ecuaciones")
 
@@ -52,9 +55,12 @@ with st.sidebar:
 # ==============================================================================
 # ÁREA PRINCIPAL
 # ==============================================================================
-tab_ops, tab_graficas, tab_sistemas = st.tabs(
-    ["Operaciones y Gram-Schmidt", "Graficación (R2 y R3)", "Sistemas de Ecuaciones"])
+tab_ops, tab_graficas, tab_sistemas, tab_analisis_conjunto = st.tabs(
+    ["Operaciones", "Graficación (R2 y R3)", "Sistemas de Ecuaciones", "Análisis de Conjuntos"])
 
+# ------------------------------------------------------------------------------
+# TAB 1: OPERACIONES VECTORIALES
+# ------------------------------------------------------------------------------
 with tab_ops:
     if st.session_state.mis_vectores:
         st.subheader("Operaciones Vectoriales")
@@ -64,18 +70,19 @@ with tab_ops:
 
         operacion = st.radio("Operación:", [
             "Suma (+)", "Resta (-)", "Escalar * v", "Distancia",
-            "Norma", "Producto Punto", "Producto Cruz (R3)", "Ángulo", "Proyección"
+            "Norma", "Producto Punto", "Producto Cruz (R3)", "Ángulo", "Proyección", "Gram-Schmidt (Vector unitario)"
         ], horizontal=True)
 
         # Campos dinámicos dependiendo de la operación
         if operacion == "Escalar * v":
             escalar_str = st.text_input("Ingrese el escalar:", value="2")
-        elif operacion not in ["Norma"]:
+        elif operacion not in ["Norma", "Gram-Schmidt (Vector unitario)"]:
             with col2:
                 v2_nombre = st.selectbox("Vector 2 (u):", list(st.session_state.mis_vectores.keys()), key="v2")
 
         if st.button("Calcular Operación"):
             v1 = st.session_state.mis_vectores[v1_nombre]
+            res = None  # Variable para atrapar resultados que sean vectores
 
             if operacion == "Escalar * v":
                 try:
@@ -89,59 +96,87 @@ with tab_ops:
             elif operacion == "Norma":
                 st.latex(f"||{v1_nombre}|| = {sp.latex(sp.simplify(v1.norm()))}")
 
+            elif operacion == "Gram-Schmidt (Vector unitario)":
+                v_ortho = sp.GramSchmidt([v1], orthonormal=True)
+                res = v_ortho[0]
+                st.success("Vector normalizado:")
+                imprimir_matriz_simbolica(res)
+
             else:
                 v2 = st.session_state.mis_vectores[v2_nombre]
 
                 if operacion == "Suma (+)":
                     if v1.shape == v2.shape:
-                        imprimir_matriz_simbolica(sp.simplify(v1 + v2))
-                    else:
-                        st.error("Diferente dimensión.")
+                        res = sp.simplify(v1 + v2)
+                        imprimir_matriz_simbolica(res)
+                    else: st.error("Diferente dimensión.")
 
                 elif operacion == "Resta (-)":
                     if v1.shape == v2.shape:
-                        imprimir_matriz_simbolica(sp.simplify(v1 - v2))
-                    else:
-                        st.error("Diferente dimensión.")
+                        res = sp.simplify(v1 - v2)
+                        imprimir_matriz_simbolica(res)
+                    else: st.error("Diferente dimensión.")
 
                 elif operacion == "Distancia":
                     if v1.shape == v2.shape:
                         dist = sp.simplify((v1 - v2).norm())
                         st.latex(f"d({v1_nombre}, {v2_nombre}) = {sp.latex(dist)}")
-                    else:
-                        st.error("Diferente dimensión.")
+                    else: st.error("Diferente dimensión.")
 
                 elif operacion == "Producto Punto":
                     if v1.shape == v2.shape:
-                        res = sp.simplify(v1.dot(v2.conjugate()))
-                        st.latex(f"{v1_nombre} \cdot {v2_nombre} = {sp.latex(res)}")
-                    else:
-                        st.error("Diferente dimensión.")
+                        dot = sp.simplify(v1.dot(v2.conjugate()))
+                        st.latex(f"{v1_nombre} \cdot {v2_nombre} = {sp.latex(dot)}")
+                    else: st.error("Diferente dimensión.")
 
                 elif operacion == "Producto Cruz (R3)":
                     if v1.rows == 3 and v2.rows == 3:
-                        imprimir_matriz_simbolica(sp.simplify(v1.cross(v2)))
-                    else:
-                        st.error("Ambos vectores deben estar en R3.")
+                        res = sp.simplify(v1.cross(v2))
+                        imprimir_matriz_simbolica(res)
+                    else: st.error("Ambos vectores deben estar en R3.")
 
                 elif operacion == "Ángulo":
                     if v1.shape == v2.shape:
                         cos_theta = sp.simplify(v1.dot(v2) / (v1.norm() * v2.norm()))
                         ang = sp.acos(cos_theta)
                         st.latex(f"\\theta = {sp.latex(ang)} \\approx {sp.N(sp.deg(ang), 5)}^\circ")
-                    else:
-                        st.error("Diferente dimensión.")
+                    else: st.error("Diferente dimensión.")
 
                 elif operacion == "Proyección":
                     if v1.shape == v2.shape:
-                        proy = sp.simplify((v1.dot(v2.conjugate()) / v2.dot(v2.conjugate())) * v2)
+                        res = sp.simplify((v1.dot(v2.conjugate()) / v2.dot(v2.conjugate())) * v2)
                         st.write(f"Proyección de {v1_nombre} sobre {v2_nombre}:")
-                        imprimir_matriz_simbolica(proy)
+                        imprimir_matriz_simbolica(res)
+                    else: st.error("Diferente dimensión.")
+
+            # Activador de guardado: Solo se enciende si 'res' es un vector válido
+            if res is not None:
+                st.session_state.ultimo_res_vec = res
+                st.session_state.mostrar_guardado_vec = True
+            else:
+                st.session_state.mostrar_guardado_vec = False
+
+        # Interfaz de guardado persistente (fuera del botón)
+        if st.session_state.get('mostrar_guardado_vec') and 'ultimo_res_vec' in st.session_state:
+            st.divider()
+            col_g1, col_g2 = st.columns([2, 1])
+            with col_g1:
+                nombre_guardar = st.text_input("Asignar nombre para guardar este vector:", key="save_vec_input").upper().strip()
+            with col_g2:
+                st.write("")
+                if st.button("💾 Guardar Vector"):
+                    if nombre_guardar:
+                        st.session_state.mis_vectores[nombre_guardar] = st.session_state.ultimo_res_vec
+                        st.session_state.mostrar_guardado_vec = False
+                        st.rerun()
                     else:
-                        st.error("Diferente dimensión.")
+                        st.error("Ingrese un nombre válido.")
     else:
         st.info("Defina vectores en la barra lateral.")
 
+# ------------------------------------------------------------------------------
+# TAB 2: GRAFICACIÓN
+# ------------------------------------------------------------------------------
 with tab_graficas:
     st.subheader("Graficador Espacial")
     if st.session_state.mis_vectores:
@@ -162,12 +197,8 @@ with tab_graficas:
                         ax.quiver(0, 0, x, y, angles='xy', scale_units='xy', scale=1, color=colores[i % len(colores)],
                                   label=seleccionados[i])
                         max_val = max(max_val, abs(x), abs(y))
-                    ax.set_xlim(-max_val - 1, max_val + 1);
-                    ax.set_ylim(-max_val - 1, max_val + 1)
-                    ax.grid(True);
-                    ax.legend();
-                    ax.axhline(0, color='black');
-                    ax.axvline(0, color='black')
+                    ax.set_xlim(-max_val - 1, max_val + 1); ax.set_ylim(-max_val - 1, max_val + 1)
+                    ax.grid(True); ax.legend(); ax.axhline(0, color='black'); ax.axvline(0, color='black')
                 else:
                     ax = fig.add_subplot(111, projection='3d')
                     max_val = 1
@@ -175,20 +206,19 @@ with tab_graficas:
                         x, y, z = float(v[0]), float(v[1]), float(v[2])
                         ax.quiver(0, 0, 0, x, y, z, color=colores[i % len(colores)], label=seleccionados[i])
                         max_val = max(max_val, abs(x), abs(y), abs(z))
-                    ax.set_xlim([-max_val, max_val]);
-                    ax.set_ylim([-max_val, max_val]);
-                    ax.set_zlim([-max_val, max_val])
+                    ax.set_xlim([-max_val, max_val]); ax.set_ylim([-max_val, max_val]); ax.set_zlim([-max_val, max_val])
                     ax.legend()
                 st.pyplot(fig)
             else:
                 st.error("Todos los vectores deben ser puramente numéricos y pertenecer al mismo espacio (R2 o R3).")
 
+# ------------------------------------------------------------------------------
+# TAB 3: SISTEMAS DE ECUACIONES
+# ------------------------------------------------------------------------------
 with tab_sistemas:
     st.subheader("Resolución de Sistemas de Ecuaciones Lineales")
     
-    # Aseguramos que sea entero y forzamos el step para evitar floats
     n_vars = int(st.number_input("Número de incógnitas:", min_value=2, max_value=10, value=3, step=1))
-    
     st.write(f"Ingrese la matriz aumentada $[A|b]$ de tamaño ${n_vars} \\times {n_vars+1}$:")
     
     with st.form("form_sistema"):
@@ -199,45 +229,8 @@ with tab_sistemas:
             for j in range(n_vars + 1):
                 with cols[j]:
                     label = f"x_{j+1}" if j < n_vars else "b"
-                    # CLAVE: Añadir n_vars a la key evita conflictos al cambiar el tamaño del sistema
                     fila.append(st.text_input(label, value="0", key=f"sys_{n_vars}_{i}_{j}"))
             elementos.append(fila)
             
         if st.form_submit_button("Resolver Sistema"):
-            M_aug = sp.zeros(n_vars, n_vars + 1)
-            error_parser = False
-            
-            # 1. Validación de entradas (Atrapamos los "None")
-            for i in range(n_vars):
-                for j in range(n_vars + 1):
-                    val = leer_expresion_st(elementos[i][j])
-                    if val is None:
-                        error_parser = True
-                    else:
-                        M_aug[i, j] = val
-                        
-            # 2. Ejecución matemática
-            if not error_parser:
-                A = M_aug[:, :-1]
-                rango_A = A.rank()
-                rango_Aug = M_aug.rank()
-                
-                st.write("**Matriz Aumentada:**")
-                imprimir_matriz_simbolica(M_aug)
-                
-                # Teorema de Rouché-Frobenius
-                if rango_A != rango_Aug:
-                    st.error("Sistema Incompatible (S.I.). No tiene solución (Los rangos no coinciden).")
-                else:
-                    variables = sp.symbols(f'x1:{n_vars+1}')
-                    solucion = sp.linsolve(M_aug, variables)
-                    
-                    if rango_A == n_vars:
-                        st.success("Sistema Compatible Determinado (S.C.D.). Solución única:")
-                        # solucion es un FiniteSet, lo pasamos a lista y sacamos la tupla
-                        sol_lista = list(solucion)[0]
-                        for i, var in enumerate(variables):
-                            st.latex(f"{var} = {sp.latex(sol_lista[i])}")
-                    else:
-                        st.warning("Sistema Compatible Indeterminado (S.C.I.). Infinitas soluciones paramétricas:")
-                        st.latex(sp.latex(solucion))
+            M_aug = sp.zeros(
