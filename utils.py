@@ -178,17 +178,33 @@ def Crear_Transformacion_UI():
     # ==============================================================================
     # 2. CAPTURA PREVIA DE VARIABLES
     # ==============================================================================
-    st.subheader("3. Variables del Dominio")
+    st.subheader("3. Variables del Dominio (Coordenadas)")
+    
+    # Generador de sugerencias inteligentes según el espacio y dimensión
     if tipo_dom == "Polinomios (Pn)":
-        st.caption("Para polinomios, el sistema utilizará automáticamente los coeficientes abstractos (c2, c1, c0) como variables de coordenadas.")
-        variables_simbolicas = tuple(sp.Symbol(f'c{i}') for i in range(dim_v - 1, -1, -1))
+        if dim_v == 3:
+            default_vars = "a, b, c"
+        elif dim_v == 2:
+            default_vars = "m, b"
+        else:
+            default_vars = ",".join([f"a{i}" for i in range(dim_v - 1, -1, -1)])
+        st.caption(f"Para un polinomio de grado {dim_v-1}, necesita definir {dim_v} coeficientes.")
     else:
-        vars_str = st.text_input(f"Ingrese {dim_v} variables libres separadas por comas (Ej: x, y, z):", value="x,y,z", key="tl_vars_input")
-        lista_vars = [v.strip() for v in vars_str.split(',') if v.strip()]
-        if len(lista_vars) != dim_v:
-            st.warning(f"Por favor ingrese exactamente {dim_v} variables para poder continuar.")
-            return
-        variables_simbolicas = tuple(sp.symbols(v) for v in lista_vars)
+        if dim_v <= 4:
+            default_vars = ",".join(["x", "y", "z", "w"][:dim_v])
+        else:
+            default_vars = ",".join([f"x{i+1}" for i in range(dim_v)])
+        st.caption(f"Defina las {dim_v} variables de su vector de entrada.")
+
+    # Captura universal para cualquier espacio
+    vars_str = st.text_input("Ingrese las variables separadas por comas:", value=default_vars, key="tl_vars_input")
+    lista_vars = [v.strip() for v in vars_str.split(',') if v.strip()]
+    
+    if len(lista_vars) != dim_v:
+        st.warning(f"Por favor ingrese exactamente {dim_v} variables para poder continuar.")
+        return
+        
+    variables_simbolicas = tuple(sp.symbols(v) for v in lista_vars)
 
     st.divider()
 
