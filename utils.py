@@ -206,7 +206,7 @@ def Crear_Transformacion_UI():
     
     # Si el dominio y codominio son polinomios, activamos el Motor de Operadores
     if tipo_dom == "Polinomios (Pn)" and tipo_cod == "Polinomios (Pn)":
-        st.info("💡 **Modo de Operador Diferencial/Integral Activado**")
+        
         st.markdown("""
         Escriba la regla matemática aplicando operaciones sobre el polinomio **`p`**. Use **`x`** como variable y **`t`** como variable auxiliar de integración.
         * **Derivada ($p'(x)$):** `diff(p, x)` o `diff(p, x, 2)` para la segunda derivada.
@@ -215,7 +215,6 @@ def Crear_Transformacion_UI():
         * **Multiplicación ($x \cdot p(x)$):** `x * p`
         """)
         
-        # El ejemplo exacto que pediste como valor por defecto
         regla_str = st.text_input(
             "Ingrese el operador $T(p) = $", 
             value="2*diff(p, x, 2) + 3*integrate(p.subs(x, t), (t, 0, x))"
@@ -224,9 +223,10 @@ def Crear_Transformacion_UI():
         if st.button("Construir Matriz del Operador"):
             x, t = sp.symbols('x t')
             
-            # 1. Construimos el polinomio abstracto p(x) basado en la dimensión
-            # Usamos la convención de mayor a menor grado: c2*x^2 + c1*x + c0
-            variables_simbolicas = sp.symbols(f'c{dim_v-1}:-1:-1') 
+            # 1. SOLUCIÓN AL ERROR: Generamos los símbolos c_n, c_n-1 ... c_0 usando Python puro
+            variables_simbolicas = tuple(sp.Symbol(f'c{i}') for i in range(dim_v - 1, -1, -1))
+            
+            # Construimos el polinomio abstracto p(x)
             p = sum(variables_simbolicas[i] * x**(dim_v - 1 - i) for i in range(dim_v))
             
             # 2. Diccionario de contexto para que SymPy entienda los comandos de cálculo
@@ -251,7 +251,7 @@ def Crear_Transformacion_UI():
                 
                 Matriz_Regla = sp.Matrix(vector_columna)
                 
-                # 5. Calculamos la Matriz Asociada derivando (Jacobiano) respecto a c2, c1, c0
+                # 5. Calculamos la Matriz Asociada derivando (Jacobiano) respecto a los coeficientes
                 Matriz_Asociada = Matriz_Regla.jacobian(variables_simbolicas)
                 
                 st.write("**Matriz Asociada a la Transformación Lineal:**")
@@ -267,7 +267,7 @@ def Crear_Transformacion_UI():
                             "variables": variables_simbolicas,
                             "matriz_asociada": Matriz_Asociada,
                             "regla": Matriz_Regla,
-                            "base_dominio": Base1, # Previamente extraídas del bloque superior
+                            "base_dominio": Base1, 
                             "base_codominio": Base2
                         }
                         st.rerun()
