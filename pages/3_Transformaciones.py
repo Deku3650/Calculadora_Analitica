@@ -35,7 +35,7 @@ with st.sidebar:
 # ÁREA PRINCIPAL
 # ==============================================================================
 tab_crear, tab_analisis, tab_evaluacion, tab_composicion, tab_bases = st.tabs([
-    "Definir T.L.", "Detalles y Núcleo/Imagen", "Evaluar Vector", "Composición e Inversa", "Bases y Espacio Dual"
+    "Definir T.L.", "Detalles y Núcleo/Imagen", "Evaluar Vector", "Composición e Inversa", "Cambio de base"
 ])
 
 # --------------------------------------------------------------------------
