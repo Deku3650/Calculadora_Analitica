@@ -139,7 +139,6 @@ with tab_ops:
                     if v1.shape == v2.shape:
                         cos_theta = sp.simplify(v1.dot(v2) / (v1.norm() * v2.norm()))
                         ang = sp.acos(cos_theta)
-                        # raw f-string salva a Python de crashear por el \t y el \c
                         st.latex(rf"\theta = {sp.latex(ang)} \approx {sp.N(ang * 180 / sp.pi, 5)}^\circ")
                     else: st.error("Diferente dimensión.")
 
@@ -150,14 +149,14 @@ with tab_ops:
                         imprimir_matriz_simbolica(res)
                     else: st.error("Diferente dimensión.")
 
-            # Activador de guardado: Solo se enciende si 'res' es un vector válido
+            # Activador de guardado
             if res is not None:
                 st.session_state.ultimo_res_vec = res
                 st.session_state.mostrar_guardado_vec = True
             else:
                 st.session_state.mostrar_guardado_vec = False
 
-        # Interfaz de guardado persistente (fuera del botón)
+        # Interfaz de guardado persistente
         if st.session_state.get('mostrar_guardado_vec') and 'ultimo_res_vec' in st.session_state:
             st.divider()
             col_g1, col_g2 = st.columns([2, 1])
@@ -305,7 +304,6 @@ with tab_analisis_conjunto:
             ortonormal = st.checkbox("¿Base Ortonormal? (Vectores unitarios)", value=True)
             if st.button("Aplicar Gram-Schmidt al conjunto"):
                 try:
-                    # El parámetro orthonormal ahora responde a tu elección
                     base_ortho = sp.GramSchmidt(vectores, orthonormal=ortonormal)
                     mat_ortho = sp.Matrix.hstack(*base_ortho)
                     
@@ -343,3 +341,10 @@ with tab_analisis_conjunto:
             M = st.session_state.mis_matrices[mat_nombre]
             tipo_ext = st.radio("Extraer:", ["Renglones", "Columnas"], horizontal=True)
             if st.button("Extraer a Inventario de Vectores"):
+                for i in range(M.rows if tipo_ext == "Renglones" else M.cols):
+                    vec = M.row(i).T if tipo_ext == "Renglones" else M.col(i)
+                    nombre = f"{mat_nombre}_{tipo_ext[0]}{i+1}"
+                    st.session_state.mis_vectores[nombre] = vec
+                    st.write(f"Guardado: {nombre}")
+    else:
+        st.info("No hay matrices guardadas en el inventario global.")
