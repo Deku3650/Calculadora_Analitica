@@ -13,8 +13,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 2. Encabezado Principal de la Plataforma
-st.markdown("Calculadora Lineal")
-st.markdown("Plataforma Computacional para Análisis Lineal y Geometría")
+st.markdown("#Calculadora Lineal")
+st.markdown("##Plataforma Computacional para Análisis Lineal y Geometría")
 st.markdown("**Desarrollado por: José Fernández y Rebeca Ortega**")
 
 st.write("") 
