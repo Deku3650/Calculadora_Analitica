@@ -157,10 +157,18 @@ def Crear_Transformacion_UI():
     st.subheader("3. Variables del Dominio (Coordenadas)")
     
     if tipo_dom == "Polinomios (Pn)":
-        if dim_v == 3: default_vars = "a, b, c"
-        elif dim_v == 2: default_vars = "m, b"
-        else: default_vars = ",".join([f"a{i}" for i in range(dim_v - 1, -1, -1)])
-        st.info(rf"💡 **Notación Polinomial:** Cada variable representa un coeficiente ordenado de mayor a menor grado. Ejemplo: Para variables '{default_vars}', el polinomio evaluado será $p(x) = { 'x^2 + '.join(default_vars.split(', ')) if dim_v==3 else 'x + '.join(default_vars.split(', ')) if dim_v==2 else '...' }$")
+        if dim_v == 3: 
+            default_vars = "a, b, c"
+            poly_ejemplo = f"ax^2 + bx + c"
+        elif dim_v == 2: 
+            default_vars = "m, b"
+            poly_ejemplo = f"mx + b"
+        else: 
+            default_vars = ",".join([f"a{i}" for i in range(dim_v - 1, -1, -1)])
+            vars_list = default_vars.split(',')
+            poly_ejemplo = f"{vars_list[0]}x^{dim_v-1} + {vars_list[1]}x^{dim_v-2} + ... + {vars_list[-1]}"
+            
+        st.info(rf"💡 **Notación Polinomial:** Cada variable representa un coeficiente ordenado de mayor a menor grado. Ejemplo: Para variables '{default_vars}', el polinomio evaluado será $p(x) = {poly_ejemplo}$")
     else:
         if dim_v <= 4: default_vars = ",".join(["x", "y", "z", "w"][:dim_v])
         else: default_vars = ",".join([f"x{i+1}" for i in range(dim_v)])
