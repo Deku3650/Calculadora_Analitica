@@ -293,12 +293,15 @@ with tab_analisis_conjunto:
 
         st.write("---")
         st.write("**Acciones sobre el conjunto:**")
-        col_btn1, col_btn2 = st.columns(2)
+        
+        # Ahora usamos 3 columnas para incluir el botón de Base Dual
+        col_btn1, col_btn2, col_btn3 = st.columns(3)
         with col_btn1:
             if st.button("Crear Matriz con estos vectores"):
                 nombre_mat = "MAT_" + "_".join(seleccion)[:10] 
                 st.session_state.mis_matrices[nombre_mat] = mat_conjunto
                 st.success(f"Guardado como '{nombre_mat}' en el Módulo de Matrices")
+                
         with col_btn2:
             if st.button("Aplicar Gram-Schmidt al conjunto"):
                 try:
@@ -306,11 +309,25 @@ with tab_analisis_conjunto:
                     mat_ortho = sp.Matrix.hstack(*base_ortho)
                     st.write("**Base Ortonormal resultante:**")
                     imprimir_matriz_simbolica(mat_ortho)
-                    # Enviar a memoria temporal para guardar como matriz
                     st.session_state.mis_matrices["GS_MAT"] = mat_ortho
                     st.success("Se ha guardado temporalmente como 'GS_MAT' en Matrices.")
                 except Exception as e:
                     st.error(f"Error al aplicar Gram-Schmidt: {e}")
+                    
+        with col_btn3:
+            if st.button(r"Calcular Base Dual ($V^*$)", key="btn_base_dual"):
+                if not (es_li and n_vecs == dim):
+                    st.error("Error: El conjunto seleccionado no es una base válida (debe ser una matriz cuadrada y L.I.) para calcular su base dual.")
+                else:
+                    try:
+                        base_dual = sp.simplify(mat_conjunto.inv())
+                        st.write(r"**Matriz de Transición de la Base Dual ($\mathcal{B}^*$):**")
+                        st.info(r"💡 **Nota Matemática:** Cada renglón (fila) de esta matriz representa los coeficientes del funcional lineal $f_i$ de la base dual, garantizando $f_i(v_j) = \delta_{ij}$.")
+                        imprimir_matriz_simbolica(base_dual)
+                        st.session_state.mis_matrices["DUAL_MAT"] = base_dual
+                        st.success("Guardado temporalmente como 'DUAL_MAT' en Matrices.")
+                    except Exception as e:
+                        st.error(f"Error al calcular la inversa para la base dual: {e}")
 
     st.divider()
     st.subheader("Extraer filas/columnas como vectores")
