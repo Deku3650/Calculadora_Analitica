@@ -294,7 +294,6 @@ with tab_analisis_conjunto:
         st.write("---")
         st.write("**Acciones sobre el conjunto:**")
         
-        # Ahora usamos 3 columnas para incluir el botón de Base Dual
         col_btn1, col_btn2, col_btn3 = st.columns(3)
         with col_btn1:
             if st.button("Crear Matriz con estos vectores"):
@@ -302,11 +301,11 @@ with tab_analisis_conjunto:
                 st.session_state.mis_matrices[nombre_mat] = mat_conjunto
                 st.success(f"Guardado como '{nombre_mat}' en el Módulo de Matrices")
                 
-       with col_btn2:
+        with col_btn2:
             ortonormal = st.checkbox("¿Base Ortonormal? (Vectores unitarios)", value=True)
             if st.button("Aplicar Gram-Schmidt al conjunto"):
                 try:
-                    # El parámetro orthonormal ahora responde a tu elección en la interfaz
+                    # El parámetro orthonormal ahora responde a tu elección
                     base_ortho = sp.GramSchmidt(vectores, orthonormal=ortonormal)
                     mat_ortho = sp.Matrix.hstack(*base_ortho)
                     
@@ -316,9 +315,8 @@ with tab_analisis_conjunto:
                         st.write("**Base Ortogonal resultante:**")
                         
                     imprimir_matriz_simbolica(mat_ortho)
-                    # Enviar a memoria temporal para guardar como matriz
                     st.session_state.mis_matrices["GS_MAT"] = mat_ortho
-                    st.success("Se ha guardado temporalmente como 'GS_MAT' en Matrices.")
+                    st.success("Guardado temporalmente como 'GS_MAT' en Matrices.")
                 except Exception as e:
                     st.error(f"Error al aplicar Gram-Schmidt: {e}")
                     
@@ -330,7 +328,7 @@ with tab_analisis_conjunto:
                     try:
                         base_dual = sp.simplify(mat_conjunto.inv())
                         st.write(r"**Matriz de Transición de la Base Dual ($\mathcal{B}^*$):**")
-                        st.info(r"💡 **Nota Matemática:** Cada renglón (fila) de esta matriz representa los coeficientes del funcional lineal $f_i$ de la base dual, garantizando $f_i(v_j) = \delta_{ij}$.")
+                        st.info(r"💡 **Nota Matemática:** Cada renglón (fila) de esta matriz representa los coeficientes del funcional lineal $f_i$ de la base dual.")
                         imprimir_matriz_simbolica(base_dual)
                         st.session_state.mis_matrices["DUAL_MAT"] = base_dual
                         st.success("Guardado temporalmente como 'DUAL_MAT' en Matrices.")
@@ -345,10 +343,3 @@ with tab_analisis_conjunto:
             M = st.session_state.mis_matrices[mat_nombre]
             tipo_ext = st.radio("Extraer:", ["Renglones", "Columnas"], horizontal=True)
             if st.button("Extraer a Inventario de Vectores"):
-                for i in range(M.rows if tipo_ext == "Renglones" else M.cols):
-                    vec = M.row(i).T if tipo_ext == "Renglones" else M.col(i)
-                    nombre = f"{mat_nombre}_{tipo_ext[0]}{i+1}"
-                    st.session_state.mis_vectores[nombre] = vec
-                    st.write(f"Guardado: {nombre}")
-    else:
-        st.info("No hay matrices guardadas en el inventario global.")
