@@ -302,13 +302,21 @@ with tab_analisis_conjunto:
                 st.session_state.mis_matrices[nombre_mat] = mat_conjunto
                 st.success(f"Guardado como '{nombre_mat}' en el Módulo de Matrices")
                 
-        with col_btn2:
+       with col_btn2:
+            ortonormal = st.checkbox("¿Base Ortonormal? (Vectores unitarios)", value=True)
             if st.button("Aplicar Gram-Schmidt al conjunto"):
                 try:
-                    base_ortho = sp.GramSchmidt(vectores, orthonormal=True)
+                    # El parámetro orthonormal ahora responde a tu elección en la interfaz
+                    base_ortho = sp.GramSchmidt(vectores, orthonormal=ortonormal)
                     mat_ortho = sp.Matrix.hstack(*base_ortho)
-                    st.write("**Base Ortonormal resultante:**")
+                    
+                    if ortonormal:
+                        st.write("**Base Ortonormal resultante:**")
+                    else:
+                        st.write("**Base Ortogonal resultante:**")
+                        
                     imprimir_matriz_simbolica(mat_ortho)
+                    # Enviar a memoria temporal para guardar como matriz
                     st.session_state.mis_matrices["GS_MAT"] = mat_ortho
                     st.success("Se ha guardado temporalmente como 'GS_MAT' en Matrices.")
                 except Exception as e:
