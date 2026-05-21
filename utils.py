@@ -181,22 +181,27 @@ def Crear_Transformacion_UI():
     # 2.5. ENTRADA DIRECTA DE BASES 
     # ==============================================================================
     st.subheader("Bases no canónicas")
-    with st.expander("¿Desea usar bases no canónicas?"):
-        st.info("Escriba cada vector columna encerrado en corchetes `[...]` y separado por comas. El sistema extraerá los vectores automáticamente.")
+    with st.expander("¿Desea ingresar bases no canónicas explícitas?"):
+        st.markdown(r"""
+        💡 **¿Cómo introducir los vectores de la base?**
+        Todo elemento de un espacio vectorial debe ingresarse como su **vector de coordenadas (columna)** encerrado en corchetes `[...]` y separado por comas:
+        * **Para $\mathbb{R}^n$:** Ingrese las componentes directamente. Ej. para $\mathbb{R}^2$: `[1, 2], [-1, 1]`
+        * **Para Polinomios ($P_n$):** Ingrese los coeficientes ordenados según sus variables. Ej. para $P_2$ ($ax^2+bx+c$), la base $\{x^2+1, x, 1\}$ se ingresa aislando sus coeficientes: `[1,0,1], [0,1,0], [0,0,1]`
+        * **Para Matrices ($M_{m \times n}$):** Aplane la matriz fila por fila. Ej. para $M_{2 \times 2}$ $\begin{pmatrix}a&b\\c&d\end{pmatrix}$, la base canónica se vería así: `[1,0,0,0], [0,1,0,0], [0,0,1,0], [0,0,0,1]`
+        """)
+        
         col_b1, col_b2 = st.columns(2)
         with col_b1:
-            st.write("Base Dominio (V):")
-            b1_input = st.text_area("Vectores (ej: [1,0], [1,1])", value="", key="base_v")
+            b1_input = st.text_area("Base Dominio (V):", value="", placeholder="Deje en blanco para usar la canónica", key="base_v")
         with col_b2:
-            st.write("Base Codominio (W):")
-            b2_input = st.text_area("Vectores (ej: [1,0,0], [0,1,0], [0,0,1])", value="", key="base_w")
+            b2_input = st.text_area("Base Codominio (W):", value="", placeholder="Deje en blanco para usar la canónica", key="base_w")
             
         try:
             vecs_b1 = re.findall(r'\[(.*?)\]', b1_input)
-            Base1 = sp.Matrix([[parse_expr(c) for c in v.split(',')] for v in vecs_b1]).T if vecs_b1 else sp.eye(dim_v)
+            Base1 = sp.Matrix([[leer_expresion_st(c) for c in v.split(',')] for v in vecs_b1]).T if vecs_b1 else sp.eye(dim_v)
             
             vecs_b2 = re.findall(r'\[(.*?)\]', b2_input)
-            Base2 = sp.Matrix([[parse_expr(c) for c in v.split(',')] for v in vecs_b2]).T if vecs_b2 else sp.eye(dim_w)
+            Base2 = sp.Matrix([[leer_expresion_st(c) for c in v.split(',')] for v in vecs_b2]).T if vecs_b2 else sp.eye(dim_w)
             
             if vecs_b1 or vecs_b2:
                 if Base1.det() == 0 or Base2.det() == 0:
