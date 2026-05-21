@@ -39,7 +39,7 @@ tab_crear, tab_analisis, tab_evaluacion, tab_composicion, tab_bases = st.tabs([
 ])
 
 # --------------------------------------------------------------------------
-# PESTAÑA 1: Definir T.L. (La lógica fuerte está en utils.py)
+# PESTAÑA 1: Definir T.L.
 # --------------------------------------------------------------------------
 with tab_crear:
     Crear_Transformacion_UI()
@@ -61,13 +61,13 @@ with tab_analisis:
             with col1:
                 st.subheader("Núcleo (Ker)")
                 base_ker = A.nullspace()
-                if not base_ker: st.write(rf"El núcleo es trivial: $\{{\mathbf{{0}}}\}$")
+                if not base_ker: st.write(r"El núcleo es trivial: $\{ \mathbf{0} \}$")
                 else: imprimir_matriz_simbolica(sp.Matrix.hstack(*base_ker))
                 st.info(f"Nulidad: {len(base_ker)}")
             with col2:
                 st.subheader("Imagen (Im)")
                 base_im = A.columnspace()
-                if not base_im: st.write(rf"La imagen es trivial: $\{{\mathbf{{0}}}\}$")
+                if not base_im: st.write(r"La imagen es trivial: $\{ \mathbf{0} \}$")
                 else: imprimir_matriz_simbolica(sp.Matrix.hstack(*base_im))
                 st.info(f"Rango: {len(base_im)}")
     else:
@@ -102,7 +102,7 @@ with tab_composicion:
     st.header("🔄 Operaciones Avanzadas")
     
     # --- SECCIÓN: INVERSA ---
-    st.subheader("1. Inversa de una Transformación Lineal ($T^{-1}$)")
+    st.subheader(r"1. Inversa de una Transformación Lineal ($T^{-1}$)")
     tl_inv = st.selectbox("Transformación a invertir:", list(st.session_state.mis_transformaciones.keys()), key="inv_tl")
     
     if st.button("Calcular Inversa Analítica"):
@@ -110,11 +110,10 @@ with tab_composicion:
         A = paq_inv["matriz_asociada"]
         
         if paq_inv["dim_V"] != paq_inv["dim_W"]:
-            st.error("La matriz asociada no es cuadrada. Solo los endomorfismos de espacios equipotentes admiten inversa.")
+            st.error("La matriz asociada no es cuadrada. Solo los endomorfismos admiten inversa.")
         else:
             try:
                 M_inversa = sp.simplify(A.inv())
-                # Creamos variables w_1, w_2... correspondientes al codominio
                 vars_inv = tuple(sp.symbols(f"w_{i+1}") for i in range(paq_inv["dim_W"]))
                 regla_inv = sp.simplify(M_inversa * sp.Matrix(vars_inv))
                 
@@ -127,15 +126,14 @@ with tab_composicion:
             except Exception:
                 st.error("La transformación no es un Isomorfismo (determinante 0). No admite operador inverso.")
 
-    # Mostrar resultados de la inversa y guardar
     if 'temp_inv_res' in st.session_state:
         inv_d = st.session_state.temp_inv_res
         c1, c2 = st.columns(2)
         with c1:
-            st.write("**Matriz Asociada ($[T^{-1}]$):**")
+            st.write(r"**Matriz Asociada ($[T^{-1}]$):**")
             imprimir_matriz_simbolica(inv_d["matriz"])
         with c2:
-            st.write("**Regla de Correspondencia ($T^{-1}(\mathbf{w})$):**")
+            st.write(r"**Regla de Correspondencia ($T^{-1}(\mathbf{w})$):**")
             st.latex(sp.latex(inv_d["regla"]))
         
         col_btn1, col_btn2 = st.columns([2, 1])
@@ -157,8 +155,8 @@ with tab_composicion:
     st.divider()
     
     # --- SECCIÓN: COMPOSICIÓN ---
-    st.subheader("2. Composición de Transformaciones ($S \circ T$)")
-    st.latex(rf"(S \circ T)(\vec{{v}})")
+    st.subheader(r"2. Composición de Transformaciones ($S \circ T$)")
+    st.latex(r"(S \circ T)(\vec{v})")
     col_t, col_s = st.columns(2)
     with col_t: T = st.selectbox("1º Se aplica (Interna T):", list(st.session_state.mis_transformaciones.keys()), key="comp_t")
     with col_s: S = st.selectbox("2º Se aplica (Externa S):", list(st.session_state.mis_transformaciones.keys()), key="comp_s")
@@ -182,15 +180,14 @@ with tab_composicion:
             }
             st.success("¡Composición calculada analíticamente!")
 
-    # Mostrar resultados de la composición y guardar
     if 'temp_comp_res' in st.session_state:
         comp_d = st.session_state.temp_comp_res
         c1, c2 = st.columns(2)
         with c1:
-            st.write("**Matriz Asociada Resultante ($[S \circ T]$):**")
+            st.write(r"**Matriz Asociada Resultante ($[S \circ T]$):**")
             imprimir_matriz_simbolica(comp_d["matriz"])
         with c2:
-            st.write("**Regla de Correspondencia ($(S \circ T)(\mathbf{v})$):**")
+            st.write(r"**Regla de Correspondencia ($(S \circ T)(\mathbf{v})$):**")
             st.latex(sp.latex(comp_d["regla"]))
         
         col_btn1, col_btn2 = st.columns([2, 1])
@@ -220,10 +217,10 @@ with tab_bases:
         st.subheader("Bases Actuales")
         col_b1, col_b2 = st.columns(2)
         with col_b1:
-            st.write("**Base del Dominio ($\\beta$):**")
+            st.write(r"**Base del Dominio ($\beta$):**")
             imprimir_matriz_simbolica(paquete['base_dominio'])
         with col_b2:
-            st.write("**Base del Codominio ($\gamma$):**")
+            st.write(r"**Base del Codominio ($\gamma$):**")
             imprimir_matriz_simbolica(paquete['base_codominio'])
             
         st.divider()
@@ -233,13 +230,14 @@ with tab_bases:
         with st.form("form_cambio_base"):
             col_nb1, col_nb2 = st.columns(2)
             with col_nb1:
-                nb1_input = st.text_area("Nueva Base Dominio ($\\beta'$):", value="", key="new_b1")
+                nb1_input = st.text_area(r"Nueva Base Dominio ($\beta'$):", value="", key="new_b1")
             with col_nb2:
-                nb2_input = st.text_area("Nueva Base Codominio ($\gamma'$):", value="", key="new_b2")
+                nb2_input = st.text_area(r"Nueva Base Codominio ($\gamma'$):", value="", key="new_b2")
                 
             submit_bases = st.form_submit_button("Calcular Matriz en Nuevas Bases")
             
         if submit_bases:
+            import re
             def procesar_base(texto, dim):
                 if not texto.strip(): return sp.eye(dim)
                 bloques = re.findall(r'\[(.*?)\]', texto)
@@ -250,44 +248,41 @@ with tab_bases:
                 return sp.Matrix(matriz).T
                 
             try:
-                # Q = Matriz de transición del dominio, P = Matriz de transición del codominio
                 Q = procesar_base(nb1_input, paquete["dim_V"]) 
                 P = procesar_base(nb2_input, paquete["dim_W"]) 
                 
                 if Q.det() == 0 or P.det() == 0:
-                    st.error("Error: Las bases ingresadas no son linealmente independientes (el determinante es nulo).")
+                    st.error("Error: Las bases ingresadas no son linealmente independientes.")
                 else:
-                    A_can = paquete["matriz_asociada"] # [T] original
+                    A_can = paquete["matriz_asociada"]
                     P_inv = sp.simplify(P.inv())
-                    
-                    # Fórmula de cambio de base: P^-1 * A * Q
                     M_nueva = sp.simplify(P_inv * A_can * Q)
                     
                     st.success("¡Cambio de base matemático exitoso!")
                     
                     st.write("### Desglose del Teorema de Cambio de Base")
-                    st.latex(rf"[T]_{{\beta'}}^{{\gamma'}} = P^{{-1}} \cdot [T]_{{\beta}}^{{\gamma}} \cdot Q")
+                    st.latex(r"[T]_{\beta'}^{\gamma'} = P^{-1} \cdot [T]_{\beta}^{\gamma} \cdot Q")
                     
                     col_mat1, col_mat2, col_mat3 = st.columns(3)
                     with col_mat1:
-                        st.write("**Paso del Dominio ($Q$):**")
+                        st.write(r"**Paso del Dominio ($Q$):**")
                         imprimir_matriz_simbolica(Q)
                     with col_mat2:
-                        st.write("**Paso del Codominio ($P$):**")
+                        st.write(r"**Paso del Codominio ($P$):**")
                         imprimir_matriz_simbolica(P)
                     with col_mat3:
-                        st.write("**Inversa de P ($P^{-1}$):**")
+                        st.write(r"**Inversa de P ($P^{-1}$):**")
                         imprimir_matriz_simbolica(P_inv)
                         
                     st.write("**Comprobación de la fórmula matricial:**")
                     st.latex(rf"{sp.latex(P_inv)} \cdot {sp.latex(A_can)} \cdot {sp.latex(Q)} = {sp.latex(M_nueva)}")
                     
-                    st.write("### Nueva Matriz Asociada $[T]_{\\beta'}^{\\gamma'}$:")
+                    st.write(r"### Nueva Matriz Asociada $[T]_{\beta'}^{\gamma'}$:")
                     imprimir_matriz_simbolica(M_nueva)
                     
                     st.divider()
-                    st.subheader("Espacio Dual ($V^*$)")
-                    st.write("Matriz de Transición de la Base Dual ($\mathcal{B}^*$) asociada a la nueva base del dominio $\\beta'$:")
+                    st.subheader(r"Espacio Dual ($V^*$)")
+                    st.write(r"Matriz de Transición de la Base Dual ($\mathcal{B}^*$) asociada a la nueva base del dominio $\beta'$:")
                     imprimir_matriz_simbolica(sp.simplify(Q.inv()))
                     
             except Exception as e:
