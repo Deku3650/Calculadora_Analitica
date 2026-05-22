@@ -261,7 +261,12 @@ def Crear_Transformacion_UI():
                     vector_columna.append(expr_evaluada.subs(x_sym, 0))
                     
                     matriz_regla = sp.Matrix(vector_columna)
-                    st.session_state.temp_tl_mat = matriz_regla.jacobian(variables_simbolicas)
+                    
+                    # Cálculo riguroso de la Matriz Asociada con Cambio de Base
+                    A_can = matriz_regla.jacobian(variables_simbolicas)
+                    M_asociada = sp.simplify(Base2.inv() * A_can * Base1)
+                    
+                    st.session_state.temp_tl_mat = M_asociada
                     st.session_state.temp_tl_reg = matriz_regla
                     st.session_state.temp_b1 = Base1
                     st.session_state.temp_b2 = Base2
@@ -294,7 +299,11 @@ def Crear_Transformacion_UI():
                         if not all(e == 0 for e in matriz_regla.subs(sustitucion_cero)):
                             st.error("Error Matemático: La transformación NO es lineal (T(0) ≠ 0).")
                         else:
-                            st.session_state.temp_tl_mat = matriz_regla.jacobian(variables_simbolicas)
+                            # Cálculo riguroso de la Matriz Asociada con Cambio de Base
+                            A_can = matriz_regla.jacobian(variables_simbolicas)
+                            M_asociada = sp.simplify(Base2.inv() * A_can * Base1)
+                            
+                            st.session_state.temp_tl_mat = M_asociada
                             st.session_state.temp_tl_reg = matriz_regla
                             st.session_state.temp_b1 = Base1
                             st.session_state.temp_b2 = Base2
@@ -318,9 +327,14 @@ def Crear_Transformacion_UI():
             
         if submit_mat:
             try:
-                matriz_asoc = sp.Matrix([[parse_expr(cell) for cell in row] for row in matriz_elementos])
+                matriz_asoc = sp.Matrix([[leer_expresion_st(cell) for cell in row] for row in matriz_elementos])
+                
+                # Transformar la matriz abstracta en una regla canónica evaluable
+                A_can = sp.simplify(Base2 * matriz_asoc * Base1.inv())
+                regla_canonica = sp.simplify(A_can * sp.Matrix(variables_simbolicas))
+                
                 st.session_state.temp_tl_mat = matriz_asoc
-                st.session_state.temp_tl_reg = matriz_asoc * sp.Matrix(variables_simbolicas)
+                st.session_state.temp_tl_reg = regla_canonica
                 st.session_state.temp_b1 = Base1
                 st.session_state.temp_b2 = Base2
                 st.rerun()
@@ -336,8 +350,13 @@ def Crear_Transformacion_UI():
                 st.error(f"Incompatibilidad de dimensiones: La matriz mide {M_imp.shape[0]}x{M_imp.shape[1]}, el espacio requiere {dim_w}x{dim_v}.")
             else:
                 if st.button("Vincular Matriz Seleccionada"):
+                    
+                    # Transformar la matriz abstracta en una regla canónica evaluable
+                    A_can = sp.simplify(Base2 * M_imp * Base1.inv())
+                    regla_canonica = sp.simplify(A_can * sp.Matrix(variables_simbolicas))
+                    
                     st.session_state.temp_tl_mat = M_imp
-                    st.session_state.temp_tl_reg = M_imp * sp.Matrix(variables_simbolicas)
+                    st.session_state.temp_tl_reg = regla_canonica
                     st.session_state.temp_b1 = Base1
                     st.session_state.temp_b2 = Base2
                     st.success("Matriz vinculada. Vea el resumen abajo.")
