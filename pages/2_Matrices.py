@@ -318,18 +318,21 @@ else:
         if st.button("Calcular Jacobiana"):
             M_jac = st.session_state.mis_matrices[mat_jac_nombre]
             variables = list(M_jac.free_symbols)
+            
             if not variables:
                 st.error("La matriz no contiene variables simbólicas.")
+            # NUEVO ESCUDO: Verificamos matemáticamente que sea un vector (1xn o nx1)
+            elif M_jac.shape[0] != 1 and M_jac.shape[1] != 1:
+                st.error(f"Error Matemático: La Jacobiana está definida estrictamente para funciones vectoriales (vectores columna o renglón). La matriz seleccionada mide {M_jac.shape[0]}x{M_jac.shape[1]}.")
             else:
                 variables.sort(key=lambda v: v.name)
                 try:
                     J = M_jac.jacobian(variables)
-                    st.success(f"Jacobiana evaluada respecto a: {variables}")
+                    st.success(f"Jacobiana evaluada respecto a las variables: {variables}")
                     st.session_state.temp_avanzada = J
-                except TypeError:
-                     st.error(f"Error Matemático: La Jacobiana está definida para vectores. Su matriz es de {M_jac.shape[0]}x{M_jac.shape[1]}.")
-                except AttributeError:
-                     st.error("Error de formato en SymPy.")
+                except Exception as e:
+                    # Captura general para evitar que la página se congele
+                    st.error(f"Error inesperado al procesar la Jacobiana: {e}")
 
         if 'temp_avanzada' in st.session_state:
             imprimir_matriz_simbolica(st.session_state.temp_avanzada)
