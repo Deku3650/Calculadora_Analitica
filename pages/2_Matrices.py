@@ -46,6 +46,50 @@ with st.sidebar:
             st.rerun() 
             
     st.divider()
+
+    # --- PUENTE DE IMPORTACIÓN ---
+    st.subheader("Importar a Matrices")
+    fuente_import = st.selectbox("¿De dónde desea importar?", ["Seleccione...", "De una Transformación Activa", "De un Conjunto de Vectores"])
+    
+    if fuente_import == "De una Transformación Activa":
+        if st.session_state.get('mis_transformaciones'):
+            tl_import = st.selectbox("Seleccione la T.L.:", list(st.session_state.mis_transformaciones.keys()), key="imp_tl")
+            nom_mat_tl = st.text_input("Guardar matriz asociada como (Ej. M_T1):").upper().strip()
+            
+            if st.button("⬇️ Importar Matriz Asociada"):
+                if nom_mat_tl:
+                    st.session_state.mis_matrices[nom_mat_tl] = st.session_state.mis_transformaciones[tl_import]["matriz_asociada"]
+                    st.success(f"Matriz '{nom_mat_tl}' importada con éxito.")
+                    st.rerun()
+                else:
+                    st.error("Ingrese un nombre para guardar la matriz.")
+        else:
+            st.info("No hay transformaciones definidas en memoria.")
+            
+    elif fuente_import == "De un Conjunto de Vectores":
+        if st.session_state.get('mis_vectores'):
+            vecs_import = st.multiselect("Seleccione vectores para formar las columnas:", list(st.session_state.mis_vectores.keys()), key="imp_vecs")
+            nom_mat_vec = st.text_input("Guardar matriz generada como (Ej. BASE1):").upper().strip()
+            
+            if st.button("⬇️ Construir e Importar Matriz"):
+                if not vecs_import:
+                    st.error("Debe seleccionar al menos un vector.")
+                elif not nom_mat_vec:
+                    st.error("Ingrese un nombre para guardar la matriz.")
+                else:
+                    try:
+                        # Une los vectores elegidos como columnas de una sola matriz
+                        lista_vectores = [st.session_state.mis_vectores[v] for v in vecs_import]
+                        matriz_armada = sp.Matrix.hstack(*lista_vectores)
+                        st.session_state.mis_matrices[nom_mat_vec] = matriz_armada
+                        st.success(f"Matriz '{nom_mat_vec}' construida e importada.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: Los vectores deben tener la misma dimensión. Detalle: {e}")
+        else:
+            st.info("No hay vectores definidos en memoria.")
+            
+    st.divider()
     
     # --- PUENTE DE EXPORTACIÓN A T.L. ---
     st.subheader("Exportar a Transformación")
