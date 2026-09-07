@@ -243,27 +243,30 @@ with tab_sistemas:
                     else: M_aug[i, j] = val
                         
             if not error_parser:
-                A = M_aug[:, :-1]
-                rango_A = A.rank()
-                rango_Aug = M_aug.rank()
-                
                 st.write("**Matriz Aumentada:**")
                 imprimir_matriz_simbolica(M_aug)
                 
-                if rango_A != rango_Aug:
-                    st.error("Sistema Incompatible (S.I.). No tiene solución (Los rangos no coinciden).")
+                variables = sp.symbols(f'x1:{n_vars+1}')
+                # 1. Ejecutamos linsolve UNA sola vez directo sobre la matriz aumentada
+                solucion = sp.linsolve(M_aug, variables)
+                
+                # 2. Evaluamos el resultado algebraico directamente
+                if not solucion:
+                    st.error("Sistema Incompatible (S.I.). No tiene solución (El conjunto solución está vacío).")
                 else:
-                    variables = sp.symbols(f'x1:{n_vars+1}')
-                    solucion = sp.linsolve(M_aug, variables)
+                    sol_lista = list(solucion)[0]
+                    # Buscamos si hay variables libres (parámetros autogenerados por SymPy)
+                    hay_parametros = any(val.free_symbols for val in sol_lista if hasattr(val, 'free_symbols'))
                     
-                    if rango_A == n_vars:
+                    if not hay_parametros:
                         st.success("Sistema Compatible Determinado (S.C.D.). Solución única:")
-                        sol_lista = list(solucion)[0]
                         for i, var in enumerate(variables):
                             st.latex(rf"{var} = {sp.latex(sol_lista[i])}")
                     else:
                         st.warning("Sistema Compatible Indeterminado (S.C.I.). Infinitas soluciones paramétricas:")
-                        st.latex(sp.latex(solucion))
+                        # Imprimimos cada variable parametrizada para mejor legibilidad
+                        for i, var in enumerate(variables):
+                            st.latex(rf"{var} = {sp.latex(sol_lista[i])}")
 
 # ------------------------------------------------------------------------------
 # TAB 4: ANÁLISIS DE CONJUNTOS
