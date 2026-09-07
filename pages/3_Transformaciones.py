@@ -27,8 +27,8 @@ with st.sidebar:
     st.divider()
     if st.button("🗑️ Borrar todas las T.L."):
         st.session_state.mis_transformaciones.clear()
-        if 'temp_inv_res' in st.session_state: del st.session_state.temp_inv_res
-        if 'temp_comp_res' in st.session_state: del st.session_state.temp_comp_res
+        st.session_state.pop('temp_inv_res', None)
+        st.session_state.pop('temp_comp_res', None)
         st.rerun()
 
 # ==============================================================================
@@ -148,7 +148,7 @@ with tab_composicion:
                         "matriz_asociada": inv_d["matriz"], "regla": inv_d["regla"],
                         "base_dominio": inv_d["b1"], "base_codominio": inv_d["b2"]
                     }
-                    del st.session_state.temp_inv_res
+                    st.session_state.pop("temp_inv_res", None)
                     st.success(f"Operador guardado como '{nombre_inv}'.")
                     st.rerun()
 
@@ -202,7 +202,7 @@ with tab_composicion:
                         "matriz_asociada": comp_d["matriz"], "regla": comp_d["regla"],
                         "base_dominio": comp_d["b1"], "base_codominio": comp_d["b2"]
                     }
-                    del st.session_state.temp_comp_res
+                    st.session_state.pop("temp_comp_res", None)
                     st.success(f"Composición guardada como '{nombre_comp}'.")
                     st.rerun()
 
