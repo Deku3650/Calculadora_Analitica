@@ -23,6 +23,7 @@ def graficar_cuadratica_st(a, b, c):
     ax.legend()
     return fig
 
+@st.cache_resource
 def renderizar_figura_3d_st(figura, params):
     fig = plt.figure(figsize=(6, 6))
     ax = fig.add_subplot(111, projection='3d')
@@ -33,8 +34,9 @@ def renderizar_figura_3d_st(figura, params):
 
     if figura == 1: # Cilindro
         r, h = params['r'], params['h']
-        z = np.linspace(0, h, 50)
-        theta = np.linspace(0, 2*np.pi, 50)
+        # OPTIMIZACIÓN: Reducción de 50 a 30 puntos
+        z = np.linspace(0, h, 30)
+        theta = np.linspace(0, 2*np.pi, 30)
         theta_grid, z_grid = np.meshgrid(theta, z)
         x_grid = r * np.cos(theta_grid)
         y_grid = r * np.sin(theta_grid)
@@ -43,8 +45,9 @@ def renderizar_figura_3d_st(figura, params):
 
     elif figura == 2: # Esfera
         r = params['r']
-        u = np.linspace(0, 2 * np.pi, 50)
-        v = np.linspace(0, np.pi, 50)
+        # OPTIMIZACIÓN: Reducción de 50 a 30 puntos
+        u = np.linspace(0, 2 * np.pi, 30)
+        v = np.linspace(0, np.pi, 30)
         x = r * np.outer(np.cos(u), np.sin(v))
         y = r * np.outer(np.sin(u), np.sin(v))
         z = r * np.outer(np.ones(np.size(u)), np.cos(v))
@@ -62,8 +65,9 @@ def renderizar_figura_3d_st(figura, params):
                 return None
             h = math.sqrt(s**2 - r**2)
 
-        z = np.linspace(0, h, 50)
-        theta = np.linspace(0, 2*np.pi, 50)
+        # OPTIMIZACIÓN: Reducción de 50 a 30 puntos
+        z = np.linspace(0, h, 30)
+        theta = np.linspace(0, 2*np.pi, 30)
         theta_grid, z_grid = np.meshgrid(theta, z)
         r_grid = r * (1 - z_grid/h) 
         x_grid = r_grid * np.cos(theta_grid)
