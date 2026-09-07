@@ -74,7 +74,7 @@ def leer_expresion_st(entrada_str, solo_reales=False):
 
 def Crear_Matriz_Simbolica_UI(nombre_clave):
     """
-    Genera la interfaz gráfica (UI) para crear una matriz.
+    Genera la interfaz gráfica (UI) para crear una matriz optimizada con st.data_editor.
     Retorna la matriz de SymPy cuando el usuario oprime "Guardar".
     """
     st.subheader(f"Crear Matriz: {nombre_clave}")
@@ -85,31 +85,54 @@ def Crear_Matriz_Simbolica_UI(nombre_clave):
     with col2:
         columnas = st.number_input("Columnas", min_value=1, max_value=10, value=3, key=f"C_{nombre_clave}")
 
-    st.write("Ingrese los elementos (números o variables como 'x', 'x**2', etc.):")
+    st.write("Edite los elementos directamente en la tabla (admite números, fracciones y variables como 'x', '2*y'):")
 
     with st.form(f"form_matriz_{nombre_clave}"):
-        matriz_elementos = []
-        for i in range(filas):
-            cols_input = st.columns(columnas)
-            fila_actual = []
-            for j in range(columnas):
-                with cols_input[j]:
-                    valor = st.text_input(f"E({i + 1},{j + 1})", value="0", key=f"elem_{nombre_clave}_{i}_{j}")
-                    fila_actual.append(valor)
-            matriz_elementos.append(fila_actual)
+        # 1. Estructuramos los datos base como diccionario para el data_editor
+        default_data = {f"C{j+1}": ["0"] * filas for j in range(columnas)}
+        
+        # 2. Forzamos que todas las columnas se interpreten como texto puro. 
+        # Esto evita que Streamlit borre expresiones algebraicas creyendo que son errores de tipeo.
+        configuracion_cols = {
+            f"C{j+1}": st.column_config.TextColumn(f"Col {j+1}", required=True) 
+            for j in range(columnas)
+        }
+        
+        # 3. La key incluye la dimensión (filas x columnas). 
+        # Esto obliga a la tabla a reiniciarse limpiamente si el usuario cambia el tamaño.
+        editor_key = f"editor_{nombre_clave}_{filas}x{columnas}"
+        
+        # 4. Inyección del componente optimizado (Un solo widget en lugar de N*M widgets)
+        datos_editados = st.data_editor(
+            default_data,
+            column_config=configuracion_cols,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            key=editor_key
+        )
 
         submit = st.form_submit_button("Construir Matriz")
 
     if submit:
         matriz_sympy = sp.zeros(filas, columnas)
         error = False
+        
         for i in range(filas):
             for j in range(columnas):
-                obj = leer_expresion_st(matriz_elementos[i][j])
+                # Extracción segura: Soporta si Streamlit retorna un Pandas DataFrame o un Diccionario
+                if hasattr(datos_editados, "iloc"): 
+                    val_str = str(datos_editados.iloc[i, j])
+                else:
+                    val_str = str(datos_editados[f"C{j+1}"][i])
+                    
+                obj = leer_expresion_st(val_str)
+                
                 if obj is None:
                     error = True
                     break
                 matriz_sympy[i, j] = obj
+            
             if error:
                 break
 
@@ -117,6 +140,7 @@ def Crear_Matriz_Simbolica_UI(nombre_clave):
             st.success("¡Matriz creada exitosamente!")
             imprimir_matriz_simbolica(matriz_sympy)
             return matriz_sympy
+            
     return None
 
 def Crear_Transformacion_UI():
