@@ -1,0 +1,27 @@
+name: Despertador Automático de Streamlit
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+jobs:
+  mantener-despierta:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Descargar código del repositorio
+        uses: actions/checkout@v3
+
+      - name: 🐍 Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Instalar dependencias del robot
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright
+          playwright install chromium
+
+      - name: 🤖 Ejecutar script despertador
+        run: python keep_alive.py
