@@ -126,8 +126,8 @@ def Crear_Transformacion_UI():
     # 1. SOLICITUD DE ESPACIOS
     # ==============================================================================
     st.subheader("1. Dominio (V)")
-    tipo_dom = st.selectbox("Espacio Vectorial del Dominio", ["R^n", "Polinomios (Pn)", "Matrices (mxn)"], key="tl_tipo_dom")
-    if tipo_dom == "R^n":
+    tipo_dom = st.selectbox("Espacio Vectorial del Dominio", ["R^n", "C^n", "Polinomios (Pn)", "Matrices (mxn)"], key="tl_tipo_dom")
+    if tipo_dom in ["R^n", "C^n"]:
         dim_v = st.number_input("Dimensión n (Dominio):", min_value=1, value=3, key="tl_dim_v_rn")
     elif tipo_dom == "Polinomios (Pn)":
         grado = st.number_input("Grado n (Dominio):", min_value=0, value=2, key="tl_dim_v_pn")
@@ -138,8 +138,8 @@ def Crear_Transformacion_UI():
         dim_v = m * n
 
     st.subheader("2. Co-Dominio (W)")
-    tipo_cod = st.selectbox("Espacio Vectorial del Codominio", ["R^n", "Polinomios (Pn)", "Matrices (mxn)"], key="tl_tipo_cod")
-    if tipo_cod == "R^n":
+    tipo_cod = st.selectbox("Espacio Vectorial del Codominio", ["R^n", "C^n", "Polinomios (Pn)", "Matrices (mxn)"], key="tl_tipo_cod")
+    if tipo_cod in ["R^n", "C^n"]:
         dim_w = st.number_input("Dimensión n (Codominio):", min_value=1, value=3, key="tl_dim_w_rn")
     elif tipo_cod == "Polinomios (Pn)":
         grado_cod = st.number_input("Grado n (Codominio):", min_value=0, value=2, key="tl_dim_w_pn")
@@ -391,7 +391,7 @@ def Crear_Transformacion_UI():
                         "base_codominio": st.session_state.temp_b2
                     }
                     for temp_var in ['temp_tl_mat', 'temp_tl_reg', 'temp_b1', 'temp_b2']:
-                        del st.session_state[temp_var]
+                        st.session_state.pop(temp_var, None)
                     st.success(f"¡Transformación '{nombre_tl}' guardada con éxito!")
                     st.rerun()
                 else:
@@ -399,7 +399,7 @@ def Crear_Transformacion_UI():
         with col_btn2:
             if st.button("❌ Cancelar"):
                 for temp_var in ['temp_tl_mat', 'temp_tl_reg', 'temp_b1', 'temp_b2']:
-                    del st.session_state[temp_var]
+                    st.session_state.pop(temp_var, None)
                 st.rerun()
 
 def mostrar_detalle_tl(nombre, tl_data):
