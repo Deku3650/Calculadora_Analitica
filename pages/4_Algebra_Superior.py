@@ -6,11 +6,8 @@ from sympy.ntheory.modular import crt
 try:
     from utils import leer_expresion_st 
 except ImportError:
-    def leer_expresion_st(val, solo_reales=False):
-        try:
-            return sp.sympify(val)
-        except:
-            return None
+    st.error("Error crítico: No se pudo cargar el analizador matemático desde utils.py. Asegúrate de ejecutar la app desde el directorio raíz.")
+    st.stop()
 
 st.set_page_config(page_title="Álgebra Superior", layout="wide")
 
