@@ -121,7 +121,7 @@ with st.sidebar:
     if st.button("🗑️ Borrar todas las matrices"):
         st.session_state.mis_matrices.clear()
         if 'temp_matriz' in st.session_state:
-            del st.session_state.temp_matriz
+            st.session_state.pop("temp_matriz", None)
         st.rerun()
 
 # ==============================================================================
@@ -187,7 +187,7 @@ else:
                 if st.button("💾 Guardar Matriz", key="save_basicas"):
                     if nombre_save:
                         st.session_state.mis_matrices[nombre_save] = st.session_state.temp_matriz
-                        del st.session_state.temp_matriz # Limpiamos la memoria temporal
+                        st.session_state.pop("temp_matriz", None)
                         st.rerun()
                     else:
                         st.error("Ingrese un nombre.")
@@ -282,7 +282,7 @@ else:
                 if st.button("💾 Guardar", key="save_prop"):
                     if nombre_save:
                         st.session_state.mis_matrices[nombre_save] = st.session_state.temp_prop_matriz
-                        del st.session_state.temp_prop_matriz
+                        st.session_state.pop("temp_prop_matriz", None)
                         st.rerun()
                     else:
                         st.error("Ingrese un nombre.")
@@ -343,7 +343,7 @@ else:
                 if st.button("💾 Guardar", key="save_av"):
                     if nom_av:
                         st.session_state.mis_matrices[nom_av] = st.session_state.temp_avanzada
-                        del st.session_state.temp_avanzada
+                        st.session_state.pop("temp_avanzada", None)
                         st.rerun()
 
     # --------------------------------------------------------------------------
