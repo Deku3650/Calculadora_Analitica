@@ -12,6 +12,17 @@ if 'mis_inversiones' not in st.session_state:
 st.title("📈 Módulo de Matemáticas Financieras")
 st.markdown("Plataforma actuarial de valuación, tasas equivalentes, escenarios dinámicos y cuadros de amortización.")
 
+# Diccionarios de conversión
+frecuencias_m = {
+    "Anual": 1, "Semestral": 2, "Cuatrimestral": 3, "Trimestral": 4, 
+    "Bimestral": 6, "Mensual": 12, "Quincenal": 24, "Semanal": 52, "Diaria": 360
+}
+
+factores_tiempo = {
+    "Años": 1, "Semestres": 2, "Cuatrimestres": 3, "Trimestres": 4, 
+    "Bimestres": 6, "Meses": 12, "Quincenas": 24, "Semanas": 52, "Días (Base 360)": 360, "Días (Base 365)": 365
+}
+
 # Diccionarios de conversión de tiempo a base anual
 factores_tiempo = {
     "Años": 1, "Semestres": 2, "Cuatrimestres": 3, "Trimestres": 4, 
