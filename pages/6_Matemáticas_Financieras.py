@@ -1,111 +1,154 @@
 import streamlit as st
 import math
+import numpy as np
+import pandas as pd
 from datetime import date
 
 st.set_page_config(page_title="Matemáticas Financieras", layout="wide")
 
-st.title("📈 Módulo de Matemáticas Financieras")
-st.markdown("Herramientas de valuación, tasas equivalentes y valor del dinero en el tiempo.")
+if 'mis_inversiones' not in st.session_state:
+    st.session_state.mis_inversiones = {}
 
-# ==============================================================================
-# PESTAÑAS DEL MÓDULO
-# ==============================================================================
-tab_interes, tab_tasas, tab_fechas, tab_anualidades = st.tabs([
-    "Interés Simple y Compuesto", 
+st.title("📈 Módulo de Matemáticas Financieras")
+st.markdown("Análisis didáctico del valor del dinero en el tiempo, tablas de amortización y comparación de curvas.")
+
+# Diccionario interno para capitalizaciones (m)
+frecuencias_m = {
+    "Anual": 1, "Semestral": 2, "Cuatrimestral": 3, "Trimestral": 4, 
+    "Bimestral": 6, "Mensual": 12, "Quincenal": 24, "Semanal": 52, "Diaria": 360
+}
+
+tab_lab, tab_tasas, tab_fechas, tab_anualidades = st.tabs([
+    "Laboratorio de Crecimiento (Simple vs Compuesto)", 
     "Tasas Equivalentes", 
     "Calculadora de Fechas", 
-    "Anualidades"
+    "Anualidades y Amortización"
 ])
 
 # ------------------------------------------------------------------------------
-# PESTAÑA 1: INTERÉS SIMPLE Y COMPUESTO
+# PESTAÑA 1: LABORATORIO DIDÁCTICO (Simple vs Compuesto)
 # ------------------------------------------------------------------------------
-with tab_interes:
-    st.subheader("Valor del Dinero en el Tiempo")
+with tab_lab:
+    st.subheader("Configuración del Escenario Financiero")
     
-    col_tipo, col_var = st.columns(2)
-    with col_tipo:
-        tipo_interes = st.radio("Régimen de Interés:", ["Simple", "Compuesto"], horizontal=True)
-    with col_var:
-        variable_calc = st.selectbox("¿Qué desea calcular?", ["Monto Final (M)", "Capital Inicial (C)", "Tasa de Interés (i)", "Tiempo (t)"])
-        
+    col_c, col_tasa, col_frec, col_t = st.columns(4)
+    with col_c:
+        tipo_interes = st.selectbox("Régimen de Interés:", ["Simple", "Compuesto"])
+        C = st.number_input("Capital Inicial (C):", min_value=0.01, value=1000.0, step=100.0)
+    with col_tasa:
+        tasa_input = st.number_input("Tasa de Interés (%)", value=12.0, step=0.5)
+    with col_frec:
+        frec_str = st.selectbox("Frecuencia de la tasa:", 
+                                ["Anual", "Semestral", "Trimestral", "Bimestral", "Mensual", "Diaria", "Continua", "Personalizada (Días)"])
+        if frec_str == "Personalizada (Días)":
+            dias_pers = st.number_input("¿Cada cuántos días?", min_value=1, value=28)
+            m = 360 / dias_pers
+        else:
+            m = frecuencias_m.get(frec_str, 1) # Si es continua, usaremos otra lógica matemática
+    with col_t:
+        t_anios = st.number_input("Tiempo de Inversión (Años):", min_value=0.1, value=5.0, step=1.0)
+
+    # Lógica Matemática Didáctica
+    i_decimal = tasa_input / 100
+    
     st.divider()
+    col_res, col_graf = st.columns([1, 2])
     
-    with st.form("form_interes"):
-        c1, c2, c3 = st.columns(3)
+    with col_res:
+        st.write("### Desglose Analítico")
         
-        # Entradas dinámicas dependiendo de lo que se va a calcular
-        if variable_calc != "Monto Final (M)":
-            with c1: M_val = st.number_input("Monto Final (M):", min_value=0.01, value=1500.0, step=100.0)
-        if variable_calc != "Capital Inicial (C)":
-            with c1 if variable_calc == "Monto Final (M)" else c2: 
-                C_val = st.number_input("Capital Inicial (C):", min_value=0.01, value=1000.0, step=100.0)
-        if variable_calc != "Tasa de Interés (i)":
-            col_tasa = c2 if variable_calc in ["Monto Final (M)", "Capital Inicial (C)"] else c3
-            with col_tasa: 
-                i_val_porc = st.number_input("Tasa de Interés (i) en %:", value=10.0, step=0.5)
-                i_val = i_val_porc / 100
-        if variable_calc != "Tiempo (t)":
-            with c3: t_val = st.number_input("Tiempo / Periodos (t):", min_value=0.01, value=1.0, step=1.0)
-            
-        calcular_btn = st.form_submit_button(f"Calcular {variable_calc.split(' ')[0]}")
-        
-    if calcular_btn:
-        res = 0.0
-        formula = ""
-        
-        try:
+        # 1. Mostrar la tasa adaptada didácticamente
+        if frec_str == "Continua":
+            st.info("💡 **Capitalización Continua:** El interés se reinvierte en cada instante infinito. Usamos la constante de Euler ($e$).")
+            M_final = C * math.exp(i_decimal * t_anios)
+            formula_usada = r"M = C e^{it}"
+        else:
+            tasa_por_periodo = i_decimal / m
+            periodos_totales = t_anios * m
             if tipo_interes == "Simple":
-                if variable_calc == "Monto Final (M)":
-                    res = C_val * (1 + i_val * t_val)
-                    formula = r"M = C(1 + it)"
-                elif variable_calc == "Capital Inicial (C)":
-                    res = M_val / (1 + i_val * t_val)
-                    formula = r"C = \frac{M}{1 + it}"
-                elif variable_calc == "Tasa de Interés (i)":
-                    res = ((M_val / C_val) - 1) / t_val
-                    formula = r"i = \frac{\frac{M}{C} - 1}{t}"
-                elif variable_calc == "Tiempo (t)":
-                    res = ((M_val / C_val) - 1) / i_val
-                    formula = r"t = \frac{\frac{M}{C} - 1}{i}"
-                    
-            elif tipo_interes == "Compuesto":
-                if variable_calc == "Monto Final (M)":
-                    res = C_val * (1 + i_val)**t_val
-                    formula = r"M = C(1 + i)^t"
-                elif variable_calc == "Capital Inicial (C)":
-                    res = M_val / (1 + i_val)**t_val
-                    formula = r"C = \frac{M}{(1 + i)^t}"
-                elif variable_calc == "Tasa de Interés (i)":
-                    res = (M_val / C_val)**(1 / t_val) - 1
-                    formula = r"i = \left(\frac{M}{C}\right)^{\frac{1}{t}} - 1"
-                elif variable_calc == "Tiempo (t)":
-                    res = math.log(M_val / C_val) / math.log(1 + i_val)
-                    formula = r"t = \frac{\ln(M/C)}{\ln(1+i)}"
+                st.info(f"💡 **Interés Simple:** La tasa del {tasa_input}% {frec_str} no se reinvierte. Solo el capital base genera intereses.")
+                M_final = C * (1 + (i_decimal * t_anios))
+                formula_usada = r"M = C(1 + it)"
+            else:
+                st.info(f"💡 **Interés Compuesto:** Tasa equivalente de **{tasa_por_periodo*100:.4f}%** aplicada durante **{periodos_totales:,.2f}** periodos. Los intereses generan más intereses.")
+                M_final = C * (1 + tasa_por_periodo)**periodos_totales
+                formula_usada = r"M = C \left(1 + \frac{j}{m}\right)^{mt}"
 
-            # Formateo visual del resultado
-            st.success("Cálculo realizado con éxito.")
-            col_res1, col_res2 = st.columns([1, 2])
-            with col_res1:
-                if variable_calc == "Tasa de Interés (i)":
-                    st.metric(label=variable_calc, value=f"{res*100:,.4f} %")
-                elif variable_calc == "Tiempo (t)":
-                    st.metric(label=variable_calc, value=f"{res:,.4f} periodos")
-                else:
-                    st.metric(label=variable_calc, value=f"${res:,.2f}")
-            with col_res2:
-                st.write("**Fórmula aplicada:**")
-                st.latex(formula)
+        st.metric("Monto Final Proyectado (M)", f"${M_final:,.2f}", delta=f"+ ${M_final - C:,.2f} de ganancia")
+        st.latex(formula_usada)
+        
+        # 2. Generación de Tabla de Evolución
+        if st.checkbox("Ver tabla de evolución periodo a periodo"):
+            if frec_str == "Continua":
+                st.warning("La tabla por periodos discretos no está definida para tiempo continuo.")
+            else:
+                n_int = int(periodos_totales)
+                tabla = []
+                saldo = C
+                for k in range(1, min(n_int + 1, 121)): # Limitamos a 120 meses visuales para no trabar el navegador
+                    if tipo_interes == "Simple":
+                        int_gen = C * tasa_por_periodo
+                        saldo += int_gen
+                    else:
+                        int_gen = saldo * tasa_por_periodo
+                        saldo += int_gen
+                    tabla.append({"Periodo": k, "Interés Generado": round(int_gen, 2), "Monto Acumulado": round(saldo, 2)})
                 
-        except Exception as e:
-            st.error("Error matemático. Verifique que el Capital Inicial sea menor al Monto Final.")
+                df_tabla = pd.DataFrame(tabla)
+                st.dataframe(df_tabla, use_container_width=True, hide_index=True)
+                if n_int > 120: st.caption("Mostrando solo los primeros 120 periodos por rendimiento visual.")
+
+    with col_graf:
+        st.write("### Comparador de Escenarios")
+        
+        # Guardar en memoria
+        with st.form("form_guardar_escenario"):
+            c_nom, c_btn = st.columns([3, 1])
+            with c_nom: nom_escenario = st.text_input("Nombre para guardar este escenario en la gráfica:", value=f"{tipo_interes} al {tasa_input}%")
+            with c_btn: 
+                st.write("")
+                if st.form_submit_button("💾 Guardar"):
+                    st.session_state.mis_inversiones[nom_escenario] = {
+                        "C": C, "tipo": tipo_interes, "i": i_decimal, "frec": frec_str, "m": m, "t": t_anios
+                    }
+                    st.rerun()
+                    
+        # Generar Gráfica Múltiple
+        if st.session_state.mis_inversiones:
+            st.write("**Curvas de Crecimiento en el Tiempo**")
+            
+            # Buscamos el horizonte de tiempo máximo entre los guardados
+            t_max_graf = max([datos['t'] for datos in st.session_state.mis_inversiones.values()])
+            
+            # Creamos un vector de tiempo suave (x-axis)
+            t_vector = np.linspace(0, t_max_graf, 100)
+            df_graf = pd.DataFrame({"Años": t_vector}).set_index("Años")
+            
+            for nombre, datos in st.session_state.mis_inversiones.items():
+                v_C = datos['C']; v_i = datos['i']; v_m = datos['m']; v_tipo = datos['tipo']; v_frec = datos['frec']
+                
+                if v_frec == "Continua":
+                    if v_tipo == "Simple": curva = v_C * (1 + v_i * t_vector)
+                    else: curva = v_C * np.exp(v_i * t_vector)
+                else:
+                    if v_tipo == "Simple": curva = v_C * (1 + v_i * t_vector)
+                    else: curva = v_C * (1 + v_i/v_m)**(v_m * t_vector)
+                    
+                df_graf[nombre] = curva
+                
+            st.line_chart(df_graf)
+            
+            if st.button("🗑️ Limpiar Gráfica"):
+                st.session_state.mis_inversiones.clear()
+                st.rerun()
+        else:
+            st.info("Guarde un escenario arriba para comenzar a graficar y comparar.")
 
 # ------------------------------------------------------------------------------
-# PESTAÑA 2: TASAS EQUIVALENTES Y DESCUENTO
+# PESTAÑA 2: TASAS EQUIVALENTES
 # ------------------------------------------------------------------------------
 with tab_tasas:
     st.subheader("Conversión y Equivalencia de Tasas")
-    
     col_t1, col_t2 = st.columns(2)
     
     with col_t1:
@@ -163,10 +206,7 @@ with tab_fechas:
     if fecha_inicio > fecha_fin:
         st.error("La Fecha Inicial debe ser menor o igual a la Fecha Final.")
     else:
-        # Cálculo Actual/Actual (Días exactos)
         dias_exactos = (fecha_fin - fecha_inicio).days
-        
-        # Cálculo 30/360 (Convención comercial/bancaria)
         dias_360 = (fecha_fin.year - fecha_inicio.year) * 360 + \
                    (fecha_fin.month - fecha_inicio.month) * 30 + \
                    (fecha_fin.day - fecha_inicio.day)
@@ -181,7 +221,7 @@ with tab_fechas:
             st.caption(f"Equivale a **{dias_360/360:,.4f}** años (Base 360)")
 
 # ------------------------------------------------------------------------------
-# PESTAÑA 4: ANUALIDADES
+# PESTAÑA 4: ANUALIDADES Y AMORTIZACIÓN
 # ------------------------------------------------------------------------------
 with tab_anualidades:
     st.subheader("Valuación de Anualidades Ciertas")
@@ -199,17 +239,12 @@ with tab_anualidades:
         
     if submit_anualidad:
         if i_an == 0:
-            VP = R * n_per
-            M = R * n_per
+            VP = R * n_per; M = R * n_per
         else:
-            # Fórmulas Anualidad Vencida
             VP = R * ((1 - (1 + i_an)**(-n_per)) / i_an)
             M = R * (((1 + i_an)**n_per - 1) / i_an)
-            
-            # Ajuste si es Anticipada
             if tipo_anualidad == "Anticipada":
-                VP = VP * (1 + i_an)
-                M = M * (1 + i_an)
+                VP = VP * (1 + i_an); M = M * (1 + i_an)
                 
         st.success(f"Valuación completada ({tipo_anualidad}).")
         col_m1, col_m2 = st.columns(2)
