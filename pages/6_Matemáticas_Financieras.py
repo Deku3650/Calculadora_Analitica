@@ -227,68 +227,123 @@ with tab_lab:
             st.line_chart(df_graf)
 
 # ==============================================================================
-# PESTAÑA 2: TASAS EQUIVALENTES E INFLACIÓN (Efecto Fisher)
+# PESTAÑA 2: TASAS EQUIVALENTES E INFLACIÓN (Didáctico)
 # ==============================================================================
 with tab_tasas:
-    st.subheader("Análisis de Tasas de Rendimiento")
+    st.subheader("Conversor Universal de Tasas Equivalentes")
+    st.markdown("💡 *Dos tasas son equivalentes si, al aplicarse al mismo capital durante el mismo tiempo, generan el mismo interés. Complete la frase para convertir su tasa:*")
+    
+    with st.form("form_conversor_tasas"):
+        # Interfaz de lectura natural
+        st.write("### 🔹 Tasa de Origen (La que tienes)")
+        c1, c2, c3 = st.columns([1, 1.5, 1.5])
+        with c1:
+            val_origen = st.number_input("1. Tengo un porcentaje del:", value=18.0, step=0.5, format="%.4f") / 100
+        with c2:
+            tipo_origen = st.selectbox("2. Que es una tasa de tipo:", 
+                                       ["Nominal (Se capitaliza por partes)", "Efectiva (Se aplica directa)"])
+        with c3:
+            frec_origen = st.selectbox("3. Con una frecuencia:", list(frecuencias_m.keys()), index=1)
+            
+        st.write("### 🔸 Tasa Destino (La que buscas)")
+        c4, c5 = st.columns([1.5, 1.5])
+        with c4:
+            tipo_destino = st.selectbox("4. Quiero convertirla a tipo:", 
+                                        ["Nominal (Se capitaliza por partes)", "Efectiva (Se aplica directa)"])
+        with c5:
+            frec_destino = st.selectbox("5. Para una nueva frecuencia:", list(frecuencias_m.keys()), index=3)
+            
+        submit_tasas = st.form_submit_button("🔄 Calcular Equivalencia")
+        
+    if submit_tasas:
+        m1 = frecuencias_m[frec_origen]
+        m2 = frecuencias_m[frec_destino]
+        
+        # PASO 1: Puente Universal -> Convertir el Origen a Tasa Efectiva Anual (TEA)
+        if "Nominal" in tipo_origen:
+            tea_puente = (1 + val_origen / m1)**m1 - 1
+            tex_origen = r"\frac{j_1}{m_1}"
+            var_origen = "j_1"
+        else:
+            tea_puente = (1 + val_origen)**m1 - 1
+            tex_origen = r"i_1"
+            var_origen = "i_1"
+            
+        # PASO 2: Convertir la TEA a la Tasa Destino
+        if "Nominal" in tipo_destino:
+            tasa_final = m2 * ((1 + tea_puente)**(1 / m2) - 1)
+            formula_tex = rf"j_2 = m_2 \left[ \left(1 + {tex_origen}\right)^{{\frac{{m_1}}{{m_2}}}} - 1 \right]"
+            etiqueta_res = f"Tasa Nominal capitalizable {frec_destino.lower()}"
+            explicacion = f"Significa que la tasa anual publicada será del **{tasa_final*100:,.4f}%**, pero el banco te aplicará un **{(tasa_final/m2)*100:,.4f}%** real cada {frec_destino.replace('al', '').replace('a', 'o').lower()}."
+        else:
+            tasa_final = (1 + tea_puente)**(1 / m2) - 1
+            formula_tex = rf"i_2 = \left(1 + {tex_origen}\right)^{{\frac{{m_1}}{{m_2}}}} - 1"
+            etiqueta_res = f"Tasa Efectiva {frec_destino.lower()}"
+            explicacion = f"Significa que tu dinero crecerá un **{tasa_final*100:,.4f}%** real y directo cada {frec_destino.replace('al', '').replace('a', 'o').lower()}."
+
+        # Despliegue de resultados
+        st.success("¡Equivalencia calculada perfectamente!")
+        col_r1, col_r2 = st.columns([1, 1])
+        with col_r1:
+            st.metric(etiqueta_res, f"{tasa_final*100:,.4f} %")
+            st.write(explicacion)
+        with col_r2:
+            st.write("**Fórmula Matemática aplicada:**")
+            st.latex(formula_tex)
+            st.caption(f"*Nota: La Tasa Efectiva Anual (TEA) real de esta operación es de **{tea_puente*100:,.4f}%**.*")
+
+    st.divider()
+    
+    # Mantenemos las funcionalidades de Fisher y Descuento intactas pero mejor presentadas
     col_t1, col_t2 = st.columns(2)
     
     with col_t1:
-        st.markdown("**1. Tasa Efectiva $\\leftrightarrow$ Nominal**")
-        st.info("Convierte entre tasa efectiva anual ($i$) y tasa nominal ($j$) capitalizable $m$ veces.")
-        modo_nom_efec = st.radio("Conversión:", ["Nominal a Efectiva", "Efectiva a Nominal"], horizontal=True)
-        m_cap = st.number_input("Capitalizaciones por año ($m$):", min_value=1, value=12)
+        st.markdown("### 📉 Tasa de Interés vs Tasa de Descuento")
+        st.info("Útil para instrumentos que se cobran por adelantado (ej. CETES).")
+        modo_int_desc = st.radio("Convertir:", ["De Interés (i) a Descuento (d)", "De Descuento (d) a Interés (i)"], horizontal=True)
         
-        if modo_nom_efec == "Nominal a Efectiva":
-            j_tasa = st.number_input("Tasa Nominal ($j$) en %:", value=12.0) / 100
-            if st.button("Calcular Tasa Efectiva ($i$)"):
-                i_efec = (1 + j_tasa / m_cap)**m_cap - 1
-                st.latex(r"i = \left(1 + \frac{j}{m}\right)^m - 1")
-                st.metric("Tasa Efectiva Anual ($i$)", f"{i_efec*100:,.4f} %")
+        c_i1, c_i2 = st.columns(2)
+        if "Interés" in modo_int_desc.split(" a ")[0]:
+            with c_i1: tasa_i = st.number_input("Tasa Vencida ($i$) en %:", value=10.0) / 100
+            with c_i2:
+                if st.button("Calcular Descuento (d)"):
+                    st.metric("Tasa de Descuento ($d$)", f"{(tasa_i / (1 + tasa_i))*100:,.4f} %")
+                    st.latex(r"d = \frac{i}{1+i}")
         else:
-            i_tasa = st.number_input("Tasa Efectiva ($i$) en %:", value=12.68) / 100
-            if st.button("Calcular Tasa Nominal ($j$)"):
-                j_nom = m_cap * ((1 + i_tasa)**(1 / m_cap) - 1)
-                st.latex(r"j = m \left[ (1 + i)^{\frac{1}{m}} - 1 \right]")
-                st.metric("Tasa Nominal Anual ($j$)", f"{j_nom*100:,.4f} %")
+            with c_i1: tasa_d2 = st.number_input("Tasa Anticipada ($d$) en %:", value=9.09) / 100
+            with c_i2:
+                if st.button("Calcular Interés (i)"):
+                    if tasa_d2 >= 1: st.error("El descuento no puede ser del 100%.")
+                    else:
+                        st.metric("Tasa de Interés ($i$)", f"{(tasa_d2 / (1 - tasa_d2))*100:,.4f} %")
+                        st.latex(r"i = \frac{d}{1-d}")
 
     with col_t2:
-        st.markdown("**2. Ecuación de Fisher (Tasa Real vs Inflación)**")
-        st.info("Determina la pérdida de poder adquisitivo descontando la inflación ($\pi$).")
+        st.markdown("### 🛒 Ecuación de Fisher (Inflación)")
+        st.info("Descubre cuánto gana realmente tu dinero descontando la inflación.")
         modo_fisher = st.radio("Despejar:", ["Tasa Real ($r$)", "Tasa Aparente ($i$)"], horizontal=True)
         
+        c_f1, c_f2 = st.columns(2)
         if modo_fisher == "Tasa Real ($r$)":
-            i_aparente = st.number_input("Tasa Aparente ($i$) en %:", value=10.0) / 100
-            inf = st.number_input("Inflación ($\pi$) en %:", value=4.5) / 100
-            if st.button("Calcular Tasa Real"):
-                r_real = (i_aparente - inf) / (1 + inf)
-                st.latex(r"r = \frac{i - \pi}{1 + \pi}")
-                st.metric("Tasa Real Neta ($r$)", f"{r_real*100:,.4f} %", delta=f"{r_real*100 - i_aparente*100:,.2f}% vs Aparente")
+            with c_f1: 
+                i_aparente = st.number_input("Tasa que paga el banco ($i$) %:", value=10.0) / 100
+                inf = st.number_input("Inflación ($\pi$) en %:", value=4.5) / 100
+            with c_f2:
+                st.write("")
+                if st.button("Calcular Tasa Real"):
+                    r_real = (i_aparente - inf) / (1 + inf)
+                    st.metric("Tasa Real ($r$)", f"{r_real*100:,.4f} %")
+                    st.latex(r"r = \frac{i - \pi}{1 + \pi}")
         else:
-            r_obj = st.number_input("Tasa Real Objetivo ($r$) en %:", value=5.0) / 100
-            inf_esp = st.number_input("Inflación Esperada ($\pi$) en %:", value=4.5) / 100
-            if st.button("Calcular Tasa Aparente"):
-                i_req = r_obj + inf_esp + (r_obj * inf_esp)
-                st.latex(r"i = r + \pi + (r \cdot \pi)")
-                st.metric("Tasa Aparente Requerida ($i$)", f"{i_req*100:,.4f} %")
-
-    st.divider()
-    st.markdown("**3. Tasa de Interés ($i$) $\\leftrightarrow$ Tasa de Descuento ($d$)**")
-    col_d1, col_d2 = st.columns(2)
-    with col_d1:
-        tasa_i = st.number_input("Tasa de Interés vencida ($i$) en %:", value=10.0) / 100
-        if st.button("Calcular Tasa de Descuento (d)"):
-            tasa_d = tasa_i / (1 + tasa_i)
-            st.latex(r"d = \frac{i}{1+i}")
-            st.metric("Tasa de Descuento ($d$)", f"{tasa_d*100:,.4f} %")
-    with col_d2:
-        tasa_d2 = st.number_input("Tasa de Descuento anticipada ($d$) en %:", value=9.09) / 100
-        if st.button("Calcular Tasa de Interés (i)"):
-            if tasa_d2 >= 1: st.error("El descuento no puede ser del 100%.")
-            else:
-                tasa_i2 = tasa_d2 / (1 - tasa_d2)
-                st.latex(r"i = \frac{d}{1-d}")
-                st.metric("Tasa de Interés ($i$)", f"{tasa_i2*100:,.4f} %")
+            with c_f1:
+                r_obj = st.number_input("Ganancia Real que deseas ($r$) %:", value=5.0) / 100
+                inf_esp = st.number_input("Inflación Esperada ($\pi$) %:", value=4.5) / 100
+            with c_f2:
+                st.write("")
+                if st.button("Calcular Tasa Aparente"):
+                    i_req = r_obj + inf_esp + (r_obj * inf_esp)
+                    st.metric("Tasa que debes buscar ($i$)", f"{i_req*100:,.4f} %")
+                    st.latex(r"i = r + \pi + (r \cdot \pi)")
 
 # ==============================================================================
 # PESTAÑA 3: FECHAS ACTUARIALES
