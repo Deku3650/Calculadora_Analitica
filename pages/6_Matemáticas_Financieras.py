@@ -60,53 +60,66 @@ with tab_lab:
     st.divider()
     
     # --------------------------------------------------------------------------
-    # MODO: TASA VARIABLE (Soporta Interés y Descuento)
+    # MODO: TASA VARIABLE (Modelo Híbrido Escalonado)
     # --------------------------------------------------------------------------
     if tipo_tasa == "Variable (Escalonada)":
-        st.info(f"💡 **Modelo Escalonado ({naturaleza}):** Ingrese el monto base y defina los distintos periodos y tasas. Asume régimen compuesto.")
+        st.info("💡 **Modelo Escalonado Híbrido:** Ingrese el monto base y defina para cada tramo de la tabla si el porcentaje actúa como Interés (capitaliza) o Descuento (actualiza).")
         col_c_var, col_t_var = st.columns(2)
         with col_c_var:
-            if naturaleza == "Interés":
-                base_var = st.number_input("Capital Inicial (C):", min_value=0.01, value=1000.0, step=100.0)
-            else:
-                base_var = st.number_input("Valor Nominal a descontar (M):", min_value=0.01, value=1000.0, step=100.0)
+            base_var = st.number_input("Fondo / Monto Base Inicial:", min_value=0.01, value=1000.0, step=100.0)
         with col_t_var:
             unidad_t_var = st.selectbox("Unidad base de los periodos:", list(factores_tiempo.keys()), index=0, key="ut_var")
 
         st.write("Defina el calendario de tasas (Edite directamente la tabla):")
+        
+        # DataFrame con la nueva columna 'Operación'
         df_tasas = pd.DataFrame([
-            {"Periodos (Duración)": 1.0, "Tasa Aplicable (%)": 5.0},
-            {"Periodos (Duración)": 2.0, "Tasa Aplicable (%)": 6.5},
-            {"Periodos (Duración)": 1.5, "Tasa Aplicable (%)": 4.0}
+            {"Periodos (Duración)": 1.0, "Tasa Aplicable (%)": 5.0, "Operación": "Interés"},
+            {"Periodos (Duración)": 2.0, "Tasa Aplicable (%)": 6.5, "Operación": "Interés"},
+            {"Periodos (Duración)": 1.5, "Tasa Aplicable (%)": 4.0, "Operación": "Descuento"}
         ])
         
-        datos_tasas = st.data_editor(df_tasas, num_rows="dynamic", use_container_width=True, key="tabla_tasas")
+        # Configuramos la columna para forzar un menú desplegable nativo en el data_editor
+        config_cols = {
+            "Operación": st.column_config.SelectboxColumn(
+                "Tipo de Operación",
+                help="Seleccione si la tasa suma (Interés) o resta (Descuento)",
+                options=["Interés", "Descuento"],
+                required=True
+            )
+        }
         
-        if st.button(f"Proyectar {naturaleza} Variable"):
+        datos_tasas = st.data_editor(
+            df_tasas, 
+            column_config=config_cols, 
+            num_rows="dynamic", 
+            use_container_width=True, 
+            key="tabla_tasas"
+        )
+        
+        if st.button("Proyectar Evolución Híbrida"):
             saldo_var = base_var
             tiempo_acumulado = 0.0
-            puntos_curva = [{"Tiempo": 0.0, "Valor": saldo_var}]
+            puntos_curva = [{"Tiempo": 0.0, "Valor Proyectado": saldo_var}]
             
             for i, row in datos_tasas.iterrows():
                 t_tramo = float(row["Periodos (Duración)"])
                 tasa_tramo = float(row["Tasa Aplicable (%)"]) / 100
+                tipo_tramo = row["Operación"]
                 
-                # Multiplicador adaptativo
-                if naturaleza == "Interés":
+                # Multiplicador adaptativo por fila
+                if tipo_tramo == "Interés":
                     saldo_var = saldo_var * (1 + tasa_tramo)**t_tramo
-                else:
+                elif tipo_tramo == "Descuento":
                     saldo_var = saldo_var * (1 - tasa_tramo)**t_tramo
                 
                 tiempo_acumulado += t_tramo
-                puntos_curva.append({"Tiempo": tiempo_acumulado, "Valor": saldo_var})
+                puntos_curva.append({"Tiempo": tiempo_acumulado, "Valor Proyectado": saldo_var})
                 
             st.success("Proyección escalonada completada.")
-            if naturaleza == "Interés":
-                st.metric("Monto Final Proyectado (M)", f"${saldo_var:,.2f}")
-            else:
-                st.metric("Valor Efectivo Proyectado (C)", f"${saldo_var:,.2f}")
+            st.metric("Valor Final Proyectado", f"${saldo_var:,.2f}")
             
-            st.write(f"### Evolución del Fondo ({naturaleza} Variable)")
+            st.write("### Evolución del Fondo (Tasas Híbridas)")
             df_curva_var = pd.DataFrame(puntos_curva).set_index("Tiempo")
             st.line_chart(df_curva_var)
 
