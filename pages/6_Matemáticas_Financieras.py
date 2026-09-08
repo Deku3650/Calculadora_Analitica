@@ -48,7 +48,7 @@ with tab_lab:
     st.divider()
     
     # --------------------------------------------------------------------------
-    # MODO: TASA VARIABLE (Modelo dinámico con st.data_editor)
+    # MODO: TASA VARIABLE
     # --------------------------------------------------------------------------
     if regimen == "Tasa Variable (Escalonada)":
         st.info("💡 **Modelo de Tasa Variable:** Ingrese el capital y defina los distintos periodos y tasas aplicables a lo largo del tiempo. Asume capitalización compuesta.")
@@ -58,7 +58,6 @@ with tab_lab:
         with col_t_var:
             unidad_t_var = st.selectbox("Unidad base de los periodos:", list(factores_tiempo.keys()), index=0, key="ut_var")
 
-        # Generador de tabla dinámica para tasas escalonadas
         st.write("Defina el calendario de tasas (Edite directamente la tabla):")
         df_tasas = pd.DataFrame([
             {"Periodos (Duración)": 1.0, "Tasa Aplicable (%)": 5.0},
@@ -83,13 +82,12 @@ with tab_lab:
             st.success("Proyección escalonada completada.")
             st.metric("Monto Final Proyectado (M)", f"${saldo_var:,.2f}")
             
-            # Gráfica aislada para el modelo variable
             st.write("### Evolución del Fondo con Tasa Variable")
             df_curva_var = pd.DataFrame(puntos_curva).set_index("Tiempo")
             st.line_chart(df_curva_var)
 
     # --------------------------------------------------------------------------
-    # MODO: TASAS FIJAS (Despejes y Comparador Gráfico)
+    # MODO: TASAS FIJAS
     # --------------------------------------------------------------------------
     else:
         with st.form("form_universal"):
@@ -112,15 +110,15 @@ with tab_lab:
                 with c3 if "Tasa" in var_calc else c4: 
                     val_t_raw = st.number_input("Tiempo (t):", min_value=0.01, value=1.0, step=0.5)
                     unidad_t = st.selectbox("Unidad de tiempo:", list(factores_tiempo.keys()), index=0)
-                
+            
+            st.write("---")
+            nom_custom = st.text_input("Nombre para la gráfica (Deje en blanco para auto-nombrar):", placeholder="Ej. Inversión Banco A")
             submit_uni = st.form_submit_button("Calcular y Graficar Escenario")
             
         if submit_uni:
             res = 0.0
             form_tex = ""
             
-            # Estandarización matemática: Llevamos el tiempo a la misma base que la tasa
-            # Ejemplo: Si tasa es Anual (1) y tiempo es Meses (12), el tiempo real en fórmulas es t_raw * (1/12)
             if "Tasa" not in var_calc and "Tiempo" not in var_calc:
                 factor_tasa = factores_tiempo[unidad_i]
                 factor_tiempo = factores_tiempo[unidad_t]
@@ -159,21 +157,45 @@ with tab_lab:
                 col_rm, col_rf = st.columns([1, 2])
                 with col_rm:
                     if "Tasa" in var_calc: st.metric(var_calc, f"{res*100:,.4f} %")
-                    elif "Tiempo" in var_calc: st.metric(var_calc, f"{res:,.4f} unidades")
+                    elif "Tiempo" in var_calc: st.metric(var_calc, f"{res:,.4f} {unidad_i.lower()}")
                     else: st.metric(var_calc, f"${res:,.2f}")
                 with col_rf:
                     st.write("**Fórmula aplicada:**")
                     st.latex(form_tex)
                     
-                # Guardado automático en el comparador gráfico
+                # Guardado inteligente y personalizado
                 if "Tasa" not in var_calc and "Tiempo" not in var_calc:
-                    nombre_escenario = f"{regimen[:4]} {val_i_porc}% {unidad_i[:3]} x {val_t_raw} {unidad_t[:3]}"
-                    st.session_state.mis_inversiones[nombre_escenario] = {
-                        "C": val_C if "Capital" not in var_calc and "Efectivo" not in var_calc else res, 
-                        "tipo": regimen, "i": val_i, 
-                        "t_efectivo": val_t_efectivo,
-                        "unidades_t": val_t_efectivo # Plazo en base a la tasa para homologar la gráfica
+                    tipo_corto = regimen.replace("Interés ", "").replace(" Bancario", "")
+                    capital_graf = val_C if "Capital" not in var_calc and "Efectivo" not in var_calc else res
+                    
+                    nombre_auto = f"[{tipo_corto}] ${capital_graf:,.0f} al {val_i_porc}%"
+                    nombre_final = nom_custom.strip() if nom_custom.strip() else nombre_auto
+                    
+                    st.session_state.mis_inversiones[nombre_final] = {
+                        "C": capital_graf, "tipo": regimen, "i": val_i, 
+                        "t_efectivo": val_t_efectivo, "unidades_t": val_t_efectivo 
                     }
+                    
+                # Restauración de la Tabla de Evolución
+                if ("Tasa" not in var_calc) and ("Tiempo" not in var_calc) and ("Continuo" not in regimen):
+                    t_iter = int(math.ceil(val_t_efectivo))
+                    if t_iter <= 120:
+                        with st.expander("📊 Ver tabla de evolución del escenario"):
+                            M_iter = val_M if "Monto" not in var_calc and "Nominal" not in var_calc else res
+                            C_iter = val_C if "Capital" not in var_calc and "Efectivo" not in var_calc else res
+                            
+                            tabla = []
+                            saldo = C_iter
+                            for k in range(1, t_iter + 1):
+                                if regimen == "Interés Simple": int_gen = C_iter * val_i
+                                elif regimen == "Interés Compuesto": int_gen = saldo * val_i
+                                elif regimen == "Descuento Bancario": int_gen = M_iter * val_i
+                                
+                                saldo += int_gen
+                                tabla.append({"Periodo": k, "Interés / Descuento": round(int_gen, 2), "Saldo Acumulado": round(saldo, 2)})
+                            st.dataframe(pd.DataFrame(tabla), use_container_width=True, hide_index=True)
+                    else:
+                        st.caption("Tabla omitida para mantener el rendimiento (más de 120 periodos).")
             
             except ValueError:
                 st.error("Error matemático. Verifique que el Capital sea menor al Monto o que los datos no generen logaritmos negativos.")
@@ -196,10 +218,8 @@ with tab_lab:
                 if d['tipo'] == "Interés Simple": curva = d['C'] * (1 + d['i'] * t_vector)
                 elif d['tipo'] == "Interés Continuo": curva = d['C'] * np.exp(d['i'] * t_vector)
                 elif d['tipo'] == "Interés Compuesto": curva = d['C'] * (1 + d['i'])**t_vector
-                elif d['tipo'] == "Descuento Bancario": curva = d['C'] / (1 - d['i'] * t_vector)
-                
-                # Invalidamos (NaN) los puntos donde el descuento bancario explota matemáticamente (cuando 1 - dt < 0)
-                if d['tipo'] == "Descuento Bancario":
+                elif d['tipo'] == "Descuento Bancario": 
+                    curva = d['C'] / (1 - d['i'] * t_vector)
                     curva = np.where(1 - d['i'] * t_vector <= 0, np.nan, curva)
                     
                 df_graf[nombre] = curva
