@@ -246,17 +246,17 @@ with tab_tasas:
     
     with st.form("form_conversor_tasas"):
         # Interfaz de lectura natural
-        st.write("### 🔹 Tasa de Origen (La que tienes)")
+        st.write("### 🔹 Tasa de Origen ")
         c1, c2, c3 = st.columns([1, 1.5, 1.5])
         with c1:
-            val_origen = st.number_input("1. Tengo un porcentaje del:", value=18.0, step=0.5, format="%.4f") / 100
+            val_origen = st.number_input("1. Porcentaje:", value=18.0, step=0.5, format="%.4f") / 100
         with c2:
-            tipo_origen = st.selectbox("2. Que es una tasa de tipo:", 
-                                       ["Nominal (Se capitaliza por partes)", "Efectiva (Se aplica directa)"])
+            tipo_origen = st.selectbox("2. Tipo de tasa:", 
+                                       ["Nominal/Convertible/Capitalizable", "Efectiva (Se aplica directa)"])
         with c3:
-            frec_origen = st.selectbox("3. Con una frecuencia:", list(frecuencias_m.keys()), index=1)
+            frec_origen = st.selectbox("3. Frecuencia:", list(frecuencias_m.keys()), index=1)
             
-        st.write("### 🔸 Tasa Destino (La que buscas)")
+        st.write("### 🔸 Tasa Destino ")
         c4, c5 = st.columns([1.5, 1.5])
         with c4:
             tipo_destino = st.selectbox("4. Quiero convertirla a tipo:", 
