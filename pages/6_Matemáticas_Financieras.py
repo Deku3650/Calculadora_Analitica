@@ -10,172 +10,204 @@ if 'mis_inversiones' not in st.session_state:
     st.session_state.mis_inversiones = {}
 
 st.title("📈 Módulo de Matemáticas Financieras")
-st.markdown("Calculadora universal, tablas de amortización, tasas equivalentes y laboratorio de curvas.")
+st.markdown("Plataforma actuarial de valuación, tasas equivalentes, escenarios dinámicos y cuadros de amortización.")
 
-# Diccionario interno para capitalizaciones (m)
-frecuencias_m = {
-    "Anual": 1, "Semestral": 2, "Cuatrimestral": 3, "Trimestral": 4, 
-    "Bimestral": 6, "Mensual": 12, "Quincenal": 24, "Semanal": 52, "Diaria": 360
+# Diccionarios de conversión de tiempo a base anual
+factores_tiempo = {
+    "Años": 1, "Semestres": 2, "Cuatrimestres": 3, "Trimestres": 4, 
+    "Bimestres": 6, "Meses": 12, "Quincenas": 24, "Semanas": 52, "Días (Base 360)": 360, "Días (Base 365)": 365
 }
 
-tab_universal, tab_lab, tab_tasas, tab_fechas, tab_anualidades = st.tabs([
-    "1. Calculadora Universal (Despejes)", 
-    "2. Laboratorio de Curvas", 
-    "3. Tasas e Inflación", 
-    "4. Fechas Actuariales",
-    "5. Anualidades y Amortización"
+tab_lab, tab_tasas, tab_fechas, tab_anualidades = st.tabs([
+    "1. Laboratorio de Valuación y Curvas", 
+    "2. Tasas Equivalentes e Inflación", 
+    "3. Fechas Actuariales",
+    "4. Anualidades y Amortización"
 ])
 
 # ==============================================================================
-# PESTAÑA 1: CALCULADORA UNIVERSAL (El regreso de los despejes completos)
+# PESTAÑA 1: LABORATORIO DE VALUACIÓN Y CURVAS (Todo integrado)
 # ==============================================================================
-with tab_universal:
-    st.subheader("Valor del Dinero en el Tiempo")
+with tab_lab:
+    st.subheader("Cálculo de Escenarios y Proyección Gráfica")
     
     col_reg, col_var = st.columns(2)
     with col_reg:
-        regimen = st.radio("Régimen Financiero:", ["Interés Simple", "Interés Compuesto", "Interés Continuo", "Descuento Bancario (Simple)"], horizontal=True)
+        regimen = st.radio("Régimen Financiero:", 
+                           ["Interés Simple", "Interés Compuesto", "Interés Continuo", "Descuento Bancario", "Tasa Variable (Escalonada)"], 
+                           horizontal=True)
     with col_var:
-        # Si es descuento, cambiamos C por VP (Valor Presente o Efectivo) y M por VN (Valor Nominal)
-        if regimen == "Descuento Bancario (Simple)":
-            opciones_calc = ["Valor Nominal (VN / M)", "Valor Efectivo (VE / C)", "Tasa de Descuento (d)", "Tiempo (t)"]
+        if regimen == "Descuento Bancario":
+            opciones_calc = ["Valor Nominal (M)", "Valor Efectivo (C)", "Tasa de Descuento (d)", "Tiempo (t)"]
+        elif regimen == "Tasa Variable (Escalonada)":
+            opciones_calc = ["Proyectar Monto Final (M)"]
         else:
             opciones_calc = ["Monto Final (M)", "Capital Inicial (C)", "Tasa de Interés (i)", "Tiempo (t)"]
         var_calc = st.selectbox("Variable a despejar:", opciones_calc)
         
     st.divider()
     
-    with st.form("form_universal"):
-        c1, c2, c3 = st.columns(3)
+    # --------------------------------------------------------------------------
+    # MODO: TASA VARIABLE (Modelo dinámico con st.data_editor)
+    # --------------------------------------------------------------------------
+    if regimen == "Tasa Variable (Escalonada)":
+        st.info("💡 **Modelo de Tasa Variable:** Ingrese el capital y defina los distintos periodos y tasas aplicables a lo largo del tiempo. Asume capitalización compuesta.")
+        col_c_var, col_t_var = st.columns(2)
+        with col_c_var:
+            C_var = st.number_input("Capital Inicial (C):", min_value=0.01, value=1000.0, step=100.0)
+        with col_t_var:
+            unidad_t_var = st.selectbox("Unidad base de los periodos:", list(factores_tiempo.keys()), index=0, key="ut_var")
+
+        # Generador de tabla dinámica para tasas escalonadas
+        st.write("Defina el calendario de tasas (Edite directamente la tabla):")
+        df_tasas = pd.DataFrame([
+            {"Periodos (Duración)": 1.0, "Tasa Aplicable (%)": 5.0},
+            {"Periodos (Duración)": 2.0, "Tasa Aplicable (%)": 6.5},
+            {"Periodos (Duración)": 1.5, "Tasa Aplicable (%)": 4.0}
+        ])
         
-        # Inputs dinámicos
-        if "Monto" not in var_calc and "Nominal" not in var_calc:
-            with c1: val_M = st.number_input("Monto / Valor Nominal (M):", min_value=0.01, value=1500.0, step=100.0)
-        if "Capital" not in var_calc and "Efectivo" not in var_calc:
-            with c1 if ("Monto" in var_calc or "Nominal" in var_calc) else c2: 
-                val_C = st.number_input("Capital / Valor Efectivo (C):", min_value=0.01, value=1000.0, step=100.0)
-        if "Tasa" not in var_calc:
-            col_tasa = c2 if ("Monto" in var_calc or "Capital" in var_calc or "Nominal" in var_calc or "Efectivo" in var_calc) else c3
-            with col_tasa: 
-                val_i_porc = st.number_input("Tasa (i o d) en %:", value=10.0, step=0.5)
-                val_i = val_i_porc / 100
-        if "Tiempo" not in var_calc:
-            with c3: val_t = st.number_input("Tiempo (t):", min_value=0.01, value=1.0, step=0.25)
-            
-        submit_uni = st.form_submit_button("Calcular")
+        datos_tasas = st.data_editor(df_tasas, num_rows="dynamic", use_container_width=True, key="tabla_tasas")
         
-    if submit_uni:
-        res = 0.0
-        form_tex = ""
-        try:
-            # 1. INTERÉS SIMPLE
-            if regimen == "Interés Simple":
-                if "Monto" in var_calc: res = val_C * (1 + val_i * val_t); form_tex = r"M = C(1 + it)"
-                elif "Capital" in var_calc: res = val_M / (1 + val_i * val_t); form_tex = r"C = \frac{M}{1 + it}"
-                elif "Tasa" in var_calc: res = ((val_M / val_C) - 1) / val_t; form_tex = r"i = \frac{\frac{M}{C} - 1}{t}"
-                elif "Tiempo" in var_calc: res = ((val_M / val_C) - 1) / val_i; form_tex = r"t = \frac{\frac{M}{C} - 1}{i}"
+        if st.button("Proyectar Crecimiento Variable"):
+            saldo_var = C_var
+            tiempo_acumulado = 0.0
+            puntos_curva = [{"Tiempo": 0.0, "Monto": saldo_var}]
             
-            # 2. INTERÉS COMPUESTO
-            elif regimen == "Interés Compuesto":
-                if "Monto" in var_calc: res = val_C * (1 + val_i)**val_t; form_tex = r"M = C(1 + i)^t"
-                elif "Capital" in var_calc: res = val_M / (1 + val_i)**val_t; form_tex = r"C = \frac{M}{(1 + i)^t}"
-                elif "Tasa" in var_calc: res = (val_M / val_C)**(1 / val_t) - 1; form_tex = r"i = \left(\frac{M}{C}\right)^{\frac{1}{t}} - 1"
-                elif "Tiempo" in var_calc: res = math.log(val_M / val_C) / math.log(1 + val_i); form_tex = r"t = \frac{\ln(M/C)}{\ln(1+i)}"
+            for i, row in datos_tasas.iterrows():
+                t_tramo = float(row["Periodos (Duración)"])
+                tasa_tramo = float(row["Tasa Aplicable (%)"]) / 100
+                saldo_var = saldo_var * (1 + tasa_tramo)**t_tramo
+                tiempo_acumulado += t_tramo
+                puntos_curva.append({"Tiempo": tiempo_acumulado, "Monto": saldo_var})
                 
-            # 3. INTERÉS CONTINUO
-            elif regimen == "Interés Continuo":
-                if "Monto" in var_calc: res = val_C * math.exp(val_i * val_t); form_tex = r"M = Ce^{it}"
-                elif "Capital" in var_calc: res = val_M * math.exp(-val_i * val_t); form_tex = r"C = Me^{-it}"
-                elif "Tasa" in var_calc: res = math.log(val_M / val_C) / val_t; form_tex = r"i = \frac{\ln(M/C)}{t}"
-                elif "Tiempo" in var_calc: res = math.log(val_M / val_C) / val_i; form_tex = r"t = \frac{\ln(M/C)}{i}"
+            st.success("Proyección escalonada completada.")
+            st.metric("Monto Final Proyectado (M)", f"${saldo_var:,.2f}")
+            
+            # Gráfica aislada para el modelo variable
+            st.write("### Evolución del Fondo con Tasa Variable")
+            df_curva_var = pd.DataFrame(puntos_curva).set_index("Tiempo")
+            st.line_chart(df_curva_var)
 
-            # 4. DESCUENTO BANCARIO
-            elif regimen == "Descuento Bancario (Simple)":
-                if "Nominal" in var_calc: res = val_C / (1 - val_i * val_t); form_tex = r"M = \frac{C}{1 - dt}"
-                elif "Efectivo" in var_calc: res = val_M * (1 - val_i * val_t); form_tex = r"C = M(1 - dt)"
-                elif "Tasa" in var_calc: res = (1 - (val_C / val_M)) / val_t; form_tex = r"d = \frac{1 - \frac{C}{M}}{t}"
-                elif "Tiempo" in var_calc: res = (1 - (val_C / val_M)) / val_i; form_tex = r"t = \frac{1 - \frac{C}{M}}{d}"
-
-            st.success("Cálculo algebraico completado.")
-            col_rm, col_rf = st.columns([1, 2])
-            with col_rm:
-                if "Tasa" in var_calc: st.metric(var_calc, f"{res*100:,.4f} %")
-                elif "Tiempo" in var_calc: st.metric(var_calc, f"{res:,.4f} periodos")
-                else: st.metric(var_calc, f"${res:,.2f}")
-            with col_rf:
-                st.write("**Fórmula aplicada:**")
-                st.latex(form_tex)
-
-            # Mini-tabla de comprobación dinámica
-            if ("Tasa" not in var_calc) and ("Tiempo" not in var_calc) and ("Continuo" not in regimen) and (val_t if 'val_t' in locals() else res) <= 120:
-                with st.expander("Ver tabla de evolución del escenario"):
-                    t_iter = int(val_t if "Tiempo" not in var_calc else res)
-                    M_iter = val_M if "Monto" not in var_calc and "Nominal" not in var_calc else res
-                    C_iter = val_C if "Capital" not in var_calc and "Efectivo" not in var_calc else res
-                    i_iter = val_i if "Tasa" not in var_calc else res
+    # --------------------------------------------------------------------------
+    # MODO: TASAS FIJAS (Despejes y Comparador Gráfico)
+    # --------------------------------------------------------------------------
+    else:
+        with st.form("form_universal"):
+            c1, c2, c3, c4 = st.columns(4)
+            
+            if "Monto" not in var_calc and "Nominal" not in var_calc:
+                with c1: val_M = st.number_input("Monto / VN (M):", min_value=0.01, value=1500.0, step=100.0)
+            if "Capital" not in var_calc and "Efectivo" not in var_calc:
+                with c1 if ("Monto" in var_calc or "Nominal" in var_calc) else c2: 
+                    val_C = st.number_input("Capital / VE (C):", min_value=0.01, value=1000.0, step=100.0)
+            
+            if "Tasa" not in var_calc:
+                col_tasa = c2 if ("Monto" in var_calc or "Capital" in var_calc or "Nominal" in var_calc or "Efectivo" in var_calc) else c3
+                with col_tasa: 
+                    val_i_porc = st.number_input("Tasa (%)", value=10.0, step=0.5)
+                    val_i = val_i_porc / 100
+                    unidad_i = st.selectbox("Expresada en:", list(factores_tiempo.keys()), index=0)
+            
+            if "Tiempo" not in var_calc:
+                with c3 if "Tasa" in var_calc else c4: 
+                    val_t_raw = st.number_input("Tiempo (t):", min_value=0.01, value=1.0, step=0.5)
+                    unidad_t = st.selectbox("Unidad de tiempo:", list(factores_tiempo.keys()), index=0)
+                
+            submit_uni = st.form_submit_button("Calcular y Graficar Escenario")
+            
+        if submit_uni:
+            res = 0.0
+            form_tex = ""
+            
+            # Estandarización matemática: Llevamos el tiempo a la misma base que la tasa
+            # Ejemplo: Si tasa es Anual (1) y tiempo es Meses (12), el tiempo real en fórmulas es t_raw * (1/12)
+            if "Tasa" not in var_calc and "Tiempo" not in var_calc:
+                factor_tasa = factores_tiempo[unidad_i]
+                factor_tiempo = factores_tiempo[unidad_t]
+                val_t_efectivo = val_t_raw * (factor_tasa / factor_tiempo)
+            
+            try:
+                # INTERÉS SIMPLE
+                if regimen == "Interés Simple":
+                    if "Monto" in var_calc: res = val_C * (1 + val_i * val_t_efectivo); form_tex = r"M = C(1 + it)"
+                    elif "Capital" in var_calc: res = val_M / (1 + val_i * val_t_efectivo); form_tex = r"C = \frac{M}{1 + it}"
+                    elif "Tasa" in var_calc: res = ((val_M / val_C) - 1) / val_t_raw; form_tex = r"i = \frac{\frac{M}{C} - 1}{t}"
+                    elif "Tiempo" in var_calc: res = ((val_M / val_C) - 1) / val_i; form_tex = r"t = \frac{\frac{M}{C} - 1}{i}"
+                
+                # INTERÉS COMPUESTO
+                elif regimen == "Interés Compuesto":
+                    if "Monto" in var_calc: res = val_C * (1 + val_i)**val_t_efectivo; form_tex = r"M = C(1 + i)^t"
+                    elif "Capital" in var_calc: res = val_M / (1 + val_i)**val_t_efectivo; form_tex = r"C = \frac{M}{(1 + i)^t}"
+                    elif "Tasa" in var_calc: res = (val_M / val_C)**(1 / val_t_raw) - 1; form_tex = r"i = \left(\frac{M}{C}\right)^{\frac{1}{t}} - 1"
+                    elif "Tiempo" in var_calc: res = math.log(val_M / val_C) / math.log(1 + val_i); form_tex = r"t = \frac{\ln(M/C)}{\ln(1+i)}"
                     
-                    tabla = []
-                    saldo = C_iter
-                    for k in range(1, t_iter + 1):
-                        if regimen == "Interés Simple": int_gen = C_iter * i_iter; saldo += int_gen
-                        elif regimen == "Interés Compuesto": int_gen = saldo * i_iter; saldo += int_gen
-                        elif regimen == "Descuento Bancario (Simple)": int_gen = M_iter * i_iter; saldo += int_gen
-                        tabla.append({"Periodo": k, "Interés / Descuento": round(int_gen, 2), "Saldo": round(saldo, 2)})
-                    st.dataframe(pd.DataFrame(tabla), use_container_width=True, hide_index=True)
+                # INTERÉS CONTINUO
+                elif regimen == "Interés Continuo":
+                    if "Monto" in var_calc: res = val_C * math.exp(val_i * val_t_efectivo); form_tex = r"M = Ce^{it}"
+                    elif "Capital" in var_calc: res = val_M * math.exp(-val_i * val_t_efectivo); form_tex = r"C = Me^{-it}"
+                    elif "Tasa" in var_calc: res = math.log(val_M / val_C) / val_t_raw; form_tex = r"i = \frac{\ln(M/C)}{t}"
+                    elif "Tiempo" in var_calc: res = math.log(val_M / val_C) / val_i; form_tex = r"t = \frac{\ln(M/C)}{i}"
 
-        except ValueError:
-            st.error("Error matemático de dominio (ej. Logaritmo de un número negativo). Verifique que el Capital sea menor al Monto.")
-        except ZeroDivisionError:
-            st.error("Error: División por cero.")
+                # DESCUENTO BANCARIO
+                elif regimen == "Descuento Bancario":
+                    if "Nominal" in var_calc: res = val_C / (1 - val_i * val_t_efectivo); form_tex = r"M = \frac{C}{1 - dt}"
+                    elif "Efectivo" in var_calc: res = val_M * (1 - val_i * val_t_efectivo); form_tex = r"C = M(1 - dt)"
+                    elif "Tasa" in var_calc: res = (1 - (val_C / val_M)) / val_t_raw; form_tex = r"d = \frac{1 - \frac{C}{M}}{t}"
+                    elif "Tiempo" in var_calc: res = (1 - (val_C / val_M)) / val_i; form_tex = r"t = \frac{1 - \frac{C}{M}}{d}"
 
-# ==============================================================================
-# PESTAÑA 2: LABORATORIO DIDÁCTICO (Curvas de crecimiento)
-# ==============================================================================
-with tab_lab:
-    st.subheader("Comparador Gráfico de Escenarios Financieros")
-    st.info("Guarde diferentes configuraciones de inversión para visualizar el cruce de curvas (Simple vs Compuesto vs Continuo).")
-    
-    with st.form("form_guardar_escenario"):
-        col_c, col_tasa, col_frec, col_t = st.columns(4)
-        with col_c:
-            tipo_int_lab = st.selectbox("Régimen:", ["Simple", "Compuesto", "Continuo"])
-            C_lab = st.number_input("Capital Inicial ($):", min_value=0.01, value=1000.0, step=100.0, key="lab_C")
-        with col_tasa:
-            tasa_lab = st.number_input("Tasa Nominal (%):", value=12.0, step=0.5, key="lab_tasa")
-        with col_frec:
-            frec_str = st.selectbox("Capitalización:", ["Anual", "Semestral", "Trimestral", "Bimestral", "Mensual", "Diaria"])
-            m_lab = frecuencias_m.get(frec_str, 1)
-        with col_t:
-            t_lab = st.number_input("Horizonte (Años):", min_value=0.1, value=10.0, step=1.0, key="lab_t")
+                st.success("Cálculo algebraico completado.")
+                col_rm, col_rf = st.columns([1, 2])
+                with col_rm:
+                    if "Tasa" in var_calc: st.metric(var_calc, f"{res*100:,.4f} %")
+                    elif "Tiempo" in var_calc: st.metric(var_calc, f"{res:,.4f} unidades")
+                    else: st.metric(var_calc, f"${res:,.2f}")
+                with col_rf:
+                    st.write("**Fórmula aplicada:**")
+                    st.latex(form_tex)
+                    
+                # Guardado automático en el comparador gráfico
+                if "Tasa" not in var_calc and "Tiempo" not in var_calc:
+                    nombre_escenario = f"{regimen[:4]} {val_i_porc}% {unidad_i[:3]} x {val_t_raw} {unidad_t[:3]}"
+                    st.session_state.mis_inversiones[nombre_escenario] = {
+                        "C": val_C if "Capital" not in var_calc and "Efectivo" not in var_calc else res, 
+                        "tipo": regimen, "i": val_i, 
+                        "t_efectivo": val_t_efectivo,
+                        "unidades_t": val_t_efectivo # Plazo en base a la tasa para homologar la gráfica
+                    }
             
-        c_nom, c_btn = st.columns([3, 1])
-        with c_nom: nom_escenario = st.text_input("Nombre de la curva:", value=f"{tipo_int_lab} al {tasa_lab}% {frec_str}")
-        with c_btn: 
-            st.write("")
-            if st.form_submit_button("💾 Guardar y Graficar"):
-                st.session_state.mis_inversiones[nom_escenario] = {
-                    "C": C_lab, "tipo": tipo_int_lab, "i": tasa_lab/100, "m": m_lab, "t": t_lab
-                }
-                st.rerun()
+            except ValueError:
+                st.error("Error matemático. Verifique que el Capital sea menor al Monto o que los datos no generen logaritmos negativos.")
+            except ZeroDivisionError:
+                st.error("Error: División por cero.")
+
+        # Módulo de Graficación Comparativa
+        if st.session_state.mis_inversiones:
+            st.divider()
+            col_tit, col_btn = st.columns([4, 1])
+            with col_tit: st.write("### Comparador Gráfico de Escenarios (Homologados en periodos de Tasa)")
+            with col_btn: 
+                if st.button("🗑️ Limpiar Gráfica"): st.session_state.mis_inversiones.clear(); st.rerun()
+            
+            t_max_global = max([d['unidades_t'] for d in st.session_state.mis_inversiones.values()])
+            t_vector = np.linspace(0, t_max_global, 100)
+            df_graf = pd.DataFrame({"Periodos Base": t_vector}).set_index("Periodos Base")
+            
+            for nombre, d in st.session_state.mis_inversiones.items():
+                if d['tipo'] == "Interés Simple": curva = d['C'] * (1 + d['i'] * t_vector)
+                elif d['tipo'] == "Interés Continuo": curva = d['C'] * np.exp(d['i'] * t_vector)
+                elif d['tipo'] == "Interés Compuesto": curva = d['C'] * (1 + d['i'])**t_vector
+                elif d['tipo'] == "Descuento Bancario": curva = d['C'] / (1 - d['i'] * t_vector)
                 
-    if st.session_state.mis_inversiones:
-        t_max = max([d['t'] for d in st.session_state.mis_inversiones.values()])
-        t_vector = np.linspace(0, t_max, 100)
-        df_graf = pd.DataFrame({"Años": t_vector}).set_index("Años")
-        
-        for nombre, d in st.session_state.mis_inversiones.items():
-            if d['tipo'] == "Simple": curva = d['C'] * (1 + d['i'] * t_vector)
-            elif d['tipo'] == "Continuo": curva = d['C'] * np.exp(d['i'] * t_vector)
-            else: curva = d['C'] * (1 + d['i']/d['m'])**(d['m'] * t_vector)
-            df_graf[nombre] = curva
-            
-        st.line_chart(df_graf)
-        
-        if st.button("🗑️ Limpiar Gráfica"):
-            st.session_state.mis_inversiones.clear(); st.rerun()
+                # Invalidamos (NaN) los puntos donde el descuento bancario explota matemáticamente (cuando 1 - dt < 0)
+                if d['tipo'] == "Descuento Bancario":
+                    curva = np.where(1 - d['i'] * t_vector <= 0, np.nan, curva)
+                    
+                df_graf[nombre] = curva
+                
+            st.line_chart(df_graf)
 
 # ==============================================================================
-# PESTAÑA 3: TASAS EQUIVALENTES E INFLACIÓN (Efecto Fisher)
+# PESTAÑA 2: TASAS EQUIVALENTES E INFLACIÓN (Efecto Fisher)
 # ==============================================================================
 with tab_tasas:
     st.subheader("Análisis de Tasas de Rendimiento")
@@ -183,6 +215,7 @@ with tab_tasas:
     
     with col_t1:
         st.markdown("**1. Tasa Efectiva $\\leftrightarrow$ Nominal**")
+        st.info("Convierte entre tasa efectiva anual ($i$) y tasa nominal ($j$) capitalizable $m$ veces.")
         modo_nom_efec = st.radio("Conversión:", ["Nominal a Efectiva", "Efectiva a Nominal"], horizontal=True)
         m_cap = st.number_input("Capitalizaciones por año ($m$):", min_value=1, value=12)
         
@@ -201,12 +234,12 @@ with tab_tasas:
 
     with col_t2:
         st.markdown("**2. Ecuación de Fisher (Tasa Real vs Inflación)**")
-        st.info("💡 Determina la pérdida de poder adquisitivo descontando la inflación ($\pi$).")
+        st.info("Determina la pérdida de poder adquisitivo descontando la inflación ($\pi$).")
         modo_fisher = st.radio("Despejar:", ["Tasa Real ($r$)", "Tasa Aparente ($i$)"], horizontal=True)
         
         if modo_fisher == "Tasa Real ($r$)":
-            i_aparente = st.number_input("Tasa de Inversión Aparente ($i$) en %:", value=10.0) / 100
-            inf = st.number_input("Inflación del periodo ($\pi$) en %:", value=4.5) / 100
+            i_aparente = st.number_input("Tasa Aparente ($i$) en %:", value=10.0) / 100
+            inf = st.number_input("Inflación ($\pi$) en %:", value=4.5) / 100
             if st.button("Calcular Tasa Real"):
                 r_real = (i_aparente - inf) / (1 + inf)
                 st.latex(r"r = \frac{i - \pi}{1 + \pi}")
@@ -219,8 +252,26 @@ with tab_tasas:
                 st.latex(r"i = r + \pi + (r \cdot \pi)")
                 st.metric("Tasa Aparente Requerida ($i$)", f"{i_req*100:,.4f} %")
 
+    st.divider()
+    st.markdown("**3. Tasa de Interés ($i$) $\\leftrightarrow$ Tasa de Descuento ($d$)**")
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        tasa_i = st.number_input("Tasa de Interés vencida ($i$) en %:", value=10.0) / 100
+        if st.button("Calcular Tasa de Descuento (d)"):
+            tasa_d = tasa_i / (1 + tasa_i)
+            st.latex(r"d = \frac{i}{1+i}")
+            st.metric("Tasa de Descuento ($d$)", f"{tasa_d*100:,.4f} %")
+    with col_d2:
+        tasa_d2 = st.number_input("Tasa de Descuento anticipada ($d$) en %:", value=9.09) / 100
+        if st.button("Calcular Tasa de Interés (i)"):
+            if tasa_d2 >= 1: st.error("El descuento no puede ser del 100%.")
+            else:
+                tasa_i2 = tasa_d2 / (1 - tasa_d2)
+                st.latex(r"i = \frac{d}{1-d}")
+                st.metric("Tasa de Interés ($i$)", f"{tasa_i2*100:,.4f} %")
+
 # ==============================================================================
-# PESTAÑA 4: FECHAS ACTUARIALES
+# PESTAÑA 3: FECHAS ACTUARIALES
 # ==============================================================================
 with tab_fechas:
     st.subheader("Cálculo de Plazos y Fracciones de Año")
@@ -243,7 +294,7 @@ with tab_fechas:
             st.caption(f"Fracción de año (Base 360): **{dias_360/360:,.6f}**")
 
 # ==============================================================================
-# PESTAÑA 5: ANUALIDADES Y TABLAS DE AMORTIZACIÓN
+# PESTAÑA 4: ANUALIDADES Y TABLAS DE AMORTIZACIÓN
 # ==============================================================================
 with tab_anualidades:
     st.subheader("Valuación de Flujos Constantes (Anualidades Ciertas)")
@@ -320,7 +371,6 @@ with tab_anualidades:
                         saldo_vivo = VP_inicial
                         tabla_amort = []
                         
-                        # Manejo especial para el periodo 0 si es anticipada
                         if tipo_anualidad == "Anticipada":
                             tabla_amort.append({"Periodo": 0, "Pago": round(R_fijo, 2), "Interés": 0.0, "Amortizado": round(R_fijo, 2), "Saldo": round(saldo_vivo - R_fijo, 2)})
                             saldo_vivo -= R_fijo
@@ -331,7 +381,6 @@ with tab_anualidades:
                             
                         for p in rango_pagos:
                             int_gen = saldo_vivo * val_i_an
-                            # Ajuste para el último pago (redondeo de centavos)
                             if p == n_redondeado or (tipo_anualidad == "Anticipada" and p == n_redondeado - 1):
                                 R_pago = saldo_vivo + int_gen
                             else:
