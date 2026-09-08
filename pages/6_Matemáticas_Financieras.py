@@ -37,35 +37,39 @@ tab_lab, tab_tasas, tab_fechas, tab_anualidades = st.tabs([
 ])
 
 # ==============================================================================
-# PESTAÑA 1: LABORATORIO DE VALUACIÓN Y CURVAS (Todo integrado)
+# PESTAÑA 1: LABORATORIO DE VALUACIÓN Y CURVAS
 # ==============================================================================
 with tab_lab:
     st.subheader("Cálculo de Escenarios y Proyección Gráfica")
     
-    col_reg, col_var = st.columns(2)
+    col_nat, col_reg, col_var = st.columns([1, 1, 1.5])
+    with col_nat:
+        naturaleza = st.radio("Operación:", ["Interés", "Descuento"])
     with col_reg:
-        regimen = st.radio("Régimen Financiero:", 
-                           ["Interés Simple", "Interés Compuesto", "Interés Continuo", "Descuento Bancario", "Tasa Variable (Escalonada)"], 
-                           horizontal=True)
+        tipo_tasa = st.selectbox("Régimen:", ["Simple", "Compuesto", "Continuo", "Variable (Escalonada)"])
     with col_var:
-        if regimen == "Descuento Bancario":
-            opciones_calc = ["Valor Nominal (M)", "Valor Efectivo (C)", "Tasa de Descuento (d)", "Tiempo (t)"]
-        elif regimen == "Tasa Variable (Escalonada)":
-            opciones_calc = ["Proyectar Monto Final (M)"]
+        if tipo_tasa == "Variable (Escalonada)":
+            opciones_calc = ["Proyectar Monto Final (M)"] if naturaleza == "Interés" else ["Proyectar Valor Efectivo (C)"]
         else:
-            opciones_calc = ["Monto Final (M)", "Capital Inicial (C)", "Tasa de Interés (i)", "Tiempo (t)"]
+            if naturaleza == "Descuento":
+                opciones_calc = ["Valor Nominal (M)", "Valor Efectivo (C)", "Tasa de Descuento (d)", "Tiempo (t)"]
+            else:
+                opciones_calc = ["Monto Final (M)", "Capital Inicial (C)", "Tasa de Interés (i)", "Tiempo (t)"]
         var_calc = st.selectbox("Variable a despejar:", opciones_calc)
         
     st.divider()
     
     # --------------------------------------------------------------------------
-    # MODO: TASA VARIABLE
+    # MODO: TASA VARIABLE (Soporta Interés y Descuento)
     # --------------------------------------------------------------------------
-    if regimen == "Tasa Variable (Escalonada)":
-        st.info("💡 **Modelo de Tasa Variable:** Ingrese el capital y defina los distintos periodos y tasas aplicables a lo largo del tiempo. Asume capitalización compuesta.")
+    if tipo_tasa == "Variable (Escalonada)":
+        st.info(f"💡 **Modelo Escalonado ({naturaleza}):** Ingrese el monto base y defina los distintos periodos y tasas. Asume régimen compuesto.")
         col_c_var, col_t_var = st.columns(2)
         with col_c_var:
-            C_var = st.number_input("Capital Inicial (C):", min_value=0.01, value=1000.0, step=100.0)
+            if naturaleza == "Interés":
+                base_var = st.number_input("Capital Inicial (C):", min_value=0.01, value=1000.0, step=100.0)
+            else:
+                base_var = st.number_input("Valor Nominal a descontar (M):", min_value=0.01, value=1000.0, step=100.0)
         with col_t_var:
             unidad_t_var = st.selectbox("Unidad base de los periodos:", list(factores_tiempo.keys()), index=0, key="ut_var")
 
@@ -78,27 +82,36 @@ with tab_lab:
         
         datos_tasas = st.data_editor(df_tasas, num_rows="dynamic", use_container_width=True, key="tabla_tasas")
         
-        if st.button("Proyectar Crecimiento Variable"):
-            saldo_var = C_var
+        if st.button(f"Proyectar {naturaleza} Variable"):
+            saldo_var = base_var
             tiempo_acumulado = 0.0
-            puntos_curva = [{"Tiempo": 0.0, "Monto": saldo_var}]
+            puntos_curva = [{"Tiempo": 0.0, "Valor": saldo_var}]
             
             for i, row in datos_tasas.iterrows():
                 t_tramo = float(row["Periodos (Duración)"])
                 tasa_tramo = float(row["Tasa Aplicable (%)"]) / 100
-                saldo_var = saldo_var * (1 + tasa_tramo)**t_tramo
+                
+                # Multiplicador adaptativo
+                if naturaleza == "Interés":
+                    saldo_var = saldo_var * (1 + tasa_tramo)**t_tramo
+                else:
+                    saldo_var = saldo_var * (1 - tasa_tramo)**t_tramo
+                
                 tiempo_acumulado += t_tramo
-                puntos_curva.append({"Tiempo": tiempo_acumulado, "Monto": saldo_var})
+                puntos_curva.append({"Tiempo": tiempo_acumulado, "Valor": saldo_var})
                 
             st.success("Proyección escalonada completada.")
-            st.metric("Monto Final Proyectado (M)", f"${saldo_var:,.2f}")
+            if naturaleza == "Interés":
+                st.metric("Monto Final Proyectado (M)", f"${saldo_var:,.2f}")
+            else:
+                st.metric("Valor Efectivo Proyectado (C)", f"${saldo_var:,.2f}")
             
-            st.write("### Evolución del Fondo con Tasa Variable")
+            st.write(f"### Evolución del Fondo ({naturaleza} Variable)")
             df_curva_var = pd.DataFrame(puntos_curva).set_index("Tiempo")
             st.line_chart(df_curva_var)
 
     # --------------------------------------------------------------------------
-    # MODO: TASAS FIJAS
+    # MODO: TASAS FIJAS (Despejes y Comparador Gráfico)
     # --------------------------------------------------------------------------
     else:
         with st.form("form_universal"):
@@ -123,7 +136,7 @@ with tab_lab:
                     unidad_t = st.selectbox("Unidad de tiempo:", list(factores_tiempo.keys()), index=0)
             
             st.write("---")
-            nom_custom = st.text_input("Nombre para la gráfica (Deje en blanco para auto-nombrar):", placeholder="Ej. Inversión Banco A")
+            nom_custom = st.text_input("Nombre para la gráfica (Opcional):", placeholder="Ej. Pagaré Banorte")
             submit_uni = st.form_submit_button("Calcular y Graficar Escenario")
             
         if submit_uni:
@@ -136,33 +149,38 @@ with tab_lab:
                 val_t_efectivo = val_t_raw * (factor_tasa / factor_tiempo)
             
             try:
-                # INTERÉS SIMPLE
-                if regimen == "Interés Simple":
-                    if "Monto" in var_calc: res = val_C * (1 + val_i * val_t_efectivo); form_tex = r"M = C(1 + it)"
-                    elif "Capital" in var_calc: res = val_M / (1 + val_i * val_t_efectivo); form_tex = r"C = \frac{M}{1 + it}"
-                    elif "Tasa" in var_calc: res = ((val_M / val_C) - 1) / val_t_raw; form_tex = r"i = \frac{\frac{M}{C} - 1}{t}"
-                    elif "Tiempo" in var_calc: res = ((val_M / val_C) - 1) / val_i; form_tex = r"t = \frac{\frac{M}{C} - 1}{i}"
-                
-                # INTERÉS COMPUESTO
-                elif regimen == "Interés Compuesto":
-                    if "Monto" in var_calc: res = val_C * (1 + val_i)**val_t_efectivo; form_tex = r"M = C(1 + i)^t"
-                    elif "Capital" in var_calc: res = val_M / (1 + val_i)**val_t_efectivo; form_tex = r"C = \frac{M}{(1 + i)^t}"
-                    elif "Tasa" in var_calc: res = (val_M / val_C)**(1 / val_t_raw) - 1; form_tex = r"i = \left(\frac{M}{C}\right)^{\frac{1}{t}} - 1"
-                    elif "Tiempo" in var_calc: res = math.log(val_M / val_C) / math.log(1 + val_i); form_tex = r"t = \frac{\ln(M/C)}{\ln(1+i)}"
-                    
-                # INTERÉS CONTINUO
-                elif regimen == "Interés Continuo":
-                    if "Monto" in var_calc: res = val_C * math.exp(val_i * val_t_efectivo); form_tex = r"M = Ce^{it}"
-                    elif "Capital" in var_calc: res = val_M * math.exp(-val_i * val_t_efectivo); form_tex = r"C = Me^{-it}"
-                    elif "Tasa" in var_calc: res = math.log(val_M / val_C) / val_t_raw; form_tex = r"i = \frac{\ln(M/C)}{t}"
-                    elif "Tiempo" in var_calc: res = math.log(val_M / val_C) / val_i; form_tex = r"t = \frac{\ln(M/C)}{i}"
-
-                # DESCUENTO BANCARIO
-                elif regimen == "Descuento Bancario":
-                    if "Nominal" in var_calc: res = val_C / (1 - val_i * val_t_efectivo); form_tex = r"M = \frac{C}{1 - dt}"
-                    elif "Efectivo" in var_calc: res = val_M * (1 - val_i * val_t_efectivo); form_tex = r"C = M(1 - dt)"
-                    elif "Tasa" in var_calc: res = (1 - (val_C / val_M)) / val_t_raw; form_tex = r"d = \frac{1 - \frac{C}{M}}{t}"
-                    elif "Tiempo" in var_calc: res = (1 - (val_C / val_M)) / val_i; form_tex = r"t = \frac{1 - \frac{C}{M}}{d}"
+                if naturaleza == "Interés":
+                    if tipo_tasa == "Simple":
+                        if "Monto" in var_calc: res = val_C * (1 + val_i * val_t_efectivo); form_tex = r"M = C(1 + it)"
+                        elif "Capital" in var_calc: res = val_M / (1 + val_i * val_t_efectivo); form_tex = r"C = \frac{M}{1 + it}"
+                        elif "Tasa" in var_calc: res = ((val_M / val_C) - 1) / val_t_raw; form_tex = r"i = \frac{\frac{M}{C} - 1}{t}"
+                        elif "Tiempo" in var_calc: res = ((val_M / val_C) - 1) / val_i; form_tex = r"t = \frac{\frac{M}{C} - 1}{i}"
+                    elif tipo_tasa == "Compuesto":
+                        if "Monto" in var_calc: res = val_C * (1 + val_i)**val_t_efectivo; form_tex = r"M = C(1 + i)^t"
+                        elif "Capital" in var_calc: res = val_M / (1 + val_i)**val_t_efectivo; form_tex = r"C = \frac{M}{(1 + i)^t}"
+                        elif "Tasa" in var_calc: res = (val_M / val_C)**(1 / val_t_raw) - 1; form_tex = r"i = \left(\frac{M}{C}\right)^{\frac{1}{t}} - 1"
+                        elif "Tiempo" in var_calc: res = math.log(val_M / val_C) / math.log(1 + val_i); form_tex = r"t = \frac{\ln(M/C)}{\ln(1+i)}"
+                    elif tipo_tasa == "Continuo":
+                        if "Monto" in var_calc: res = val_C * math.exp(val_i * val_t_efectivo); form_tex = r"M = Ce^{it}"
+                        elif "Capital" in var_calc: res = val_M * math.exp(-val_i * val_t_efectivo); form_tex = r"C = Me^{-it}"
+                        elif "Tasa" in var_calc: res = math.log(val_M / val_C) / val_t_raw; form_tex = r"i = \frac{\ln(M/C)}{t}"
+                        elif "Tiempo" in var_calc: res = math.log(val_M / val_C) / val_i; form_tex = r"t = \frac{\ln(M/C)}{i}"
+                else: # Descuento
+                    if tipo_tasa == "Simple":
+                        if "Nominal" in var_calc: res = val_C / (1 - val_i * val_t_efectivo); form_tex = r"M = \frac{C}{1 - dt}"
+                        elif "Efectivo" in var_calc: res = val_M * (1 - val_i * val_t_efectivo); form_tex = r"C = M(1 - dt)"
+                        elif "Tasa" in var_calc: res = (1 - (val_C / val_M)) / val_t_raw; form_tex = r"d = \frac{1 - \frac{C}{M}}{t}"
+                        elif "Tiempo" in var_calc: res = (1 - (val_C / val_M)) / val_i; form_tex = r"t = \frac{1 - \frac{C}{M}}{d}"
+                    elif tipo_tasa == "Compuesto":
+                        if "Nominal" in var_calc: res = val_C * (1 - val_i)**(-val_t_efectivo); form_tex = r"M = C(1 - d)^{-t}"
+                        elif "Efectivo" in var_calc: res = val_M * (1 - val_i)**val_t_efectivo; form_tex = r"C = M(1 - d)^t"
+                        elif "Tasa" in var_calc: res = 1 - (val_C / val_M)**(1 / val_t_raw); form_tex = r"d = 1 - \left(\frac{C}{M}\right)^{\frac{1}{t}}"
+                        elif "Tiempo" in var_calc: res = math.log(val_C / val_M) / math.log(1 - val_i); form_tex = r"t = \frac{\ln(C/M)}{\ln(1 - d)}"
+                    elif tipo_tasa == "Continuo":
+                        if "Nominal" in var_calc: res = val_C * math.exp(val_i * val_t_efectivo); form_tex = r"M = Ce^{dt}"
+                        elif "Efectivo" in var_calc: res = val_M * math.exp(-val_i * val_t_efectivo); form_tex = r"C = Me^{-dt}"
+                        elif "Tasa" in var_calc: res = math.log(val_M / val_C) / val_t_raw; form_tex = r"d = \frac{\ln(M/C)}{t}"
+                        elif "Tiempo" in var_calc: res = math.log(val_M / val_C) / val_i; form_tex = r"t = \frac{\ln(M/C)}{d}"
 
                 st.success("Cálculo algebraico completado.")
                 col_rm, col_rf = st.columns([1, 2])
@@ -174,21 +192,24 @@ with tab_lab:
                     st.write("**Fórmula aplicada:**")
                     st.latex(form_tex)
                     
-                # Guardado inteligente y personalizado
+                # Guardado inteligente en el diccionario para la gráfica
                 if "Tasa" not in var_calc and "Tiempo" not in var_calc:
-                    tipo_corto = regimen.replace("Interés ", "").replace(" Bancario", "")
-                    capital_graf = val_C if "Capital" not in var_calc and "Efectivo" not in var_calc else res
-                    
-                    nombre_auto = f"[{tipo_corto}] ${capital_graf:,.0f} al {val_i_porc}%"
+                    # En Interés la curva arranca del Capital, en Descuento la curva se traza respecto al Valor Nominal
+                    if naturaleza == "Interés":
+                        base_graf = val_C if "Capital" not in var_calc else res
+                    else:
+                        base_graf = val_M if "Nominal" not in var_calc else res
+                        
+                    nombre_auto = f"[{naturaleza[:3]} {tipo_tasa[:4]}] ${base_graf:,.0f} al {val_i_porc}%"
                     nombre_final = nom_custom.strip() if nom_custom.strip() else nombre_auto
                     
                     st.session_state.mis_inversiones[nombre_final] = {
-                        "C": capital_graf, "tipo": regimen, "i": val_i, 
-                        "t_efectivo": val_t_efectivo, "unidades_t": val_t_efectivo 
+                        "Base": base_graf, "nat": naturaleza, "tipo": tipo_tasa, "i": val_i, 
+                        "unidades_t": val_t_efectivo 
                     }
                     
-                # Restauración de la Tabla de Evolución
-                if ("Tasa" not in var_calc) and ("Tiempo" not in var_calc) and ("Continuo" not in regimen):
+                # Tabla de Evolución Dinámica
+                if ("Tasa" not in var_calc) and ("Tiempo" not in var_calc):
                     t_iter = int(math.ceil(val_t_efectivo))
                     if t_iter <= 120:
                         with st.expander("📊 Ver tabla de evolución del escenario"):
@@ -196,24 +217,30 @@ with tab_lab:
                             C_iter = val_C if "Capital" not in var_calc and "Efectivo" not in var_calc else res
                             
                             tabla = []
-                            saldo = C_iter
+                            saldo = C_iter if naturaleza == "Interés" else M_iter
                             for k in range(1, t_iter + 1):
-                                if regimen == "Interés Simple": int_gen = C_iter * val_i
-                                elif regimen == "Interés Compuesto": int_gen = saldo * val_i
-                                elif regimen == "Descuento Bancario": int_gen = M_iter * val_i
-                                
-                                saldo += int_gen
-                                tabla.append({"Periodo": k, "Interés / Descuento": round(int_gen, 2), "Saldo Acumulado": round(saldo, 2)})
+                                if naturaleza == "Interés":
+                                    if tipo_tasa == "Simple": int_gen = C_iter * val_i
+                                    elif tipo_tasa == "Compuesto": int_gen = saldo * val_i
+                                    elif tipo_tasa == "Continuo": int_gen = saldo * (math.exp(val_i) - 1)
+                                    saldo += int_gen
+                                else:
+                                    if tipo_tasa == "Simple": int_gen = M_iter * val_i
+                                    elif tipo_tasa == "Compuesto": int_gen = saldo * val_i
+                                    elif tipo_tasa == "Continuo": int_gen = saldo * (1 - math.exp(-val_i))
+                                    saldo -= int_gen # El descuento resta del nominal
+                                    
+                                tabla.append({"Periodo": k, "Interés / Descuento": round(int_gen, 2), "Valor Proyectado": round(abs(saldo), 2)})
                             st.dataframe(pd.DataFrame(tabla), use_container_width=True, hide_index=True)
                     else:
                         st.caption("Tabla omitida para mantener el rendimiento (más de 120 periodos).")
             
             except ValueError:
-                st.error("Error matemático. Verifique que el Capital sea menor al Monto o que los datos no generen logaritmos negativos.")
+                st.error("Error matemático. Verifique que el Capital (Valor Efectivo) sea menor al Monto (Valor Nominal) o que la tasa no exceda límites lógicos.")
             except ZeroDivisionError:
                 st.error("Error: División por cero.")
 
-        # Módulo de Graficación Comparativa
+        # Módulo de Graficación Comparativa Global
         if st.session_state.mis_inversiones:
             st.divider()
             col_tit, col_btn = st.columns([4, 1])
@@ -226,17 +253,21 @@ with tab_lab:
             df_graf = pd.DataFrame({"Periodos Base": t_vector}).set_index("Periodos Base")
             
             for nombre, d in st.session_state.mis_inversiones.items():
-                if d['tipo'] == "Interés Simple": curva = d['C'] * (1 + d['i'] * t_vector)
-                elif d['tipo'] == "Interés Continuo": curva = d['C'] * np.exp(d['i'] * t_vector)
-                elif d['tipo'] == "Interés Compuesto": curva = d['C'] * (1 + d['i'])**t_vector
-                elif d['tipo'] == "Descuento Bancario": 
-                    curva = d['C'] / (1 - d['i'] * t_vector)
-                    curva = np.where(1 - d['i'] * t_vector <= 0, np.nan, curva)
+                val_base = d['Base']
+                if d['nat'] == "Interés":
+                    if d['tipo'] == "Simple": curva = val_base * (1 + d['i'] * t_vector)
+                    elif d['tipo'] == "Continuo": curva = val_base * np.exp(d['i'] * t_vector)
+                    elif d['tipo'] == "Compuesto": curva = val_base * (1 + d['i'])**t_vector
+                else: 
+                    if d['tipo'] == "Compuesto": curva = val_base * (1 - d['i'])**t_vector
+                    elif d['tipo'] == "Continuo": curva = val_base * np.exp(-d['i'] * t_vector)
+                    elif d['tipo'] == "Simple": 
+                        curva = val_base * (1 - d['i'] * t_vector)
+                        curva = np.where(1 - d['i'] * t_vector <= 0, np.nan, curva)
                     
                 df_graf[nombre] = curva
                 
             st.line_chart(df_graf)
-
 # ==============================================================================
 # PESTAÑA 2: TASAS EQUIVALENTES E INFLACIÓN (Didáctico)
 # ==============================================================================
