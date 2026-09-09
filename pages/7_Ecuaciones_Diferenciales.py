@@ -159,7 +159,7 @@ with tab_sistemas:
         with col_graf:
             st.subheader("3. Análisis Gráfico del Sistema")
             
-                        @st.cache_data
+            @st.cache_data
             def generar_graficas_sistema(str_p, str_q, t_val):
                 p_eq = parse_expr(str_p, transformations=transf, local_dict=dicc_loc).subs(t_sym, t_val)
                 q_eq = parse_expr(str_q, transformations=transf, local_dict=dicc_loc).subs(t_sym, t_val)
@@ -185,12 +185,11 @@ with tab_sistemas:
                 fig1, ax1 = plt.subplots(figsize=(7, 6))
                 Y_q, X_q = np.mgrid[-5:5:20j, -5:5:20j]
                 
-                # CORRECCIÓN: Forzamos .astype(np.float64) para evitar que Q=0 genere enteros
+                # CORRECCIÓN: Forzamos .astype(np.float64)
                 U_q = np.broadcast_to(func_U(X_q, Y_q), X_q.shape).astype(np.float64)
                 V_q = np.broadcast_to(func_V(X_q, Y_q), X_q.shape).astype(np.float64)
                 
                 N_q = np.sqrt(U_q**2 + V_q**2)
-                # Ahora np.zeros_like creará matrices de floats, permitiendo la división
                 U_norm = np.divide(U_q, N_q, out=np.zeros_like(U_q), where=N_q!=0)
                 V_norm = np.divide(V_q, N_q, out=np.zeros_like(V_q), where=N_q!=0)
                 
@@ -207,7 +206,7 @@ with tab_sistemas:
                 fig2, ax2 = plt.subplots(figsize=(7, 6))
                 Y_s, X_s = np.mgrid[-5:5:100j, -5:5:100j]
                 
-                # CORRECCIÓN: Aplicamos el mismo blindaje de tipo float64 aquí
+                # CORRECCIÓN: Forzamos .astype(np.float64)
                 U_s = np.broadcast_to(func_U(X_s, Y_s), X_s.shape).astype(np.float64)
                 V_s = np.broadcast_to(func_V(X_s, Y_s), X_s.shape).astype(np.float64)
                 velocidad = np.sqrt(U_s**2 + V_s**2)
@@ -235,6 +234,33 @@ with tab_sistemas:
                 ax2.legend(loc='upper right', fontsize='small')
 
                 return fig1, fig2
+
+            try:
+                fig_quiver, fig_stream = generar_graficas_sistema(str(P_expr), str(Q_expr), t_eval)
+                
+                tab_fase, tab_vect = st.tabs(["🌊 Retrato de Fase (Soluciones)", "🔀 Campo Vectorial (Quiver)"])
+                with tab_fase:
+                    st.pyplot(fig_stream)
+                    st.caption("Visualización del flujo continuo y las curvas de las Isoclinas. Los puntos rojos indican los puntos singulares calculados analíticamente.")
+                with tab_vect:
+                    st.pyplot(fig_quiver)
+                    st.caption("Vectores normalizados en color morado claro mostrando la dirección pura del flujo en el espacio.")
+            except Exception as e:
+                st.error(f"Fallo en renderizado. Es posible que el campo contenga singularidades insolubles en la malla. Detalle: {e}")
+
+        with col_sol:
+            st.subheader("4. Ecuación de Órbitas")
+            st.latex(rf"\frac{{dy}}{{dx}} = \frac{{{sp.latex(Q_expr)}}}{{{sp.latex(P_expr)}}}")
+            
+            if st.button("Intentar solución analítica integral (dy/dx)"):
+                y_orb = sp.Function('y')(x_sym)
+                try:
+                    eq_orbita = sp.Eq(y_orb.diff(x_sym), Q_expr.subs(y_sym, y_orb) / P_expr.subs(y_sym, y_orb))
+                    sol_orbita = sp.dsolve(eq_orbita, y_orb)
+                    st.info("Solución implicita general:")
+                    st.latex(sp.latex(sol_orbita))
+                except Exception:
+                    st.warning("La ecuación de la órbita no admite una solución cerrada explícita por métodos estándar.")
 
 # ==============================================================================
 # PESTAÑA 2: EDOs DE PRIMER ORDEN (RESOLUTOR)
