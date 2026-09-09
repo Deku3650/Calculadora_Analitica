@@ -159,7 +159,7 @@ with tab_sistemas:
         with col_graf:
             st.subheader("3. Análisis Gráfico del Sistema")
             
-            @st.cache_data
+                        @st.cache_data
             def generar_graficas_sistema(str_p, str_q, t_val):
                 p_eq = parse_expr(str_p, transformations=transf, local_dict=dicc_loc).subs(t_sym, t_val)
                 q_eq = parse_expr(str_q, transformations=transf, local_dict=dicc_loc).subs(t_sym, t_val)
@@ -174,7 +174,7 @@ with tab_sistemas:
                                 if sol[x_sym].is_real and sol[y_sym].is_real:
                                     puntos_criticos.append((float(sol[x_sym]), float(sol[y_sym])))
                 except Exception:
-                    pass # Si es demasiado complejo, simplemente lo omitimos para no crashear
+                    pass
                 
                 func_U = sp.lambdify((x_sym, y_sym), p_eq, modules=['numpy'])
                 func_V = sp.lambdify((x_sym, y_sym), q_eq, modules=['numpy'])
@@ -184,11 +184,13 @@ with tab_sistemas:
                 # ==========================================
                 fig1, ax1 = plt.subplots(figsize=(7, 6))
                 Y_q, X_q = np.mgrid[-5:5:20j, -5:5:20j]
-                U_q = np.broadcast_to(func_U(X_q, Y_q), X_q.shape)
-                V_q = np.broadcast_to(func_V(X_q, Y_q), X_q.shape)
                 
-                # Normalizamos vectores para que todas las flechas midan lo mismo
+                # CORRECCIÓN: Forzamos .astype(np.float64) para evitar que Q=0 genere enteros
+                U_q = np.broadcast_to(func_U(X_q, Y_q), X_q.shape).astype(np.float64)
+                V_q = np.broadcast_to(func_V(X_q, Y_q), X_q.shape).astype(np.float64)
+                
                 N_q = np.sqrt(U_q**2 + V_q**2)
+                # Ahora np.zeros_like creará matrices de floats, permitiendo la división
                 U_norm = np.divide(U_q, N_q, out=np.zeros_like(U_q), where=N_q!=0)
                 V_norm = np.divide(V_q, N_q, out=np.zeros_like(V_q), where=N_q!=0)
                 
@@ -204,19 +206,19 @@ with tab_sistemas:
                 # ==========================================
                 fig2, ax2 = plt.subplots(figsize=(7, 6))
                 Y_s, X_s = np.mgrid[-5:5:100j, -5:5:100j]
-                U_s = np.broadcast_to(func_U(X_s, Y_s), X_s.shape)
-                V_s = np.broadcast_to(func_V(X_s, Y_s), X_s.shape)
+                
+                # CORRECCIÓN: Aplicamos el mismo blindaje de tipo float64 aquí
+                U_s = np.broadcast_to(func_U(X_s, Y_s), X_s.shape).astype(np.float64)
+                V_s = np.broadcast_to(func_V(X_s, Y_s), X_s.shape).astype(np.float64)
                 velocidad = np.sqrt(U_s**2 + V_s**2)
                 
                 ax2.streamplot(X_s, Y_s, U_s, V_s, color=velocidad, cmap='viridis', linewidth=1.2, arrowsize=1.2, density=1.5)
                 
-                # Trazado de isoclinas gruesas
                 try:
                     if np.ptp(U_s) > 0: ax2.contour(X_s, Y_s, U_s, levels=[0], colors=['red'], alpha=0.8, linewidths=2.5)
                     if np.ptp(V_s) > 0: ax2.contour(X_s, Y_s, V_s, levels=[0], colors=['blue'], alpha=0.8, linewidths=2.5)
                 except Exception: pass
 
-                # Dibujar Puntos Singulares (Rojos) en AMBAS gráficas
                 for pt in puntos_criticos:
                     if -5 <= pt[0] <= 5 and -5 <= pt[1] <= 5:
                         ax1.plot(pt[0], pt[1], 'ro', markersize=8, markeredgecolor='black', zorder=5)
@@ -227,41 +229,12 @@ with tab_sistemas:
                 ax2.grid(True, linestyle='--', alpha=0.5)
                 ax2.set_xlabel("x"); ax2.set_ylabel("y")
                 
-                # Leyenda manual para Figura 2
                 ax2.plot([], [], color='red', linewidth=2.5, label="Isoclina x'=0")
                 ax2.plot([], [], color='blue', linewidth=2.5, label="Isoclina y'=0")
                 ax2.plot([], [], 'ro', markeredgecolor='black', label="Punto Singular")
                 ax2.legend(loc='upper right', fontsize='small')
 
                 return fig1, fig2
-
-            try:
-                fig_quiver, fig_stream = generar_graficas_sistema(str(P_expr), str(Q_expr), t_eval)
-                
-                # Implementación de pestañas para visualizar cada gráfico ordenadamente
-                tab_fase, tab_vect = st.tabs(["🌊 Retrato de Fase (Soluciones)", "🔀 Campo Vectorial (Quiver)"])
-                with tab_fase:
-                    st.pyplot(fig_stream)
-                    st.caption("Visualización del flujo continuo y las curvas de las Isoclinas. Los puntos rojos indican los puntos singulares (equilibrios) calculados analíticamente.")
-                with tab_vect:
-                    st.pyplot(fig_quiver)
-                    st.caption("Vectores normalizados en color morado claro mostrando la dirección pura del flujo en el espacio, sobre una cuadrícula de coordenadas.")
-            except Exception as e:
-                st.error(f"Fallo en renderizado. Es posible que el campo contenga singularidades insolubles en la malla. Detalle: {e}")
-
-        with col_sol:
-            st.subheader("4. Ecuación de Órbitas")
-            st.latex(rf"\frac{{dy}}{{dx}} = \frac{{{sp.latex(Q_expr)}}}{{{sp.latex(P_expr)}}}")
-            
-            if st.button("Intentar solución analítica integral (dy/dx)"):
-                y_orb = sp.Function('y')(x_sym)
-                try:
-                    eq_orbita = sp.Eq(y_orb.diff(x_sym), Q_expr.subs(y_sym, y_orb) / P_expr.subs(y_sym, y_orb))
-                    sol_orbita = sp.dsolve(eq_orbita, y_orb)
-                    st.info("Solución implicita general:")
-                    st.latex(sp.latex(sol_orbita))
-                except Exception:
-                    st.warning("La ecuación de la órbita no admite una solución cerrada explícita por métodos estándar.")
 
 # ==============================================================================
 # PESTAÑA 2: EDOs DE PRIMER ORDEN (RESOLUTOR)
