@@ -13,7 +13,7 @@ except ImportError:
 st.set_page_config(page_title="Ecuaciones Diferenciales", layout="wide")
 
 # ==============================================================================
-# INICIALIZACIÓN DE MEMORIA PERSISTENTE (CRÍTICO PARA QUE LOS BOTONES FUNCIONEN)
+# INICIALIZACIÓN DE MEMORIA PERSISTENTE
 # ==============================================================================
 if 'mis_matrices' not in st.session_state:
     st.session_state.mis_matrices = {}
@@ -23,7 +23,7 @@ if 'sys_Q' not in st.session_state:
     st.session_state.sys_Q = None
 
 st.title("🌪️ Análisis de Campos Vectoriales y Sistemas Dinámicos")
-st.markdown("Estudio de sistemas lineales y no lineales, retratos de fase y linealización Jacobiana en $\mathbb{R}^2$.")
+st.markdown("Estudio de sistemas lineales y no lineales, retratos de fase, isoclinas y linealización Jacobiana en $\mathbb{R}^2$.")
 
 tab_sistemas, tab_edo1 = st.tabs([
     "Sistemas y Plano Fase (x', y')",
@@ -104,7 +104,7 @@ with tab_sistemas:
             
             t_eval = 0.0
             if not es_autonomo:
-                st.warning("El campo es **No Autónomo** (depende del tiempo 't'). Seleccione un instante de evaluación:")
+                st.warning("El campo es **No Autónomo**. Seleccione un instante de evaluación $t$:")
                 t_eval = st.slider("Evaluar espacio en t =", min_value=-10.0, max_value=10.0, value=0.0, step=0.5)
                 
             P_f = P_expr.subs(t_sym, t_eval)
@@ -157,64 +157,102 @@ with tab_sistemas:
         col_graf, col_sol = st.columns([1.5, 1])
         
         with col_graf:
-            st.subheader("3. Retrato de Fase (Global)")
+            st.subheader("3. Análisis Gráfico del Sistema")
             
             @st.cache_data
-            def graficar_campo_vectorial(str_p, str_q, t_val):
+            def generar_graficas_sistema(str_p, str_q, t_val):
                 p_eq = parse_expr(str_p, transformations=transf, local_dict=dicc_loc).subs(t_sym, t_val)
                 q_eq = parse_expr(str_q, transformations=transf, local_dict=dicc_loc).subs(t_sym, t_val)
+                
+                # --- BUSCAR PUNTOS SINGULARES ANALÍTICAMENTE ---
+                puntos_criticos = []
+                try:
+                    equilibrios = sp.solve([p_eq, q_eq], (x_sym, y_sym), dict=True)
+                    if isinstance(equilibrios, list):
+                        for sol in equilibrios:
+                            if x_sym in sol and y_sym in sol:
+                                if sol[x_sym].is_real and sol[y_sym].is_real:
+                                    puntos_criticos.append((float(sol[x_sym]), float(sol[y_sym])))
+                except Exception:
+                    pass # Si es demasiado complejo, simplemente lo omitimos para no crashear
                 
                 func_U = sp.lambdify((x_sym, y_sym), p_eq, modules=['numpy'])
                 func_V = sp.lambdify((x_sym, y_sym), q_eq, modules=['numpy'])
                 
-                Y, X = np.mgrid[-5:5:30j, -5:5:30j]
+                # ==========================================
+                # FIGURA 1: CAMPO VECTORIAL (QUIVER MORADO)
+                # ==========================================
+                fig1, ax1 = plt.subplots(figsize=(7, 6))
+                Y_q, X_q = np.mgrid[-5:5:20j, -5:5:20j]
+                U_q = np.broadcast_to(func_U(X_q, Y_q), X_q.shape)
+                V_q = np.broadcast_to(func_V(X_q, Y_q), X_q.shape)
                 
-                U = np.broadcast_to(func_U(X, Y), X.shape)
-                V = np.broadcast_to(func_V(X, Y), X.shape)
+                # Normalizamos vectores para que todas las flechas midan lo mismo
+                N_q = np.sqrt(U_q**2 + V_q**2)
+                U_norm = np.divide(U_q, N_q, out=np.zeros_like(U_q), where=N_q!=0)
+                V_norm = np.divide(V_q, N_q, out=np.zeros_like(V_q), where=N_q!=0)
                 
-                velocidad = np.sqrt(U**2 + V**2)
+                ax1.quiver(X_q, Y_q, U_norm, V_norm, color='mediumpurple', alpha=0.8, pivot='mid')
                 
-                fig, ax = plt.subplots(figsize=(8, 7))
-                ax.streamplot(X, Y, U, V, color=velocidad, cmap='inferno', linewidth=1, arrowsize=1.5, density=1.5)
+                ax1.set_xlim([-5, 5]); ax1.set_ylim([-5, 5])
+                ax1.axhline(0, color='black', linewidth=1); ax1.axvline(0, color='black', linewidth=1)
+                ax1.grid(True, linestyle='--', alpha=0.5)
+                ax1.set_xlabel("x"); ax1.set_ylabel("y")
                 
-                # Trazado de isoclinas con protección matemática (si el campo es constante, contour falla)
+                # ==========================================
+                # FIGURA 2: RETRATO DE FASE E ISOCLINAS
+                # ==========================================
+                fig2, ax2 = plt.subplots(figsize=(7, 6))
+                Y_s, X_s = np.mgrid[-5:5:100j, -5:5:100j]
+                U_s = np.broadcast_to(func_U(X_s, Y_s), X_s.shape)
+                V_s = np.broadcast_to(func_V(X_s, Y_s), X_s.shape)
+                velocidad = np.sqrt(U_s**2 + V_s**2)
+                
+                ax2.streamplot(X_s, Y_s, U_s, V_s, color=velocidad, cmap='viridis', linewidth=1.2, arrowsize=1.2, density=1.5)
+                
+                # Trazado de isoclinas gruesas
                 try:
-                    if np.ptp(U) > 0: ax.contour(X, Y, U, levels=[0], colors=['red'], alpha=0.5, linestyles='dashed', linewidths=2)
-                except Exception: pass
-                
-                try:
-                    if np.ptp(V) > 0: ax.contour(X, Y, V, levels=[0], colors=['blue'], alpha=0.5, linestyles='dashed', linewidths=2)
+                    if np.ptp(U_s) > 0: ax2.contour(X_s, Y_s, U_s, levels=[0], colors=['red'], alpha=0.8, linewidths=2.5)
+                    if np.ptp(V_s) > 0: ax2.contour(X_s, Y_s, V_s, levels=[0], colors=['blue'], alpha=0.8, linewidths=2.5)
                 except Exception: pass
 
-                ax.set_xlim([-5, 5])
-                ax.set_ylim([-5, 5])
-                ax.axhline(0, color='white', linewidth=1)
-                ax.axvline(0, color='white', linewidth=1)
+                # Dibujar Puntos Singulares (Rojos) en AMBAS gráficas
+                for pt in puntos_criticos:
+                    if -5 <= pt[0] <= 5 and -5 <= pt[1] <= 5:
+                        ax1.plot(pt[0], pt[1], 'ro', markersize=8, markeredgecolor='black', zorder=5)
+                        ax2.plot(pt[0], pt[1], 'ro', markersize=8, markeredgecolor='black', zorder=5)
+
+                ax2.set_xlim([-5, 5]); ax2.set_ylim([-5, 5])
+                ax2.axhline(0, color='black', linewidth=1); ax2.axvline(0, color='black', linewidth=1)
+                ax2.grid(True, linestyle='--', alpha=0.5)
+                ax2.set_xlabel("x"); ax2.set_ylabel("y")
                 
-                fig.patch.set_facecolor('#0e1117')
-                ax.set_facecolor('#0e1117')
-                ax.tick_params(colors='white')
-                ax.xaxis.label.set_color('white')
-                ax.yaxis.label.set_color('white')
-                for spine in ax.spines.values(): spine.set_edgecolor('white')
-                
-                ax.plot([], [], color='red', linestyle='dashed', label="Isoclina x'=0")
-                ax.plot([], [], color='blue', linestyle='dashed', label="Isoclina y'=0")
-                ax.legend(facecolor='#0e1117', edgecolor='white', labelcolor='white', loc='upper right')
-                
-                return fig
+                # Leyenda manual para Figura 2
+                ax2.plot([], [], color='red', linewidth=2.5, label="Isoclina x'=0")
+                ax2.plot([], [], color='blue', linewidth=2.5, label="Isoclina y'=0")
+                ax2.plot([], [], 'ro', markeredgecolor='black', label="Punto Singular")
+                ax2.legend(loc='upper right', fontsize='small')
+
+                return fig1, fig2
 
             try:
-                fig_fase = graficar_campo_vectorial(str(P_expr), str(Q_expr), t_eval)
-                st.pyplot(fig_fase)
+                fig_quiver, fig_stream = generar_graficas_sistema(str(P_expr), str(Q_expr), t_eval)
+                
+                # Implementación de pestañas para visualizar cada gráfico ordenadamente
+                tab_fase, tab_vect = st.tabs(["🌊 Retrato de Fase (Soluciones)", "🔀 Campo Vectorial (Quiver)"])
+                with tab_fase:
+                    st.pyplot(fig_stream)
+                    st.caption("Visualización del flujo continuo y las curvas de las Isoclinas. Los puntos rojos indican los puntos singulares (equilibrios) calculados analíticamente.")
+                with tab_vect:
+                    st.pyplot(fig_quiver)
+                    st.caption("Vectores normalizados en color morado claro mostrando la dirección pura del flujo en el espacio, sobre una cuadrícula de coordenadas.")
             except Exception as e:
-                st.error(f"Fallo en renderizado. Es posible que el campo contenga singularidades insolubles (división por cero) en la malla. Detalle: {e}")
+                st.error(f"Fallo en renderizado. Es posible que el campo contenga singularidades insolubles en la malla. Detalle: {e}")
 
         with col_sol:
             st.subheader("4. Ecuación de Órbitas")
             st.latex(rf"\frac{{dy}}{{dx}} = \frac{{{sp.latex(Q_expr)}}}{{{sp.latex(P_expr)}}}")
             
-            # Como P_expr y Q_expr están en session_state, este botón ahora sí funcionará sin borrarse
             if st.button("Intentar solución analítica integral (dy/dx)"):
                 y_orb = sp.Function('y')(x_sym)
                 try:
@@ -223,7 +261,7 @@ with tab_sistemas:
                     st.info("Solución implicita general:")
                     st.latex(sp.latex(sol_orbita))
                 except Exception:
-                    st.warning("La ecuación de la órbita no admite una solución cerrada explícita. Típico en sistemas no lineales complejos.")
+                    st.warning("La ecuación de la órbita no admite una solución cerrada explícita por métodos estándar.")
 
 # ==============================================================================
 # PESTAÑA 2: EDOs DE PRIMER ORDEN (RESOLUTOR)
