@@ -74,7 +74,7 @@ with col2:
         <li style="color: #ffffff; margin-bottom: 25px;">
             <strong style="font-size: 17px;">↗️ Vectores & Sistemas:</strong><br>
             <span style="color: #b0b3b8; font-size: 14px; display: block; margin-top: 4px;">
-                Proyecciones, ángulos, Gram-Schmidt y resolución de sistemas lineales $[A|b]$.
+                Proyecciones, ángulos, Gram-Schmidt y resolución de sistemas lineales [A|b].
             </span>
         </li>
         <li style="color: #ffffff; margin-bottom: 25px;">
