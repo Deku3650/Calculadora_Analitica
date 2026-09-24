@@ -9,7 +9,7 @@ st.set_page_config(page_title="Matemáticas Financieras", layout="wide")
 if 'mis_inversiones' not in st.session_state:
     st.session_state.mis_inversiones = {}
 
-st.title("📈 Módulo de Matemáticas Financieras")
+st.title("📈 Matemáticas Financieras")
 st.markdown("Plataforma actuarial de valuación, tasas equivalentes, escenarios dinámicos y cuadros de amortización.")
 
 # Diccionarios de conversión
