@@ -10,7 +10,7 @@ if 'mis_transformaciones' not in st.session_state:
 if 'mis_matrices' not in st.session_state:
     st.session_state.mis_matrices = {}
 
-st.title("🔄 Módulo de Transformaciones Lineales")
+st.title("🔄 Transformaciones Lineales")
 
 # ==============================================================================
 # PANEL LATERAL
