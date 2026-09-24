@@ -6,7 +6,7 @@ import pandas as pd
 # MÓDULO: ECONOMÍA Y MICROECONOMÍA
 # ==============================================================================
 
-st.title("📊 Módulo de Economía y Microeconomía")
+st.title("📊 Economía y Microeconomía")
 st.markdown("Herramientas analíticas para equilibrio de mercado, elasticidades y restricción presupuestaria.")
 
 tab_eq, tab_elas, tab_pres = st.tabs([
