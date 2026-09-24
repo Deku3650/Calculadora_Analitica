@@ -80,7 +80,7 @@ with col2:
         <li style="color: #ffffff; margin-bottom: 25px;">
             <strong style="font-size: 17px;">🌪️ Análisis Vectorial y Sistemas Dinámicos:</strong><br>
             <span style="color: #b0b3b8; font-size: 14px; display: block; margin-top: 4px;">
-                Estudio de sistemas lineales y no lineales, retratos de fase, isoclinas y linealización Jacobiana en \(\mathbb{R}^2\).
+                Estudio de sistemas lineales y no lineales, retratos de fase, isoclinas y linealización Jacobiana en R<sup>2</sup>.
             </span>
         </li>
     </ul>
