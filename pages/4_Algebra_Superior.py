@@ -14,7 +14,7 @@ st.set_page_config(page_title="Álgebra Superior", layout="wide")
 if 'mis_complejos' not in st.session_state:
     st.session_state.mis_complejos = {}
 
-st.title("🔢 Módulo de Álgebra Superior")
+st.title("🔢 Álgebra Superior")
 st.markdown("Teoría de Números, Aritmética Modular y Variable Compleja.")
 
 tab_mcd, tab_euclides, tab_congruencias, tab_complejos = st.tabs([
