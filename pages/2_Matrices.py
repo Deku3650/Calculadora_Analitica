@@ -392,7 +392,8 @@ with tab_espectral:
                 columnas_P, valores_D = [], []
                 
                 for val, mult_alg, vects in vectores_propios:
-                    st.markdown(f"### \(\lambda = {sp.latex(val)}\)")
+                    # CORREGIDO: Usamos st.latex para que la letra griega y la fórmula respiren bien
+                    st.latex(f"\lambda = {sp.latex(val)}")
                     st.write(f"Multiplicidad Algebraica: {mult_alg} | Multiplicidad Geométrica: {len(vects)}")
                     
                     for i, v in enumerate(vects):
