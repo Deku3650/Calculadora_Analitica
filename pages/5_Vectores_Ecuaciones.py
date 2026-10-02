@@ -19,44 +19,71 @@ if 'mis_matrices' not in st.session_state:
 st.title("↗️ Vectores y Sistemas de Ecuaciones")
 
 # ==============================================================================
-# PANEL LATERAL (INVENTARIO DE VECTORES)
+# PANEL LATERAL (INVENTARIO LIMPIO DE VECTORES)
 # ==============================================================================
 with st.sidebar:
-    st.header("Inventario de Vectores")
+    st.header("📦 Inventario de Vectores")
     if st.session_state.mis_vectores:
         for nombre, vec in st.session_state.mis_vectores.items():
-            st.write(f"**{nombre}**:")
-            imprimir_matriz_simbolica(vec)
+            with st.expander(f"Vector {nombre} (R^{vec.shape[0]})"):
+                imprimir_matriz_simbolica(vec)
     else:
         st.info("No hay vectores en memoria.")
 
     st.divider()
-    st.subheader("Nuevo Vector")
-    nombre_nuevo = st.text_input("Asignar nombre (Ej: u, v, w):").upper().strip()
-
-    if nombre_nuevo:
-        dim = st.number_input("Dimensión del vector (Rn):", min_value=2, max_value=10, value=3)
-        with st.form("form_vector"):
-            componentes = [st.text_input(f"Componente {i + 1}:", value="0") for i in range(dim)]
-            if st.form_submit_button("Guardar Vector"):
-                try:
-                    vec_nums = [leer_expresion_st(c) for c in componentes]
-                    if None not in vec_nums:
-                        st.session_state.mis_vectores[nombre_nuevo] = sp.Matrix(vec_nums)
-                        st.success(f"Vector {nombre_nuevo} guardado.")
-                        st.rerun()
-                except Exception:
-                    st.error("Error al procesar componentes.")
-
-    if st.button("🗑️ Borrar todos los vectores"):
+    if st.button("🗑️ Borrar todos los vectores", use_container_width=True):
         st.session_state.mis_vectores.clear()
         st.rerun()
 
 # ==============================================================================
-# ÁREA PRINCIPAL
+# ÁREA PRINCIPAL (PESTAÑAS)
 # ==============================================================================
-tab_ops, tab_graficas, tab_sistemas, tab_analisis_conjunto = st.tabs(
-    ["Operaciones", "Graficación (R2 y R3)", "Sistemas de Ecuaciones", "Análisis de Conjuntos"])
+tab_gestion, tab_ops, tab_graficas, tab_sistemas, tab_analisis_conjunto = st.tabs([
+    "📥 Gestión y Creación", 
+    "Operaciones", 
+    "Graficación (R2 y R3)", 
+    "Sistemas de Ecuaciones", 
+    "Análisis de Conjuntos"
+])
+
+# ----------------F--------------------------------------------------------------
+# TAB 0: GESTIÓN Y CREACIÓN
+# ------------------------------------------------------------------------------
+with tab_gestion:
+    st.subheader("Constructor de Vectores")
+    
+    col_v1, col_v2 = st.columns([1, 2])
+    
+    with col_v1:
+        st.markdown("### ➕ Nuevo Vector")
+        nombre_nuevo = st.text_input("Asignar nombre (Ej: u, v, w):", key="input_nom_vector").upper().strip()
+        dim = st.number_input("Dimensión del vector (Rn):", min_value=2, max_value=10, value=3, key="dim_vector_input")
+        
+        with st.form("form_vector_main"):
+            componentes = [st.text_input(f"Componente {i + 1}:", value="0", key=f"comp_{i}_main") for i in range(dim)]
+            if st.form_submit_button("Guardar Vector"):
+                try:
+                    vec_nums = [leer_expresion_st(c) for c in componentes]
+                    if None not in vec_nums and nombre_nuevo:
+                        st.session_state.mis_vectores[nombre_nuevo] = sp.Matrix(vec_nums)
+                        st.success(f"Vector {nombre_nuevo} guardado.")
+                        st.rerun()
+                    elif not nombre_nuevo:
+                        st.error("Por favor, asigna un nombre al vector.")
+                    else:
+                        st.error("Error al procesar componentes.")
+                except Exception:
+                    st.error("Error al procesar componentes.")
+
+    with col_v2:
+        st.markdown("### 📋 Vista Previa del Espacio de Trabajo")
+        if st.session_state.mis_vectores:
+            st.info("Tus vectores actuales están listos para usarse en operaciones, sistemas de ecuaciones y graficación.")
+            for nom, v in st.session_state.mis_vectores.items():
+                st.write(f"**{nom}** =")
+                imprimir_matriz_simbolica(v)
+        else:
+            st.warning("Aún no has creado ningún vector. Utiliza el formulario de la izquierda para comenzar.")
 
 # ------------------------------------------------------------------------------
 # TAB 1: OPERACIONES VECTORIALES
@@ -172,7 +199,7 @@ with tab_ops:
                     else:
                         st.error("Ingrese un nombre válido.")
     else:
-        st.info("Defina vectores en la barra lateral.")
+        st.info("Defina vectores en la pestaña 'Gestión y Creación'.")
 
 # ------------------------------------------------------------------------------
 # TAB 2: GRAFICACIÓN
@@ -219,7 +246,7 @@ with tab_sistemas:
     st.subheader("Resolución de Sistemas de Ecuaciones Lineales")
     
     n_vars = int(st.number_input("Número de incógnitas:", min_value=2, max_value=10, value=3, step=1))
-    st.write(rf"Ingrese la matriz aumentada $[A|b]$ de tamaño ${n_vars} \times {n_vars+1}$:")
+    st.write(rf"Ingrese la matriz aumentada \([A|b]\) de tamaño \({n_vars} \times {n_vars+1}\):")
     
     with st.form("form_sistema"):
         elementos = []
@@ -247,15 +274,12 @@ with tab_sistemas:
                 imprimir_matriz_simbolica(M_aug)
                 
                 variables = sp.symbols(f'x1:{n_vars+1}')
-                # 1. Ejecutamos linsolve UNA sola vez directo sobre la matriz aumentada
                 solucion = sp.linsolve(M_aug, variables)
                 
-                # 2. Evaluamos el resultado algebraico directamente
                 if not solucion:
                     st.error("Sistema Incompatible (S.I.). No tiene solución (El conjunto solución está vacío).")
                 else:
                     sol_lista = list(solucion)[0]
-                    # Buscamos si hay variables libres (parámetros autogenerados por SymPy)
                     hay_parametros = any(val.free_symbols for val in sol_lista if hasattr(val, 'free_symbols'))
                     
                     if not hay_parametros:
@@ -264,7 +288,6 @@ with tab_sistemas:
                             st.latex(rf"{var} = {sp.latex(sol_lista[i])}")
                     else:
                         st.warning("Sistema Compatible Indeterminado (S.C.I.). Infinitas soluciones paramétricas:")
-                        # Imprimimos cada variable parametrizada para mejor legibilidad
                         for i, var in enumerate(variables):
                             st.latex(rf"{var} = {sp.latex(sol_lista[i])}")
 
@@ -291,7 +314,7 @@ with tab_analisis_conjunto:
             
             es_li = (rank == n_vecs)
             st.write(f"¿Es Linealmente Independiente?: {'✅ Sí' if es_li else '❌ No'}")
-            st.write(rf"¿Es Base para $\mathbb{{R}}^{{{dim}}}$?: {'✅ Sí' if (es_li and n_vecs == dim) else '❌ No'}")
+            st.write(rf"¿Es Base para \(\mathbb{{R}}^{{{dim}}}\)?: {'✅ Sí' if (es_li and n_vecs == dim) else '❌ No'}")
 
         st.write("---")
         st.write("**Acciones sobre el conjunto:**")
@@ -322,14 +345,14 @@ with tab_analisis_conjunto:
                     st.error(f"Error al aplicar Gram-Schmidt: {e}")
                     
         with col_btn3:
-            if st.button(r"Calcular Base Dual ($V^*$)", key="btn_base_dual"):
+            if st.button(r"Calcular Base Dual (\(V^*\))", key="btn_base_dual"):
                 if not (es_li and n_vecs == dim):
                     st.error("Error: El conjunto seleccionado no es una base válida (debe ser una matriz cuadrada y L.I.) para calcular su base dual.")
                 else:
                     try:
                         base_dual = sp.simplify(mat_conjunto.inv())
-                        st.write(r"**Matriz de Transición de la Base Dual ($\mathcal{B}^*$):**")
-                        st.info(r"💡 **Nota Matemática:** Cada renglón (fila) de esta matriz representa los coeficientes del funcional lineal $f_i$ de la base dual.")
+                        st.write(r"**Matriz de Transición de la Base Dual (\(\mathcal{B}^*\)):**")
+                        st.info(r"💡 **Nota Matemática:** Cada renglón (fila) de esta matriz representa los coeficientes del funcional lineal \(f_i\) de la base dual.")
                         imprimir_matriz_simbolica(base_dual)
                         st.session_state.mis_matrices["DUAL_MAT"] = base_dual
                         st.success("Guardado temporalmente como 'DUAL_MAT' en Matrices.")
