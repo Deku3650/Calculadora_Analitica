@@ -392,8 +392,7 @@ with tab_espectral:
                 columnas_P, valores_D = [], []
                 
                 for val, mult_alg, vects in vectores_propios:
-                    # CORREGIDO: Usamos st.latex para que la letra griega y la fórmula respiren bien
-                    st.latex(f"\lambda = {sp.latex(val)}")
+                    st.markdown(f"### \(\lambda = {sp.latex(val)}\)")
                     st.write(f"Multiplicidad Algebraica: {mult_alg} | Multiplicidad Geométrica: {len(vects)}")
                     
                     for i, v in enumerate(vects):
@@ -431,4 +430,4 @@ with tab_espectral:
                         st.write("Inversa (\(P^{-1}\))")
                         imprimir_matriz_simbolica(P_inv)
                 else:
-                    st.error("La matriz **NO** es diagonalizable (no hay suficientes vectores propios independientes).")
+                    st.error("La matriz **NO** es diagonalizable.")
