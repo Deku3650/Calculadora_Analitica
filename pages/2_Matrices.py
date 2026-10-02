@@ -67,7 +67,7 @@ with tab_gestion:
         
         if nombre_nueva:
             if nombre_nueva in st.session_state.mis_matrices:
-                st.warning("⚠️ Ese nombre ya existe. Se sobreescribirá.")
+                st.warning("⚠️ Ese nombre ya existe. Se sobreescribirá al guardar.")
                 
             matriz_creada = Crear_Matriz_Simbolica_UI(nombre_nueva)
             
@@ -140,7 +140,6 @@ with tab_gestion:
                     st.success(f"T.L. '{nombre_tl}' creada exitosamente en el otro módulo.")
                 else:
                     st.error("Ingrese un nombre para la T.L.")
-
 # --------------------------------------------------------------------------
 # PESTAÑA 1: Operaciones Básicas
 # --------------------------------------------------------------------------
