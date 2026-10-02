@@ -67,14 +67,16 @@ with tab_gestion:
         
         if nombre_nueva:
             if nombre_nueva in st.session_state.mis_matrices:
-                st.warning("⚠️ Ese nombre ya existe. Se sobreescribirá al guardar.")
+                st.warning(f"⚠️ La matriz '{nombre_nueva}' ya existe. Se sobreescribirá al guardar.")
                 
+            # Muestra la UI interactiva para capturar la matriz
             matriz_creada = Crear_Matriz_Simbolica_UI(nombre_nueva)
             
+            # Solo guardamos y reiniciamos cuando la función retorna una matriz confirmada (no None)
             if matriz_creada is not None:
                 st.session_state.mis_matrices[nombre_nueva] = matriz_creada
-                st.success(f"¡Matriz {nombre_nueva} guardada con éxito!")
-                st.rerun() 
+                st.success(f"¡Matriz '{nombre_nueva}' guardada con éxito en el inventario!")
+                st.rerun()
 
     with col_g2:
         st.markdown("### 🔀 Puentes de Importación / Exportación")
