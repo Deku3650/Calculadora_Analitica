@@ -359,12 +359,9 @@ with tab_avanzadas:
                         st.rerun()
 
 # --------------------------------------------------------------------------
-# PESTAÑA 4: Análisis Espectral
-# --------------------------------------------------------------------------
-with tab_espectral:
-    if not st.session_state.mis_matrices:
-        st.info("👈 Comience creando o importando una matriz en la pestaña 'Gestión y Creación'.")
-    else:
+    # PESTAÑA 4: Análisis Espectral
+    # --------------------------------------------------------------------------
+    with tab_espectral:
         st.subheader("Valores y Vectores Propios")
         mat_esp_nombre = st.selectbox("Seleccione Matriz:", list(st.session_state.mis_matrices.keys()), key="esp_mat")
         
@@ -392,7 +389,7 @@ with tab_espectral:
                 columnas_P, valores_D = [], []
                 
                 for val, mult_alg, vects in vectores_propios:
-                    st.markdown(f"### \(\lambda = {sp.latex(val)}\)")
+                    st.markdown(f"### $\lambda = {sp.latex(val)}$")
                     st.write(f"Multiplicidad Algebraica: {mult_alg} | Multiplicidad Geométrica: {len(vects)}")
                     
                     for i, v in enumerate(vects):
@@ -421,13 +418,13 @@ with tab_espectral:
                     
                     col_p, col_d, col_pinv = st.columns(3)
                     with col_p:
-                        st.write("Matriz de Paso (\(P\))")
+                        st.write("Matriz de Paso ($P$)")
                         imprimir_matriz_simbolica(P)
                     with col_d:
-                        st.write("Matriz Diagonal (\(D\))")
+                        st.write("Matriz Diagonal ($D$)")
                         imprimir_matriz_simbolica(D)
                     with col_pinv:
-                        st.write("Inversa (\(P^{-1}\))")
+                        st.write("Inversa ($P^{-1}$)")
                         imprimir_matriz_simbolica(P_inv)
                 else:
-                    st.error("La matriz **NO** es diagonalizable.")
+                    st.error("La matriz **NO** es diagonalizable (no hay suficientes vectores propios independientes).")
