@@ -46,7 +46,7 @@ tab_gestion, tab_ops, tab_graficas, tab_sistemas, tab_analisis_conjunto = st.tab
     "Análisis de Conjuntos"
 ])
 
-# ----------------F--------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # TAB 0: GESTIÓN Y CREACIÓN
 # ------------------------------------------------------------------------------
 with tab_gestion:
@@ -314,7 +314,8 @@ with tab_analisis_conjunto:
             
             es_li = (rank == n_vecs)
             st.write(f"¿Es Linealmente Independiente?: {'✅ Sí' if es_li else '❌ No'}")
-            st.write(rf"¿Es Base para \(\mathbb{{R}}^{{{dim}}}\)?: {'✅ Sí' if (es_li and n_vecs == dim) else '❌ No'}")
+            # Corrección aplicada aquí usando st.markdown con formato LaTeX correcto
+            st.markdown(f"¿Es Base para \(\\mathbb{{R}}^{{{dim}}}\)?: {'✅ Sí' if (es_li and n_vecs == dim) else '❌ No'}")
 
         st.write("---")
         st.write("**Acciones sobre el conjunto:**")
