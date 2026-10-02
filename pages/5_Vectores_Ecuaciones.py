@@ -315,7 +315,7 @@ with tab_analisis_conjunto:
             es_li = (rank == n_vecs)
             st.write(f"¿Es Linealmente Independiente?: {'✅ Sí' if es_li else '❌ No'}")
             # Corrección aplicada aquí usando st.markdown con formato LaTeX correcto
-            st.markdown(f"¿Es Base para \(\\mathbb{{R}}^{{{dim}}}\)?: {'✅ Sí' if (es_li and n_vecs == dim) else '❌ No'}")
+            st.markdown(f"¿Es Base para R{dim}?: {'✅ Sí' if (es_li and n_vecs == dim) else '❌ No'}", unsafe_allow_html=True)
 
         st.write("---")
         st.write("**Acciones sobre el conjunto:**")
