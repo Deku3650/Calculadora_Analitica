@@ -11,7 +11,7 @@ import sympy as sp
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application, convert_xor
 import streamlit as st
 import re
-
+import multiprocessing
 # ==============================================================================
 # 1. CONFIGURACIÓN INICIAL DE LA PÁGINA Y MEMORIA (SESSION STATE)
 # ==============================================================================
@@ -27,8 +27,41 @@ if 'mis_complejos' not in st.session_state:
     st.session_state.mis_complejos = {}
 
 # ==============================================================================
-# 2. FUNCIONES DE APOYO (Adaptadas a Streamlit)
+# 2. FUNCIONES DE APOYO
 # ==============================================================================
+
+def evaluar_numerico(matriz_sp):
+    """
+    Verifica si la matriz de SymPy es puramente numérica y la convierte a 
+    NumPy para cálculos (inversas, eigenvalores) ultra rápidos. Retorna None si hay variables.
+    """
+    if matriz_sp.free_symbols or matriz_sp.has(sp.I):
+        return None
+    return np.array(matriz_sp).astype(np.float64)
+
+def calcular_con_limite(func, args=(), kwargs=None, timeout=5):
+    """
+    Ejecuta una función pesada de SymPy en un proceso separado y lo aniquila
+    si excede el timeout (cortocircuito). Evita que se congele el servidor para todos.
+    """
+    if kwargs is None:
+        kwargs = {}
+    pool = multiprocessing.Pool(processes=1)
+    resultado_async = pool.apply_async(func, args, kwargs)
+    
+    try:
+        resultado = resultado_async.get(timeout=timeout)
+        pool.close()
+        pool.join()
+        return resultado
+    except multiprocessing.TimeoutError:
+        pool.terminate()
+        pool.join()
+        raise TimeoutError(f"El cálculo matemático superó el tiempo máximo de {timeout} segundos. Simplifique la matriz o evalúela numéricamente.")
+    except Exception as e:
+        pool.terminate()
+        pool.join()
+        raise e
 
 def imprimir_matriz_simbolica(matriz_sp):
     """
@@ -69,7 +102,7 @@ def leer_expresion_st(entrada_str, solo_reales=False):
         return None
 
 # ==============================================================================
-# 3. MÓDULOS DE CREACIÓN DE MATRICES Y TRANSFORMACIONES (Adaptados)
+# 3. MÓDULOS DE CREACIÓN DE MATRICES Y TRANSFORMACIONES
 # ==============================================================================
 
 def Crear_Matriz_Simbolica_UI(nombre_matriz=""):
@@ -277,9 +310,10 @@ def Crear_Transformacion_UI():
                     
                     matriz_regla = sp.Matrix(vector_columna)
                     
-                    # Cálculo riguroso de la Matriz Asociada con Cambio de Base
                     A_can = matriz_regla.jacobian(variables_simbolicas)
-                    M_asociada = sp.simplify(Base2.inv() * A_can * Base1)
+                    
+                    # --- SOLUCIÓN 3: Eliminar los 'sp.simplify()' masivos aquí ---
+                    M_asociada = Base2.inv() * A_can * Base1
                     
                     st.session_state.temp_tl_mat = M_asociada
                     st.session_state.temp_tl_reg = matriz_regla
@@ -314,9 +348,10 @@ def Crear_Transformacion_UI():
                         if not all(e == 0 for e in matriz_regla.subs(sustitucion_cero)):
                             st.error("Error Matemático: La transformación NO es lineal (T(0) ≠ 0).")
                         else:
-                            # Cálculo riguroso de la Matriz Asociada con Cambio de Base
                             A_can = matriz_regla.jacobian(variables_simbolicas)
-                            M_asociada = sp.simplify(Base2.inv() * A_can * Base1)
+                            
+                            # --- SOLUCIÓN 3: Eliminar 'sp.simplify()' destructivos ---
+                            M_asociada = Base2.inv() * A_can * Base1
                             
                             st.session_state.temp_tl_mat = M_asociada
                             st.session_state.temp_tl_reg = matriz_regla
@@ -344,9 +379,8 @@ def Crear_Transformacion_UI():
             try:
                 matriz_asoc = sp.Matrix([[leer_expresion_st(cell) for cell in row] for row in matriz_elementos])
                 
-                # Transformar la matriz abstracta en una regla canónica evaluable
-                A_can = sp.simplify(Base2 * matriz_asoc * Base1.inv())
-                regla_canonica = sp.simplify(A_can * sp.Matrix(variables_simbolicas))
+                A_can = Base2 * matriz_asoc * Base1.inv()
+                regla_canonica = A_can * sp.Matrix(variables_simbolicas)
                 
                 st.session_state.temp_tl_mat = matriz_asoc
                 st.session_state.temp_tl_reg = regla_canonica
@@ -366,9 +400,8 @@ def Crear_Transformacion_UI():
             else:
                 if st.button("Vincular Matriz Seleccionada"):
                     
-                    # Transformar la matriz abstracta en una regla canónica evaluable
-                    A_can = sp.simplify(Base2 * M_imp * Base1.inv())
-                    regla_canonica = sp.simplify(A_can * sp.Matrix(variables_simbolicas))
+                    A_can = Base2 * M_imp * Base1.inv()
+                    regla_canonica = A_can * sp.Matrix(variables_simbolicas)
                     
                     st.session_state.temp_tl_mat = M_imp
                     st.session_state.temp_tl_reg = regla_canonica
