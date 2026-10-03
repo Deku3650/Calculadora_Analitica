@@ -124,11 +124,14 @@ with tab_ops:
                 st.latex(rf"||{v1_nombre}|| = {sp.latex(sp.simplify(v1.norm()))}")
 
             elif operacion == "Gram-Schmidt (Vector unitario)":
-                v_ortho = sp.GramSchmidt([v1], orthonormal=True)
-                res = v_ortho[0]
-                st.success("Vector normalizado:")
-                imprimir_matriz_simbolica(res)
-
+                try:
+                    v_ortho = sp.GramSchmidt([v1], orthonormal=True)
+                    res = v_ortho[0]
+                    st.success("Vector normalizado:")
+                    imprimir_matriz_simbolica(res)
+                except ValueError:
+                    st.error("Error: No se puede normalizar el vector nulo. El algoritmo de Gram-Schmidt requiere vectores linealmente independientes.")
+            
             else:
                 v2 = st.session_state.mis_vectores[v2_nombre]
 
