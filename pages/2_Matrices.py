@@ -463,13 +463,18 @@ with tab_espectral:
                     st.divider()
                     st.write("**2. Espectro y Bases (Aproximación Numérica)**")
                     columnas_P = []
-                    
+
                     for i in range(len(w)):
-                        st.markdown(f"### $\lambda \approx {w[i]:.4f}$")
+                        # Extraer y formatear el valor propio (soporte estético para números complejos)
+                        val_propio = np.round(w[i], 4)
+                        val_str = str(val_propio).replace('j', 'i').replace('(', '').replace(')', '')
+                        
+                        # Se usa el prefijo rf"..." para proteger los comandos LaTeX (\lambda, \approx)
+                        st.markdown(rf"### $\lambda \approx {val_str}$")
                         vec_propio = sp.Matrix(np.round(v[:, i], 4))
                         columnas_P.append(vec_propio)
-                        st.latex(f"v_{{{i+1}}} = {sp.latex(vec_propio)}")
-                        
+                        st.latex(rf"v_{{{i+1}}} = {sp.latex(vec_propio)}")
+                    
                     st.divider()
                     st.write("**3. Diagonalización**")
                     if len(columnas_P) == A.shape[0]:
