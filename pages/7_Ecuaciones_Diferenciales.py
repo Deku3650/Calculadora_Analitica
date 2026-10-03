@@ -2,6 +2,7 @@ import streamlit as st
 import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.integrate as spi # AGREGADO: Necesario para simular trayectorias (Retrato de Fase 3D)
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application, convert_xor
 
 try:
@@ -21,6 +22,7 @@ if 'sys_P' not in st.session_state:
     st.session_state.sys_P = None
 if 'sys_Q' not in st.session_state:
     st.session_state.sys_Q = None
+# AGREGADO: Memoria para la tercera dimensión
 if 'sys_R' not in st.session_state:
     st.session_state.sys_R = None
 
@@ -32,6 +34,7 @@ tab_sistemas, tab_edo1 = st.tabs([
     "Resolutor de EDOs (1er Orden)"
 ])
 
+# Símbolos base globales (Agregados z y c3)
 t_sym, x_sym, y_sym, z_sym = sp.symbols('t x y z')
 c1_sym, c2_sym, c3_sym = sp.symbols('c_1 c_2 c_3')
 transf = standard_transformations + (implicit_multiplication_application, convert_xor)
@@ -47,7 +50,8 @@ with tab_sistemas:
         st.subheader("Definición del Campo Vectorial")
         st.info("💡 Exprese su campo $V(x, y)$ o $V(x, y, z)$.")
         
-        fuente_matriz = st.radio("Entrada:", ["Ecuaciones Explícitas", "Matriz $2\\times2$ (Lineal)", "Importar del Módulo de Matrices"])
+        # AGREGADO: Opción para Matriz 3x3 en el radio button
+        fuente_matriz = st.radio("Entrada:", ["Ecuaciones Explícitas", "Matriz $2\\times2$ (Lineal)", "Matriz $3\\times3$ (Lineal)", "Importar del Módulo de Matrices"])
         
         if fuente_matriz == "Ecuaciones Explícitas":
             with st.form("form_ecuaciones"):
@@ -83,6 +87,29 @@ with tab_sistemas:
                         st.session_state.sys_R = None
                     except: st.error("Error en las entradas.")
                     
+        # AGREGADO: Formulario para ingresar Matriz 3x3 manualmente
+        elif fuente_matriz == "Matriz $3\\times3$ (Lineal)":
+            with st.form("form_matriz_sist_3x3"):
+                c1, c2, c3 = st.columns(3)
+                with c1: 
+                    a11 = st.text_input("a11:", value="1")
+                    a21 = st.text_input("a21:", value="0")
+                    a31 = st.text_input("a31:", value="0")
+                with c2: 
+                    a12 = st.text_input("a12:", value="0")
+                    a22 = st.text_input("a22:", value="-1")
+                    a32 = st.text_input("a32:", value="0")
+                with c3: 
+                    a13 = st.text_input("a13:", value="0")
+                    a23 = st.text_input("a23:", value="0")
+                    a33 = st.text_input("a33:", value="-2")
+                if st.form_submit_button("Cargar Sistema Lineal 3x3"):
+                    try:
+                        st.session_state.sys_P = leer_expresion_st(a11)*x_sym + leer_expresion_st(a12)*y_sym + leer_expresion_st(a13)*z_sym
+                        st.session_state.sys_Q = leer_expresion_st(a21)*x_sym + leer_expresion_st(a22)*y_sym + leer_expresion_st(a23)*z_sym
+                        st.session_state.sys_R = leer_expresion_st(a31)*x_sym + leer_expresion_st(a32)*y_sym + leer_expresion_st(a33)*z_sym
+                    except: st.error("Error en las entradas.")
+
         elif fuente_matriz == "Importar del Módulo de Matrices":
             # AGREGADO: Compatibilidad con matrices de 3x3
             matrices_compatibles = {k: v for k, v in st.session_state.mis_matrices.items() if v.shape in [(2, 2), (3, 3)]}
@@ -206,7 +233,7 @@ with tab_sistemas:
                 # ==========================================================
                 # ANÁLISIS PASO A PASO (DIAGONALIZACIÓN Y LÍMITES)
                 # ==========================================================
-                # AGREGADO: Blindaje contra componentes imaginarias
+                # Blindaje contra componentes imaginarias
                 val_prop_reales = all(v[0].is_real for v in vectores_propios)
                 es_diagonalizable = sum(v[1] for v in vectores_propios) == (3 if es_3d else 2)
                 
@@ -260,7 +287,7 @@ with tab_sistemas:
                                 st.write("**2. Solución en el sistema original $x(t) = P y(t)$:**")
                                 st.latex(rf"x(t) = {sp.latex(sp.simplify(X_sol))}")
 
-                                # AGREGADO: Prevención de errores con límites si es complejo
+                                # Prevención de errores con límites si es complejo
                                 if val_prop_reales:
                                     if not es_3d and lambdas[0] != lambdas[1]:
                                         st.markdown("### Comportamiento Asintótico (Límites)")
@@ -299,22 +326,24 @@ with tab_sistemas:
         st.divider()
         st.subheader("3. Análisis Gráfico del Sistema")
         
-        # AGREGADO: Quiver Experimental para 3D
+        # AGREGADO: Funciones lambdificadas para uso global en gráficas
+        func_U = sp.lambdify((x_sym, y_sym, z_sym) if es_3d else (x_sym, y_sym), P_f, modules=['numpy'])
+        func_V = sp.lambdify((x_sym, y_sym, z_sym) if es_3d else (x_sym, y_sym), Q_f, modules=['numpy'])
+        if es_3d: func_W = sp.lambdify((x_sym, y_sym, z_sym), R_f, modules=['numpy'])
+        
         if es_3d:
-            tab_vect3d, = st.tabs(["🔀 Campo Vectorial 3D (Quiver)"])
+            # AGREGADO: Pestañas para 3D y Proyecciones
+            tab_vect3d, tab_fase3d, tab_proy = st.tabs(["🔀 Campo Vectorial 3D (Quiver)", "🌌 Retrato de Fase 3D (Trayectorias)", "🪞 Proyecciones en 2D"])
+            
             with tab_vect3d:
                 try:
                     fig3d = plt.figure(figsize=(7, 6))
                     ax3d = fig3d.add_subplot(111, projection='3d')
                     
-                    func_U = sp.lambdify((x_sym, y_sym, z_sym), P_f, modules=['numpy'])
-                    func_V = sp.lambdify((x_sym, y_sym, z_sym), Q_f, modules=['numpy'])
-                    func_W = sp.lambdify((x_sym, y_sym, z_sym), R_f, modules=['numpy'])
-                    
                     X_q, Y_q, Z_q = np.mgrid[-4:4:6j, -4:4:6j, -4:4:6j]
-                    U_q = func_U(X_q, Y_q, Z_q)
-                    V_q = func_V(X_q, Y_q, Z_q)
-                    W_q = func_W(X_q, Y_q, Z_q)
+                    U_q = np.broadcast_to(func_U(X_q, Y_q, Z_q), X_q.shape).astype(np.float64)
+                    V_q = np.broadcast_to(func_V(X_q, Y_q, Z_q), X_q.shape).astype(np.float64)
+                    W_q = np.broadcast_to(func_W(X_q, Y_q, Z_q), X_q.shape).astype(np.float64)
                     
                     ax3d.quiver(X_q, Y_q, Z_q, U_q, V_q, W_q, length=0.6, normalize=True, color='mediumpurple', alpha=0.7)
                     ax3d.set_xlabel("x"); ax3d.set_ylabel("y"); ax3d.set_zlabel("z")
@@ -322,6 +351,88 @@ with tab_sistemas:
                     st.pyplot(fig3d)
                 except Exception as e:
                     st.error(f"Error al generar gráfica 3D: {e}")
+                    
+            with tab_fase3d:
+                st.write("Generando trayectorias representativas en el espacio fase $\\mathbb{R}^3$...")
+                try:
+                    fig3d_fase = plt.figure(figsize=(8, 7))
+                    ax3d_fase = fig3d_fase.add_subplot(111, projection='3d')
+                    
+                    def vector_field_3d(Y, t):
+                        x_v, y_v, z_v = Y
+                        u = func_U(x_v, y_v, z_v)
+                        v = func_V(x_v, y_v, z_v)
+                        w = func_W(x_v, y_v, z_v)
+                        return [u, v, w]
+                    
+                    # Semillas iniciales para las órbitas
+                    ics = [
+                        [1, 1, 1], [-1, -1, -1], [1, -1, 1], [-1, 1, -1],
+                        [2, 0, 0], [0, 2, 0], [0, 0, 2],
+                        [-2, 0, 0], [0, -2, 0], [0, 0, -2]
+                    ]
+                    t_span = np.linspace(0, 5, 200) # Hacia adelante
+                    t_span_rev = np.linspace(0, -5, 200) # Hacia atrás
+                    
+                    for ic in ics:
+                        try:
+                            traj_f = spi.odeint(vector_field_3d, ic, t_span)
+                            traj_b = spi.odeint(vector_field_3d, ic, t_span_rev)
+                            
+                            ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='blue', alpha=0.6, linewidth=1.2)
+                            ax3d_fase.plot(traj_b[:,0], traj_b[:,1], traj_b[:,2], color='red', alpha=0.6, linewidth=1.2)
+                        except Exception:
+                            pass # Ignorar trayectorias que divergen a infinito
+                    
+                    ax3d_fase.set_xlabel("x")
+                    ax3d_fase.set_ylabel("y")
+                    ax3d_fase.set_zlabel("z")
+                    ax3d_fase.set_xlim([-4, 4]); ax3d_fase.set_ylim([-4, 4]); ax3d_fase.set_zlim([-4, 4])
+                    ax3d_fase.set_title("Trayectorias en el Espacio de Fase 3D (Rojo: t<0, Azul: t>0)")
+                    st.pyplot(fig3d_fase)
+                except Exception as e:
+                    st.error(f"Error al generar trayectorias 3D: {e}")
+                    
+            with tab_proy:
+                st.write("Visualización del flujo interceptando los planos principales en el origen.")
+                try:
+                    fig_proy, (ax_xy, ax_xz, ax_yz) = plt.subplots(1, 3, figsize=(15, 5))
+                    Y_m, X_m = np.mgrid[-4:4:50j, -4:4:50j]
+                    
+                    # Plano XY (z=0)
+                    U_xy = np.broadcast_to(func_U(X_m, Y_m, 0), X_m.shape).astype(np.float64)
+                    V_xy = np.broadcast_to(func_V(X_m, Y_m, 0), X_m.shape).astype(np.float64)
+                    vel_xy = np.sqrt(U_xy**2 + V_xy**2)
+                    ax_xy.streamplot(X_m, Y_m, U_xy, V_xy, color=vel_xy, cmap='viridis', density=1.2)
+                    ax_xy.set_title("Plano XY (z=0)")
+                    ax_xy.set_xlabel("x"); ax_xy.set_ylabel("y")
+                    ax_xy.grid(True, linestyle='--', alpha=0.5)
+                    ax_xy.axhline(0, color='black'); ax_xy.axvline(0, color='black')
+                    
+                    # Plano XZ (y=0) -> x es horizontal, z es vertical
+                    U_xz = np.broadcast_to(func_U(X_m, 0, Y_m), X_m.shape).astype(np.float64)
+                    W_xz = np.broadcast_to(func_W(X_m, 0, Y_m), X_m.shape).astype(np.float64)
+                    vel_xz = np.sqrt(U_xz**2 + W_xz**2)
+                    ax_xz.streamplot(X_m, Y_m, U_xz, W_xz, color=vel_xz, cmap='viridis', density=1.2)
+                    ax_xz.set_title("Plano XZ (y=0)")
+                    ax_xz.set_xlabel("x"); ax_xz.set_ylabel("z")
+                    ax_xz.grid(True, linestyle='--', alpha=0.5)
+                    ax_xz.axhline(0, color='black'); ax_xz.axvline(0, color='black')
+                    
+                    # Plano YZ (x=0) -> y es horizontal, z es vertical
+                    V_yz = np.broadcast_to(func_V(0, X_m, Y_m), X_m.shape).astype(np.float64)
+                    W_yz = np.broadcast_to(func_W(0, X_m, Y_m), X_m.shape).astype(np.float64)
+                    vel_yz = np.sqrt(V_yz**2 + W_yz**2)
+                    ax_yz.streamplot(X_m, Y_m, V_yz, W_yz, color=vel_yz, cmap='viridis', density=1.2)
+                    ax_yz.set_title("Plano YZ (x=0)")
+                    ax_yz.set_xlabel("y"); ax_yz.set_ylabel("z")
+                    ax_yz.grid(True, linestyle='--', alpha=0.5)
+                    ax_yz.axhline(0, color='black'); ax_yz.axvline(0, color='black')
+                    
+                    plt.tight_layout()
+                    st.pyplot(fig_proy)
+                except Exception as e:
+                    st.error(f"Error al generar proyecciones: {e}")
         else:
             if es_lineal and Lambda_sym is not None and val_prop_reales:
                 tab_fase, tab_vect, tab_canonico = st.tabs(["🌊 Retrato de Fase (Original)", "🔀 Campo Vectorial (Quiver)", "📐 Plano Canónico (y1, y2)"])
@@ -330,8 +441,7 @@ with tab_sistemas:
                 tab_fase, tab_vect = st.tabs(["🌊 Retrato de Fase (Original)", "🔀 Campo Vectorial (Quiver)"])
                 mostrar_canonico = False
 
-            # CORRECCIÓN BUG PESTAÑAS: Se desactiva el caché @st.cache_data que congelaba las gráficas en las tabs.
-            # @st.cache_data 
+            # Se desactiva el caché @st.cache_data que congelaba las gráficas en las tabs.
             def generar_graficas_sistema(str_p, str_q, t_val, str_A=None):
                 p_eq = parse_expr(str_p, transformations=transf, local_dict=dicc_loc).subs(t_sym, t_val)
                 q_eq = parse_expr(str_q, transformations=transf, local_dict=dicc_loc).subs(t_sym, t_val)
@@ -347,9 +457,6 @@ with tab_sistemas:
                                     puntos_criticos.append((float(sol[x_sym]), float(sol[y_sym])))
                 except Exception:
                     pass
-                
-                func_U = sp.lambdify((x_sym, y_sym), p_eq, modules=['numpy'])
-                func_V = sp.lambdify((x_sym, y_sym), q_eq, modules=['numpy'])
                 
                 # ==========================================
                 # FIGURA 1: CAMPO VECTORIAL (QUIVER)
@@ -470,7 +577,6 @@ with tab_sistemas:
                         st.pyplot(fig_stream)
                     with c_txt:
                         st.write("**Interpretación:**")
-                        # CORRECCIÓN EN TEXTO (Eliminación de span tags corruptos)
                         st.write("Visualización del flujo continuo del sistema original. Si el sistema es lineal y posee vectores propios reales, estos se trazan como líneas punteadas, actuando como las asíntotas y directrices fundamentales del comportamiento geométrico.")
                 
                 with tab_vect:
@@ -484,7 +590,6 @@ with tab_sistemas:
                             st.pyplot(fig_canonico)
                         with c_txt2:
                             st.write("**Interpretación:**")
-                            # CORRECCIÓN EN TEXTO (Eliminación de span tags corruptos)
                             st.write("Este es el plano desacoplado $\dot{y} = \Lambda y$. Aquí los ejes representan directamente las direcciones de los vectores propios. La matriz $P$ aplica una transformación lineal que rota y estira este espacio para formar el retrato de fase original.")
 
             except Exception as e:
