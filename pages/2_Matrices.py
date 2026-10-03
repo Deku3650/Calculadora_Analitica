@@ -63,20 +63,65 @@ with tab_gestion:
     
     with col_g1:
         st.markdown("### ➕ Nueva Matriz Manual")
-        nombre_nueva = st.text_input("Asignar nombre (Ej: A, M1):", key="input_nom_manual").upper().strip()
         
-        if nombre_nueva:
-            if nombre_nueva in st.session_state.mis_matrices:
-                st.warning(f"⚠️ La matriz '{nombre_nueva}' ya existe. Se sobreescribirá al guardar.")
-                
-            # Muestra la UI interactiva para capturar la matriz
-            matriz_creada = Crear_Matriz_Simbolica_UI(nombre_nueva)
+        # Entrada de Nombre y Dimensiones
+        nombre_nueva = st.text_input("Asignar nombre de la matriz (Ej: A, M1):", key="input_nom_manual").upper().strip()
+        
+        col_m, col_n = st.columns(2)
+        with col_m:
+            filas = st.number_input("Número de filas:", min_value=1, max_value=6, value=2, step=1, key="num_filas_mat")
+        with col_n:
+            columnas = st.number_input("Número de columnas:", min_value=1, max_value=6, value=2, step=1, key="num_cols_mat")
             
-            # Solo guardamos y reiniciamos cuando la función retorna una matriz confirmada (no None)
-            if matriz_creada is not None:
-                st.session_state.mis_matrices[nombre_nueva] = matriz_creada
-                st.success(f"¡Matriz '{nombre_nueva}' guardada con éxito en el inventario!")
-                st.rerun()
+        st.divider()
+        
+        # Tarjeta contenedora idéntica al diseño de la imagen
+        with st.container(border=True):
+            st.markdown("#### Componentes de la Matriz")
+            
+            matriz_elementos = []
+            error_sintaxis = False
+            
+            # Generación de la cuadrícula interactiva celda por celda (a_ij)
+            for i in range(filas):
+                cols = st.columns(columnas)
+                fila_vals = []
+                for j in range(columnas):
+                    with cols[j]:
+                        # Etiqueta individual por elemento
+                        val_str = st.text_input(
+                            f"Elemento ({i+1}, {j+1}):", 
+                            value="0", 
+                            key=f"celda_{i}_{j}_{filas}_{columnas}"
+                        ).strip()
+                        
+                        try:
+                            val_sym = sp.sympify(val_str)
+                            fila_vals.append(val_sym)
+                        except Exception:
+                            error_sintaxis = True
+                matriz_elementos.append(fila_vals)
+            
+            st.write("")
+            if error_sintaxis:
+                st.error("⚠️ Ingrese expresiones matemáticas o números válidos en todas las celdas.")
+            else:
+                matriz_temp = sp.Matrix(matriz_elementos)
+                
+                # Vista previa previa al guardado
+                st.markdown("**Vista previa:**")
+                st.latex(f"{nombre_nueva if nombre_nueva else 'M'} = {sp.latex(matriz_temp)}")
+                
+                # Botón dentro de la tarjeta
+                if st.button("Guardar Matriz", key="btn_guardar_mat_manual", use_container_width=True):
+                    if not nombre_nueva:
+                        st.error("Por favor, asigna un nombre a la matriz.")
+                    else:
+                        if nombre_nueva in st.session_state.mis_matrices:
+                            st.warning(f"La matriz '{nombre_nueva}' fue sobreescrita.")
+                        st.session_state.mis_matrices[nombre_nueva] = matriz_temp
+                        st.success(f"¡Matriz '{nombre_nueva}' guardada exitosamente!")
+                        st.rerun()
 
     with col_g2:
         st.markdown("### 🔀 Puentes de Importación / Exportación")
