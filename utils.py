@@ -72,74 +72,65 @@ def leer_expresion_st(entrada_str, solo_reales=False):
 # 3. MÓDULOS DE CREACIÓN DE MATRICES Y TRANSFORMACIONES (Adaptados)
 # ==============================================================================
 
-def Crear_Matriz_Simbolica_UI(nombre_clave):
+def Crear_Matriz_Simbolica_UI(nombre_matriz=""):
     """
-    Genera la interfaz gráfica (UI) para crear una matriz optimizada con st.data_editor.
-    Retorna la matriz de SymPy cuando el usuario oprime "Guardar".
+    Crea una matriz simbólica celda por celda dentro de un contenedor visual redondeado.
     """
-    st.subheader(f"Crear Matriz: {nombre_clave}")
+    if not nombre_matriz:
+        st.info("Escriba un nombre para la matriz arriba para comenzar.")
+        return None
 
-    col1, col2 = st.columns(2)
-    with col1:
-        filas = st.number_input("Renglones", min_value=1, max_value=10, value=3, key=f"R_{nombre_clave}")
-    with col2:
-        columnas = st.number_input("Columnas", min_value=1, max_value=10, value=3, key=f"C_{nombre_clave}")
+    st.markdown(f"### Crear Matriz: {nombre_matriz}")
 
-    st.write("Edite los elementos directamente en la tabla (admite números, fracciones y variables como 'x', '2*y'):")
+    # Selección de dimensiones
+    col_m, col_n = st.columns(2)
+    with col_m:
+        filas = st.number_input("Renglones", min_value=1, max_value=6, value=3, step=1, key=f"f_{nombre_matriz}")
+    with col_n:
+        columnas = st.number_input("Columnas", min_value=1, max_value=6, value=3, step=1, key=f"c_{nombre_matriz}")
 
-    with st.form(f"form_matriz_{nombre_clave}"):
-        # 1. Estructuramos los datos base como diccionario para el data_editor
-        default_data = {f"C{j+1}": ["0"] * filas for j in range(columnas)}
+    st.caption("Ingrese las componentes individuales de la matriz (admite números, fracciones y variables como 'x', '2*y'):")
+
+    # Tarjeta contenedora con borde
+    with st.container(border=True):
+        st.markdown("#### Componentes de la Matriz")
         
-        # 2. Forzamos que todas las columnas se interpreten como texto puro. 
-        # Esto evita que Streamlit borre expresiones algebraicas creyendo que son errores de tipeo.
-        configuracion_cols = {
-            f"C{j+1}": st.column_config.TextColumn(f"Col {j+1}", required=True) 
-            for j in range(columnas)
-        }
+        matriz_elementos = []
+        error_sintaxis = False
         
-        # 3. La key incluye la dimensión (filas x columnas). 
-        # Esto obliga a la tabla a reiniciarse limpiamente si el usuario cambia el tamaño.
-        editor_key = f"editor_{nombre_clave}_{filas}x{columnas}"
-        
-        # 4. Inyección del componente optimizado (Un solo widget en lugar de N*M widgets)
-        datos_editados = st.data_editor(
-            default_data,
-            column_config=configuracion_cols,
-            use_container_width=True,
-            hide_index=True,
-            num_rows="fixed",
-            key=editor_key
-        )
-
-        submit = st.form_submit_button("Construir Matriz")
-
-    if submit:
-        matriz_sympy = sp.zeros(filas, columnas)
-        error = False
-        
+        # Generación de la cuadrícula celda por celda
         for i in range(filas):
+            cols = st.columns(columnas)
+            fila_vals = []
             for j in range(columnas):
-                # Extracción segura: Soporta si Streamlit retorna un Pandas DataFrame o un Diccionario
-                if hasattr(datos_editados, "iloc"): 
-                    val_str = str(datos_editados.iloc[i, j])
-                else:
-                    val_str = str(datos_editados[f"C{j+1}"][i])
+                with cols[j]:
+                    val_str = st.text_input(
+                        f"Componente ({i+1}, {j+1}):", 
+                        value="0", 
+                        key=f"celda_{nombre_matriz}_{i}_{j}_{filas}_{columnas}"
+                    ).strip()
                     
-                obj = leer_expresion_st(val_str)
-                
-                if obj is None:
-                    error = True
-                    break
-                matriz_sympy[i, j] = obj
-            
-            if error:
-                break
-
-        if not error:
-            st.success("¡Matriz creada exitosamente!")
-            imprimir_matriz_simbolica(matriz_sympy)
-            return matriz_sympy
+                    try:
+                        val_sym = sp.sympify(val_str)
+                        fila_vals.append(val_sym)
+                    except Exception:
+                        error_sintaxis = True
+            matriz_elementos.append(fila_vals)
+        
+        st.write("")
+        if error_sintaxis:
+            st.error("⚠ Ingrese expresiones matemáticas o números válidos en todas las celdas.")
+            return None
+        
+        matriz_temp = sp.Matrix(matriz_elementos)
+        
+        # Vista previa en LaTeX
+        st.markdown("**Vista previa:**")
+        st.latex(f"{nombre_matriz} = {sp.latex(matriz_temp)}")
+        
+        # Botón para confirmar y guardar
+        if st.button("Guardar Matriz", key=f"btn_save_{nombre_matriz}", use_container_width=True):
+            return matriz_temp
             
     return None
 
