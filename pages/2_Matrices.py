@@ -1,9 +1,9 @@
 import streamlit as st
 import sympy as sp
+import numpy as np
 
-# Intentamos importar las herramientas base
 try:
-    from utils import Crear_Matriz_Simbolica_UI, imprimir_matriz_simbolica
+    from utils import Crear_Matriz_Simbolica_UI, imprimir_matriz_simbolica, calcular_con_limite, evaluar_numerico
 except ImportError:
     st.error("Error al cargar utils.py. Asegúrese de ejecutar la aplicación correctamente.")
 
@@ -69,9 +69,9 @@ with tab_gestion:
         
         col_m, col_n = st.columns(2)
         with col_m:
-            filas = st.number_input("Número de filas:", min_value=1, max_value=6, value=2, step=1, key="num_filas_mat")
+            filas = st.number_input("Número de filas:", min_value=1, max_value=10, value=2, step=1, key="num_filas_mat")
         with col_n:
-            columnas = st.number_input("Número de columnas:", min_value=1, max_value=6, value=2, step=1, key="num_cols_mat")
+            columnas = st.number_input("Número de columnas:", min_value=1, max_value=10, value=2, step=1, key="num_cols_mat")
             
         st.divider()
         
@@ -187,6 +187,7 @@ with tab_gestion:
                     st.success(f"T.L. '{nombre_tl}' creada exitosamente en el otro módulo.")
                 else:
                     st.error("Ingrese un nombre para la T.L.")
+
 # --------------------------------------------------------------------------
 # PESTAÑA 1: Operaciones Básicas
 # --------------------------------------------------------------------------
@@ -213,7 +214,7 @@ with tab_basicas:
             if operacion == "* Escalar":
                 try:
                     esc = sp.sympify(escalar_str)
-                    res = sp.simplify(esc * matA)
+                    res = esc * matA # Eliminado sp.simplify()
                 except Exception:
                     st.error("Escalar inválido.")
             else:
@@ -223,9 +224,9 @@ with tab_basicas:
                 elif operacion == "*" and matA.shape[1] != matB.shape[0]:
                     st.error("Error: Las dimensiones no son compatibles para multiplicar.")
                 else:
-                    if operacion == "+": res = sp.simplify(matA + matB)
-                    elif operacion == "-": res = sp.simplify(matA - matB)
-                    elif operacion == "*": res = sp.simplify(matA * matB)
+                    if operacion == "+": res = matA + matB # Eliminado sp.simplify()
+                    elif operacion == "-": res = matA - matB # Eliminado sp.simplify()
+                    elif operacion == "*": res = matA * matB # Eliminado sp.simplify()
             
             if res is not None:
                 st.session_state.temp_matriz = res
@@ -266,26 +267,43 @@ with tab_propiedades:
             res_matriz = None 
             
             if prop_elegida == "Determinante":
-                if M.is_square: st.success(f"**Determinante:** {sp.simplify(M.det())}")
+                if M.is_square: 
+                    try:
+                        det_val = calcular_con_limite(M.det, timeout=5)
+                        st.success(f"**Determinante:** {det_val}")
+                    except TimeoutError as e:
+                        st.error(str(e))
                 else: st.error("La matriz debe ser cuadrada.")
             
             elif prop_elegida == "Traza":
-                if M.is_square: st.success(f"**Traza:** {sp.simplify(M.trace())}")
+                if M.is_square: st.success(f"**Traza:** {M.trace()}")
                 else: st.error("La matriz debe ser cuadrada.")
                     
             elif prop_elegida == "Inversa":
                 if M.is_square:
                     try:
-                        res_matriz = sp.simplify(M.inv())
+                        # BLINDAJE NUMÉRICO: Si no hay variables y es muy grande, NumPy lo hace.
+                        M_num = evaluar_numerico(M)
+                        if M_num is not None and M.shape[0] >= 4:
+                            st.info("💡 Matriz numérica grande: Evaluando con motor NumPy para mayor velocidad.")
+                            inv_np = np.linalg.inv(M_num)
+                            res_matriz = sp.Matrix(np.round(inv_np, 4))
+                        else:
+                            res_matriz = calcular_con_limite(M.inv, timeout=5)
                         st.write("Matriz Inversa (\(A^{-1}\)):")
+                    except TimeoutError as e:
+                        st.error(str(e))
                     except Exception:
-                        st.error("La matriz es singular (Determinante = 0).")
+                        st.error("La matriz es singular (Determinante = 0) o no se puede invertir numéricamente.")
                 else: st.error("La matriz debe ser cuadrada.")
             
             elif prop_elegida == "Adjunta Clásica":
                 if M.is_square:
-                    res_matriz = sp.simplify(M.adjugate())
-                    st.write("Matriz Adjunta Clásica (Matriz de Cofactores Transpuesta):")
+                    try:
+                        res_matriz = calcular_con_limite(M.adjugate, timeout=5)
+                        st.write("Matriz Adjunta Clásica (Matriz de Cofactores Transpuesta):")
+                    except TimeoutError as e:
+                        st.error(str(e))
                 else: st.error("La matriz debe ser cuadrada.")
                     
             elif prop_elegida == "Transpuesta Conjugada":
@@ -295,36 +313,42 @@ with tab_propiedades:
                     st.info("No contiene complejos; la Transpuesta Conjugada es igual a la Transpuesta normal.")
                 
             elif prop_elegida == "Matriz Reducida (RREF)":
-                rref_sp, pivotes = M.rref()
-                res_matriz = rref_sp
-                st.write("Forma Escalonada Reducida por Renglones:")
-                st.info(f"Pivotes encontrados en las columnas: {pivotes}")
+                try:
+                    rref_sp, pivotes = calcular_con_limite(M.rref, timeout=5)
+                    res_matriz = rref_sp
+                    st.write("Forma Escalonada Reducida por Renglones:")
+                    st.info(f"Pivotes encontrados en las columnas: {pivotes}")
+                except TimeoutError as e:
+                    st.error(str(e))
                 
             elif prop_elegida == "Rango y Subespacios":
-                rref_sp, pivotes = M.rref()
-                st.write(f"**Rango de la matriz:** {M.rank()}")
-                
-                col_sub1, col_sub2 = st.columns(2)
-                with col_sub1:
-                    st.write("**Base del Espacio Renglón \(L_r(A)\):**")
-                    renglones = [rref_sp.row(i) for i in range(rref_sp.rows) if rref_sp.row(i) != sp.zeros(1, rref_sp.cols)]
-                    if renglones: imprimir_matriz_simbolica(sp.Matrix(renglones))
-                    else: st.write("Trivial")
+                try:
+                    rref_sp, pivotes = calcular_con_limite(M.rref, timeout=5)
+                    st.write(f"**Rango de la matriz:** {len(pivotes)}")
                     
-                with col_sub2:
-                    st.write("**Base del Espacio Columna \(L_c(A)\):**")
-                    columnas = [M.col(j) for j in pivotes]
-                    if columnas: imprimir_matriz_simbolica(sp.Matrix.hstack(*columnas))
-                    else: st.write("Trivial")
-                    
-                st.divider()
-                st.write("**Base del Kernel (Espacio Nulo):**")
-                base_kernel = M.nullspace()
-                if base_kernel:
-                    for i, vec in enumerate(base_kernel): imprimir_matriz_simbolica(vec)
-                    st.write(f"**Nulidad:** {len(base_kernel)}")
-                else:
-                    st.write("El Kernel es trivial (vector cero).")
+                    col_sub1, col_sub2 = st.columns(2)
+                    with col_sub1:
+                        st.write("**Base del Espacio Renglón \(L_r(A)\):**")
+                        renglones = [rref_sp.row(i) for i in range(rref_sp.rows) if rref_sp.row(i) != sp.zeros(1, rref_sp.cols)]
+                        if renglones: imprimir_matriz_simbolica(sp.Matrix(renglones))
+                        else: st.write("Trivial")
+                        
+                    with col_sub2:
+                        st.write("**Base del Espacio Columna \(L_c(A)\):**")
+                        columnas = [M.col(j) for j in pivotes]
+                        if columnas: imprimir_matriz_simbolica(sp.Matrix.hstack(*columnas))
+                        else: st.write("Trivial")
+                        
+                    st.divider()
+                    st.write("**Base del Kernel (Espacio Nulo):**")
+                    base_kernel = calcular_con_limite(M.nullspace, timeout=5)
+                    if base_kernel:
+                        for i, vec in enumerate(base_kernel): imprimir_matriz_simbolica(vec)
+                        st.write(f"**Nulidad:** {len(base_kernel)}")
+                    else:
+                        st.write("El Kernel es trivial (vector cero).")
+                except TimeoutError as e:
+                    st.error(str(e))
 
             if res_matriz is not None:
                 st.session_state.temp_prop_matriz = res_matriz
@@ -364,9 +388,12 @@ with tab_avanzadas:
                     st.error("La función es constante.")
                 else:
                     vars_list.sort(key=lambda v: v.name)
-                    H = sp.hessian(f, vars_list)
+                    # BLINDAJE CON TIMEOUT
+                    H = calcular_con_limite(sp.hessian, args=(f, vars_list), timeout=5)
                     st.success(f"Función detectada: \(f({', '.join([v.name for v in vars_list])})\)")
                     st.session_state.temp_avanzada = H
+            except TimeoutError as e:
+                st.error(str(e))
             except Exception:
                 st.error("Error matemático o de sintaxis.")
                 
@@ -386,9 +413,12 @@ with tab_avanzadas:
             else:
                 variables.sort(key=lambda v: v.name)
                 try:
-                    J = M_jac.jacobian(variables)
+                    # BLINDAJE CON TIMEOUT
+                    J = calcular_con_limite(M_jac.jacobian, args=(variables,), timeout=5)
                     st.success(f"Jacobiana evaluada respecto a: {variables}")
                     st.session_state.temp_avanzada = J
+                except TimeoutError as e:
+                    st.error(str(e))
                 except Exception as e:
                     st.error(f"Error inesperado al procesar la Jacobiana: {e}")
 
@@ -405,72 +435,125 @@ with tab_avanzadas:
                         st.rerun()
 
 # --------------------------------------------------------------------------
-    # PESTAÑA 4: Análisis Espectral
-    # --------------------------------------------------------------------------
-    with tab_espectral:
-        st.subheader("Valores y Vectores Propios")
-        mat_esp_nombre = st.selectbox("Seleccione Matriz:", list(st.session_state.mis_matrices.keys()), key="esp_mat")
+# PESTAÑA 4: Análisis Espectral
+# --------------------------------------------------------------------------
+with tab_espectral:
+    st.subheader("Valores y Vectores Propios")
+    mat_esp_nombre = st.selectbox("Seleccione Matriz:", list(st.session_state.mis_matrices.keys()), key="esp_mat")
+    
+    if st.button("Ejecutar Análisis Espectral"):
+        A = st.session_state.mis_matrices[mat_esp_nombre]
         
-        if st.button("Ejecutar Análisis Espectral"):
-            A = st.session_state.mis_matrices[mat_esp_nombre]
-            
-            if not A.is_square:
-                st.error("El análisis espectral requiere una matriz cuadrada.")
-            else:
+        if not A.is_square:
+            st.error("El análisis espectral requiere una matriz cuadrada.")
+        else:
+            try:
                 lamda = sp.Symbol('lambda')
-                polinomio = A.charpoly(lamda)
+                polinomio = calcular_con_limite(A.charpoly, args=(lamda,), timeout=5)
                 
                 st.write("**1. Polinomio Característico**")
                 st.latex(f"p(\lambda) = \det(A - \lambda I) = {sp.latex(polinomio.as_expr())}")
                 
-                vectores_propios = A.eigenvects()
-                try:
-                    vectores_propios.sort(key=lambda x: sp.re(x[0]), reverse=True)
-                except Exception:
-                    pass
-                
-                st.divider()
-                st.write("**2. Espectro y Bases**")
-                
-                columnas_P, valores_D = [], []
-                
-                for val, mult_alg, vects in vectores_propios:
-                    st.markdown(f"### $\lambda = {sp.latex(val)}$")
-                    st.write(f"Multiplicidad Algebraica: {mult_alg} | Multiplicidad Geométrica: {len(vects)}")
+                # BLINDAJE NUMÉRICO AVANZADO PARA MATRICES PESADAS
+                A_num = evaluar_numerico(A)
+                if A_num is not None and A.shape[0] >= 4:
+                    st.info("💡 Matriz numérica grande detectada: Evaluando con motor NumPy para prevenir colapsos.")
+                    w, v = np.linalg.eig(A_num)
                     
-                    for i, v in enumerate(vects):
-                        denominadores = [sp.fraction(sp.simplify(e))[1] for e in v]
-                        mcm = 1
-                        for d in denominadores: mcm = sp.lcm(mcm, d)
-                        v_entero = sp.simplify(v * mcm)
-                        
-                        for e in v_entero:
-                            if e != 0:
-                                if e.is_real and e < 0: 
-                                    v_entero = v_entero * -1
-                                break
-                                
-                        columnas_P.append(v_entero)
-                        valores_D.append(val)
-                        st.latex(f"v_{{{i+1}}} = {sp.latex(v_entero)}")
-                        
-                st.divider()
-                st.write("**3. Diagonalización**")
-                if A.is_diagonalizable():
-                    st.success("La matriz **SÍ** es diagonalizable.")
-                    P = sp.Matrix.hstack(*columnas_P)
-                    D = sp.diag(*valores_D)
-                    P_inv = sp.simplify(P.inv())
+                    st.divider()
+                    st.write("**2. Espectro y Bases (Aproximación Numérica)**")
+                    columnas_P = []
                     
-                    col_p, col_d, col_pinv = st.columns(3)
-                    with col_p:
-                        st.write("Matriz de Paso ($P$)")
-                        imprimir_matriz_simbolica(P)
-                    with col_d:
-                        st.write("Matriz Diagonal ($D$)")
-                        imprimir_matriz_simbolica(D)
-                    with col_pinv:
-                        st.write("Inversa ($P^{-1}$)")
-                        imprimir_matriz_simbolica(P_inv)
+                    for i in range(len(w)):
+                        st.markdown(f"### $\lambda \approx {w[i]:.4f}$")
+                        vec_propio = sp.Matrix(np.round(v[:, i], 4))
+                        columnas_P.append(vec_propio)
+                        st.latex(f"v_{{{i+1}}} = {sp.latex(vec_propio)}")
+                        
+                    st.divider()
+                    st.write("**3. Diagonalización**")
+                    if len(columnas_P) == A.shape[0]:
+                        st.success("La matriz **SÍ** es diagonalizable.")
+                        P = sp.Matrix.hstack(*columnas_P)
+                        D = sp.diag(*[np.round(val, 4) for val in w])
+                        
+                        try:
+                            P_inv = sp.Matrix(np.round(np.linalg.inv(np.array(P).astype(np.float64)), 4))
+                        except Exception:
+                            P_inv = calcular_con_limite(P.inv, timeout=5)
+                        
+                        col_p, col_d, col_pinv = st.columns(3)
+                        with col_p:
+                            st.write("Matriz de Paso ($P$)")
+                            imprimir_matriz_simbolica(P)
+                        with col_d:
+                            st.write("Matriz Diagonal ($D$)")
+                            imprimir_matriz_simbolica(D)
+                        with col_pinv:
+                            st.write("Inversa ($P^{-1}$)")
+                            imprimir_matriz_simbolica(P_inv)
+                    else:
+                        st.error("La matriz **NO** es diagonalizable de forma numérica.")
+                        
                 else:
-                    st.error("La matriz **NO** es diagonalizable (no hay suficientes vectores propios independientes).")
+                    # BLINDAJE POR TIMEOUT PARA MATRICES SIMBÓLICAS O PEQUEÑAS
+                    vectores_propios = calcular_con_limite(A.eigenvects, timeout=8)
+                    
+                    try:
+                        vectores_propios.sort(key=lambda x: sp.re(x[0]), reverse=True)
+                    except Exception:
+                        pass
+                    
+                    st.divider()
+                    st.write("**2. Espectro y Bases**")
+                    
+                    columnas_P, valores_D = [], []
+                    
+                    for val, mult_alg, vects in vectores_propios:
+                        st.markdown(f"### $\lambda = {sp.latex(val)}$")
+                        st.write(f"Multiplicidad Algebraica: {mult_alg} | Multiplicidad Geométrica: {len(vects)}")
+                        
+                        for i, v in enumerate(vects):
+                            try:
+                                denominadores = [sp.fraction(e)[1] for e in v]
+                                mcm = 1
+                                for d in denominadores: mcm = sp.lcm(mcm, d)
+                                v_entero = v * mcm
+                                
+                                for e in v_entero:
+                                    if e != 0:
+                                        if e.is_real and e < 0: 
+                                            v_entero = v_entero * -1
+                                        break
+                            except Exception:
+                                v_entero = v
+                                    
+                            columnas_P.append(v_entero)
+                            valores_D.append(val)
+                            st.latex(f"v_{{{i+1}}} = {sp.latex(v_entero)}")
+                            
+                    st.divider()
+                    st.write("**3. Diagonalización**")
+                    if len(columnas_P) == A.shape[0]:
+                        st.success("La matriz **SÍ** es diagonalizable.")
+                        P = sp.Matrix.hstack(*columnas_P)
+                        D = sp.diag(*valores_D)
+                        P_inv = calcular_con_limite(P.inv, timeout=5)
+                        
+                        col_p, col_d, col_pinv = st.columns(3)
+                        with col_p:
+                            st.write("Matriz de Paso ($P$)")
+                            imprimir_matriz_simbolica(P)
+                        with col_d:
+                            st.write("Matriz Diagonal ($D$)")
+                            imprimir_matriz_simbolica(D)
+                        with col_pinv:
+                            st.write("Inversa ($P^{-1}$)")
+                            imprimir_matriz_simbolica(P_inv)
+                    else:
+                        st.error("La matriz **NO** es diagonalizable (no hay suficientes vectores propios independientes).")
+                        
+            except TimeoutError as e:
+                st.error(str(e))
+            except Exception as e:
+                st.error(f"Error procesando el análisis espectral: {e}")
