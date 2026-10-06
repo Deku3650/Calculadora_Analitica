@@ -1,7 +1,7 @@
 import streamlit as st
 
 # 1. Configuración de la página con el nuevo nombre formal
-st.set_page_config(page_title="Calculadora Lineal", page_icon="🧮", layout="centered")
+st.set_page_config(page_title="MATHESIS", page_icon="🧮", layout="centered")
 
 # CSS Limpio: Quitamos el bloqueo del header para que SIEMPRE aparezca la flecha del menú en celulares
 st.markdown("""
@@ -13,14 +13,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 2. Encabezados Corregidos (Con el espacio necesario después del '#' para que se vean grandes)
-st.markdown("# Calculadora Lineal")
+st.markdown("# MATHESIS ")
 st.markdown("## Plataforma Computacional para Análisis Lineal y Geometría")
 st.markdown("### Desarrollado por: José Fernández y Rebeca Ortega")
 
 st.write("") 
 
 st.markdown("""
-¡Bienvenidos! Esta herramienta ha sido diseñada como un entorno computacional riguroso para 
+¡Bienvenidos a Mathesis! Esta herramienta ha sido diseñada como un entorno computacional riguroso para 
 asistir en cálculos complejos de nivel universitario.
 
 *📱 **Nota para celular:** Si no ve el menú de páginas, toque la pequeña flecha **( > )** en la esquina superior izquierda para desplegar los módulos.*
@@ -82,6 +82,11 @@ with col2:
             <span style="color: #b0b3b8; font-size: 14px; display: block; margin-top: 4px;">
                 Estudio de sistemas lineales y no lineales, retratos de fase, isoclinas y linealización Jacobiana en R<sup>2</sup>.
             </span>
+        </li>
+        <li style="color: #ffffff; margin-bottom: 25px;"> 
+            <strong style="font-size: 17px;">💰 Economía y Microeconomía:</strong><br> 
+            <span style="color: #b0b3b8; font-size: 14px; display: block; margin-top: 4px;"> 
+                Cálculo del precio y cantidad de equilibrio, elasticidad, funciones de oferta y demanda, excedentes y análisis microeconómico. </span> 
         </li>
     </ul>
     """, unsafe_allow_html=True)
