@@ -53,6 +53,11 @@ with col1:
                 Plataforma actuarial de valuación, tasas equivalentes, escenarios dinámicos y cuadros de amortización.
             </span>
         </li>
+         <li style="color: #ffffff; margin-bottom: 25px;"> 
+            <strong style="font-size: 17px;">💰 Economía y Microeconomía:</strong><br> 
+            <span style="color: #b0b3b8; font-size: 14px; display: block; margin-top: 4px;"> 
+                Cálculo del precio y cantidad de equilibrio, elasticidad, funciones de oferta y demanda, excedentes y análisis microeconómico. </span> 
+        </li>
     </ul>
     """, unsafe_allow_html=True)
 
@@ -83,11 +88,7 @@ with col2:
                 Estudio de sistemas lineales y no lineales, retratos de fase, isoclinas y linealización Jacobiana en R<sup>2</sup>.
             </span>
         </li>
-        <li style="color: #ffffff; margin-bottom: 25px;"> 
-            <strong style="font-size: 17px;">💰 Economía y Microeconomía:</strong><br> 
-            <span style="color: #b0b3b8; font-size: 14px; display: block; margin-top: 4px;"> 
-                Cálculo del precio y cantidad de equilibrio, elasticidad, funciones de oferta y demanda, excedentes y análisis microeconómico. </span> 
-        </li>
+       
     </ul>
     """, unsafe_allow_html=True)
 
