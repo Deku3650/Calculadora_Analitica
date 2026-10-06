@@ -14,7 +14,7 @@ st.markdown("""
 
 # 2. Encabezados Corregidos (Con el espacio necesario después del '#' para que se vean grandes)
 st.markdown("# MATHESIS ")
-st.markdown("## Plataforma Computacional para Análisis Lineal y Geometría")
+st.markdown("## Plataforma Computacional para Matemáticas y Análisis Cuantitativo")
 st.markdown("### Desarrollado por: José Fernández y Rebeca Ortega")
 
 st.write("") 
