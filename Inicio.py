@@ -141,7 +141,7 @@ with col1:
     
     with st.container(border=True):
         st.markdown('<span class="module-badge">Análisis</span>', unsafe_allow_html=True)
-        st.page_link("pages/8_Economía y Microeconomía.py", label="💰 Economía y Microeconomía")
+        st.page_link("pages/8_Economía_microeconomía.py", label="💰 Economía y Microeconomía")
         st.caption("Precio y cantidad de equilibrio, elasticidad, funciones de oferta y demanda, excedentes y análisis microeconómico.")
 
 with col2:
