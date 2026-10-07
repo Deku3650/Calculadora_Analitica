@@ -1,7 +1,7 @@
 import streamlit as st
 
 # 1. Configuración de la página 
-st.set_page_config(page_title="MATHESIS", page_icon="🧮", layout="centered")
+st.set_page_config(page_title="MATHESIS", layout="centered")
 
 # Quitamos el bloqueo del header para que SIEMPRE aparezca la flecha del menú en celulares
 st.markdown("""
