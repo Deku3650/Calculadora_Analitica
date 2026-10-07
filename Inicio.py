@@ -20,10 +20,65 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("# MATHESIS")
-st.markdown("## Matemáticas que se calculan, se exploran y se visualizan.")
-
-st.write("") 
+# ==========================================
+#  ENCABEZADO DESTACADO (HERO BANNER)
+# ==========================================
+st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f172a 100%);
+        padding: 35px 25px;
+        border-radius: 20px;
+        border: 1px solid #334155;
+        border-left: 6px solid #38bdf8;
+        box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.6);
+        margin-bottom: 30px;
+        text-align: center;
+    ">
+        <span style="
+            background: linear-gradient(90deg, #0284c7, #0369a1);
+            color: #f0f9ff;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.8px;
+            padding: 5px 14px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            display: inline-block;
+            margin-bottom: 14px;
+            border: 1px solid #38bdf8;
+        ">🏛️ UNAM • Facultad de Ciencias • Actuaría</span>
+        <h1 style="
+            font-size: 52px;
+            font-weight: 900;
+            margin: 0;
+            letter-spacing: 4px;
+            background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1.1;
+        ">MATHESIS</h1>
+        <p style="
+            color: #e2e8f0;
+            font-size: 18px;
+            font-weight: 500;
+            margin-top: 12px;
+            margin-bottom: 16px;
+        ">Matemáticas que se calculan, se exploran y se visualizan.</p>
+        <div style="
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background-color: rgba(15, 23, 42, 0.7);
+            padding: 6px 16px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            font-size: 13px;
+        ">
+            👨‍💻 Desarrollado por: <strong style="color: #38bdf8;">José Fernández</strong> y <strong style="color: #38bdf8;">Rebeca Ortega</strong>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
 
 st.markdown("""
 ¡Bienvenidos a Mathesis! Aquí encontrarás distintas herramientas para explorar, resolver y visualizar problemas matemáticos de forma interactiva.
@@ -98,7 +153,7 @@ with col2:
 
 st.write("---")
 
-# 4. Acerca de MATHESIS
+# 4. Sección "Acerca de MATHESIS"
 st.markdown("## ℹ️ Acerca de MATHESIS")
 
 st.markdown("""
