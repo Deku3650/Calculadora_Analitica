@@ -129,44 +129,44 @@ with col1:
     # Módulo 2
     with st.container(border=True):
         st.markdown('<span class="module-badge">Álgebra Lineal</span>', unsafe_allow_html=True)
-        st.page_link("pages/2_Transformaciones.py", label="🔄 Transformaciones Lineales")
+        st.page_link("pages/3_Transformaciones.py", label="🔄 Transformaciones Lineales")
         st.caption("Núcleo, imagen, isomorfismos y matrices de cambio de base.")
 
-    # Módulo 3
+    # 
     with st.container(border=True):
         st.markdown('<span class="module-badge">Actuarial</span>', unsafe_allow_html=True)
-        st.page_link("pages/3_Financieras.py", label="📈 Matemáticas Financieras")
+        st.page_link("pages/3_Matemáticas_Financieras.py", label="📈 Matemáticas Financieras")
         st.caption("Plataforma actuarial de valuación, tasas equivalentes, escenarios dinámicos y cuadros de amortización.")
 
-    # Módulo 4
+    
     with st.container(border=True):
         st.markdown('<span class="module-badge">Análisis</span>', unsafe_allow_html=True)
-        st.page_link("pages/4_Economia.py", label="💰 Economía y Microeconomía")
+        st.page_link("pages/8_Economía y Microeconomía.py", label="💰 Economía y Microeconomía")
         st.caption("Precio y cantidad de equilibrio, elasticidad, funciones de oferta y demanda, excedentes y análisis microeconómico.")
 
 with col2:
-    # Módulo 5
+
     with st.container(border=True):
         st.markdown('<span class="module-badge">Computación</span>', unsafe_allow_html=True)
-        st.page_link("pages/5_Matrices.py", label="🧮 Matrices")
+        st.page_link("pages/2_Matrices.py", label="🧮 Matrices")
         st.caption("Operaciones lineales, determinantes, matrices Hessianas y análisis espectral.")
 
-    # Módulo 6
+
     with st.container(border=True):
         st.markdown('<span class="module-badge">Fundamentos</span>', unsafe_allow_html=True)
-        st.page_link("pages/6_Algebra_Superior.py", label="🔢 Álgebra Superior")
+        st.page_link("pages/4_Algebra_Superior.py", label="🔢 Álgebra Superior")
         st.caption("Aritmética modular, identidad de Bézout y números complejos.")
 
-    # Módulo 7
+
     with st.container(border=True):
         st.markdown('<span class="module-badge">Sistemas A|b</span>', unsafe_allow_html=True)
-        st.page_link("pages/7_Vectores.py", label="↗️ Vectores y Sistemas")
+        st.page_link("pages/5_Vectores_Ecuaciones.py", label="↗️ Vectores y Sistemas")
         st.caption("Proyecciones, ángulos, Gram-Schmidt y resolución de sistemas lineales.")
 
-    # Módulo 8
+    
     with st.container(border=True):
         st.markdown('<span class="module-badge">Avanzado</span>', unsafe_allow_html=True)
-        st.page_link("pages/8_Analisis_Vectorial.py", label="🌪️ Análisis Vectorial & Dinámico")
+        st.page_link("pages/7_Ecuaciones_Diferenciales.py", label="🌪️ Análisis Vectorial & Dinámico")
         st.caption("Sistemas lineales y no lineales, retratos de fase, isoclinas y linealización Jacobiana en ℝ².")
 
 st.write("---")
