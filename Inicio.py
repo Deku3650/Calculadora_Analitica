@@ -1,70 +1,19 @@
 import streamlit as st
 
-# 1. Configuración de la página 
+# 1. Configuración de la página
 st.set_page_config(page_title="MATHESIS", layout="centered")
 
-# CSS personalizado para la estética general y las tarjetas de módulos
+# CSS ligero para ajustar márgenes y estilo general (opcional)
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .block-container {padding-top: 1.5rem;}
     
-    /* Estilo de tarjeta para los módulos */
-    .module-card {
-        background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
-        border: 1px solid #334155;
-        border-radius: 14px;
-        padding: 20px;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        transition: transform 0.2s ease, border-color 0.2s ease;
-        height: 100%;
-    }
-    
-    .module-card:hover {
-        border-color: #38bdf8;
-        transform: translateY(-2px);
-    }
-    
-    .module-title {
-        color: #f8fafc;
-        font-size: 18px;
-        font-weight: 700;
-        margin-bottom: 6px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    
-    .module-desc {
-        color: #94a3b8;
-        font-size: 14px;
-        line-height: 1.5;
-        margin: 0;
-    }
-
-    .module-badge {
-        background-color: rgba(56, 189, 248, 0.1);
-        color: #38bdf8;
-        font-size: 10px;
-        font-weight: 700;
-        padding: 3px 8px;
-        border-radius: 6px;
-        border: 1px solid rgba(56, 189, 248, 0.3);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        float: right;
-    }
-
-    /* Tarjetas de desarrolladores */
-    .about-card {
-        background-color: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 12px;
-        padding: 18px;
-        margin-top: 10px;
-        margin-bottom: 15px;
+    /* Estilo para ajustar el botón de redirección en Python */
+    div.stButton > button {
+        width: 100%;
+        border-radius: 8px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -117,7 +66,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("""
-¡Bienvenidos a Mathesis! Aquí encontrarás distintas herramientas para explorar, resolver y visualizar problemas matemáticos de forma interactiva.
+¡Bienvenidos a Mathesis! Selecciona cualquiera de los módulos para acceder directamente a la herramienta interactiva.
 
 *📱 **Nota para celular:** Si no ves el menú de páginas, toca la pequeña flecha **( > )** en la esquina superior izquierda para desplegar los módulos.*
 """)
@@ -125,82 +74,82 @@ st.markdown("""
 st.write("")
 
 # ==========================================
-# MENU DE MODULOS
+# MENÚ DE MÓDULOS 
 # ==========================================
-st.markdown("### Módulos Disponibles")
+st.markdown("### MODULOS DISPONIBLES")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.markdown("""
-    <div class="module-card">
-        <span class="module-badge">Visualización</span>
-        <div class="module-title">📐 Geometría</div>
-        <p class="module-desc">Áreas, volúmenes, modelado y visualización 3D interactiva.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Módulo 1
+    with st.container(border=True):
+        st.caption("VISUALIZACIÓN")
+        st.subheader("📐 Geometría")
+        st.write("Áreas, volúmenes, modelado y visualización 3D interactiva.")
+        if st.button("Abrir módulo", key="btn_geom", use_container_width=True):
+            st.switch_page("pages/1_Geometria.py")
 
-    st.markdown("""
-    <div class="module-card">
-        <span class="module-badge">Álgebra Lineal</span>
-        <div class="module-title">🔄 Transformaciones Lineales</div>
-        <p class="module-desc">Núcleo, imagen, isomorfismos y matrices de cambio de base.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Módulo 2
+    with st.container(border=True):
+        st.caption("ÁLGEBRA LINEAL")
+        st.subheader("🔄 Transformaciones Lineales")
+        st.write("Núcleo, imagen, isomorfismos y matrices de cambio de base.")
+        if st.button("Abrir módulo", key="btn_transf", use_container_width=True):
+            st.switch_page("pages/2_Transformaciones.py")
 
-    st.markdown("""
-    <div class="module-card">
-        <span class="module-badge">Actuarial</span>
-        <div class="module-title">📈 Matemáticas Financieras</div>
-        <p class="module-desc">Plataforma actuarial de valuación, tasas equivalentes, escenarios dinámicos y cuadros de amortización.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Módulo 3
+    with st.container(border=True):
+        st.caption("ACTUARIAL")
+        st.subheader("📈 Matemáticas Financieras")
+        st.write("Plataforma actuarial de valuación, tasas equivalentes, escenarios dinámicos y cuadros de amortización.")
+        if st.button("Abrir módulo", key="btn_fin", use_container_width=True):
+            st.switch_page("pages/3_Financieras.py")
 
-    st.markdown("""
-    <div class="module-card">
-        <span class="module-badge">Análisis</span>
-        <div class="module-title">💰 Economía y Microeconomía</div>
-        <p class="module-desc">Precio y cantidad de equilibrio, elasticidad, funciones de oferta y demanda, excedentes y análisis microeconómico.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Módulo 4
+    with st.container(border=True):
+        st.caption("ANÁLISIS")
+        st.subheader("💰 Economía y Microeconomía")
+        st.write("Precio y cantidad de equilibrio, elasticidad, funciones de oferta y demanda, excedentes y análisis microeconómico.")
+        if st.button("Abrir módulo", key="btn_econ", use_container_width=True):
+            st.switch_page("pages/4_Economia.py")
 
 with col2:
-    st.markdown("""
-    <div class="module-card">
-        <span class="module-badge">Computación</span>
-        <div class="module-title">🧮 Matrices</div>
-        <p class="module-desc">Operaciones lineales, determinantes, matrices Hessianas y análisis espectral.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Módulo 5
+    with st.container(border=True):
+        st.caption("COMPUTACIÓN")
+        st.subheader("🧮 Matrices")
+        st.write("Operaciones lineales, determinantes, matrices Hessianas y análisis espectral.")
+        if st.button("Abrir módulo", key="btn_mat", use_container_width=True):
+            st.switch_page("pages/5_Matrices.py")
 
-    st.markdown("""
-    <div class="module-card">
-        <span class="module-badge">Fundamentos</span>
-        <div class="module-title">🔢 Álgebra Superior</div>
-        <p class="module-desc">Aritmética modular, identidad de Bézout y números complejos.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Módulo 6
+    with st.container(border=True):
+        st.caption("FUNDAMENTOS")
+        st.subheader("🔢 Álgebra Superior")
+        st.write("Aritmética modular, identidad de Bézout y números complejos.")
+        if st.button("Abrir módulo", key="btn_alg_sup", use_container_width=True):
+            st.switch_page("pages/6_Algebra_Superior.py")
 
-    st.markdown("""
-    <div class="module-card">
-        <span class="module-badge">Sistemas A|b</span>
-        <div class="module-title">↗️ Vectores y Sistemas</div>
-        <p class="module-desc">Proyecciones, ángulos, Gram-Schmidt y resolución de sistemas lineales.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Módulo 7
+    with st.container(border=True):
+        st.caption("SISTEMAS A|b")
+        st.subheader("↗️ Vectores y Sistemas")
+        st.write("Proyecciones, ángulos, Gram-Schmidt y resolución de sistemas lineales.")
+        if st.button("Abrir módulo", key="btn_vect", use_container_width=True):
+            st.switch_page("pages/7_Vectores.py")
 
-    st.markdown("""
-    <div class="module-card">
-        <span class="module-badge">Avanzado</span>
-        <div class="module-title">🌪️ Análisis Vectorial & Dinámico</div>
-        <p class="module-desc">Sistemas lineales y no lineales, retratos de fase, isoclinas y linealización Jacobiana en ℝ².</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Módulo 8
+    with st.container(border=True):
+        st.caption("AVANZADO")
+        st.subheader("🌪️ Análisis Vectorial & Dinámico")
+        st.write("Sistemas lineales y no lineales, retratos de fase, isoclinas y linealización Jacobiana en ℝ².")
+        if st.button("Abrir módulo", key="btn_vec_dyn", use_container_width=True):
+            st.switch_page("pages/8_Analisis_Vectorial.py")
 
 st.write("---")
 
 # ==========================================
-# SECCIÓN ACERCA DE
+# SECCIÓN ACERCA DE (100% PYTHON CONTENEDORES)
 # ==========================================
 st.markdown("## ℹ️ Acerca de MATHESIS")
 
@@ -210,31 +159,21 @@ la exploración intuitiva y la resolución práctica de modelos cuantitativos en
 Análisis Vectorial, Economía y Matemáticas Financieras**.
 """)
 
-st.markdown("#### 🏛️ Desarrolladores y Contacto")
+st.markdown("#### Desarrolladores y Contacto")
 st.markdown("Estudiantes de la Licenciatura en **Actuaría** | **Facultad de Ciencias, UNAM**")
 
 col_dev1, col_dev2 = st.columns(2)
 
 with col_dev1:
-    st.markdown("""
-    <div class="about-card">
-        <h4 style="margin: 0; color: #38bdf8;">👨‍💻 José Alberto Fernández Cendejas</h4>
-        <p style="color: #94a3b8; font-size: 13px; margin-top: 5px; margin-bottom: 10px;">Licenciatura en Actuaría — UNAM</p>
-        <p style="font-size: 13px; color: #cbd5e1; margin: 0;">
-            ✉️ <b>Correo:</b> <a href="mailto:jose.fernandezcendejas@ciencias.unam.mx" style="color: #38bdf8; text-decoration: none;">jose.fernandezcendejas@ciencias.unam.mx</a>
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown("#### José Alberto Fernández Cendejas")
+        st.caption("Licenciatura en Actuaría — UNAM")
+        st.write("✉️ **Correo:** jose.fernandezcendejas@ciencias.unam.mx")
 
 with col_dev2:
-    st.markdown("""
-    <div class="about-card">
-        <h4 style="margin: 0; color: #38bdf8;">👩‍💻 Ingrid Rebeca Ortega Flores</h4>
-        <p style="color: #94a3b8; font-size: 13px; margin-top: 5px; margin-bottom: 10px;">Licenciatura en Actuaría — UNAM</p>
-        <p style="font-size: 13px; color: #cbd5e1; margin: 0;">
-            ✉️ <b>Correo:</b> <a href="mailto:i.rebecaorfi@ciencias.unam.mx" style="color: #38bdf8; text-decoration: none;">i.rebecaorfi@ciencias.unam.mx</a>
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    with st.container(border=True):
+        st.markdown("#### Ingrid Rebeca Ortega Flores")
+        st.caption("Licenciatura en Actuaría — UNAM")
+        st.write("✉️ **Correo:** i.rebecaorfi@ciencias.unam.mx")
 
 st.caption("MATHESIS © 2026 — Facultad de Ciencias, UNAM")
