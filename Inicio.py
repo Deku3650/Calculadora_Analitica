@@ -135,7 +135,7 @@ with col1:
     # 
     with st.container(border=True):
         st.markdown('<span class="module-badge">Actuarial</span>', unsafe_allow_html=True)
-        st.page_link("pages/3_Matemáticas_Financieras.py", label="📈 Matemáticas Financieras")
+        st.page_link("pages/6_Matemáticas_Financieras.py", label="📈 Matemáticas Financieras")
         st.caption("Plataforma actuarial de valuación, tasas equivalentes, escenarios dinámicos y cuadros de amortización.")
 
     
