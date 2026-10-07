@@ -22,7 +22,6 @@ st.markdown("""
 
 st.markdown("# MATHESIS")
 st.markdown("## Matemáticas que se calculan, se exploran y se visualizan.")
-st.markdown("### Desarrollado por: José Fernández y Rebeca Ortega")
 
 st.write("") 
 
@@ -108,7 +107,7 @@ la exploración intuitiva y la resolución práctica de modelos cuantitativos en
 Análisis Vectorial, Economía y Matemáticas Financieras**.
 """)
 
-st.markdown("#### 🏛️ Desarrolladores & Contacto")
+st.markdown("#### 🏛️ Desarrolladores y Contacto")
 st.markdown("Estudiantes de la Licenciatura en **Actuaría** | **Facultad de Ciencias, UNAM**")
 
 col_dev1, col_dev2 = st.columns(2)
