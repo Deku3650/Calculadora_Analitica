@@ -135,13 +135,13 @@ with col1:
     # 
     with st.container(border=True):
         st.markdown('<span class="module-badge">Actuarial</span>', unsafe_allow_html=True)
-        st.page_link("pages/6_Matemáticas_Financieras.py", label="📈 Matemáticas Financieras")
+        st.page_link("pages/6_Matematicas_Financieras.py", label="📈 Matemáticas Financieras")
         st.caption("Plataforma actuarial de valuación, tasas equivalentes, escenarios dinámicos y cuadros de amortización.")
 
     
     with st.container(border=True):
         st.markdown('<span class="module-badge">Análisis</span>', unsafe_allow_html=True)
-        st.page_link("pages/8_Economía_microeconomía.py", label="💰 Economía y Microeconomía")
+        st.page_link("pages/8_Economia_microeconomia.py", label="💰 Economía y Microeconomía")
         st.caption("Precio y cantidad de equilibrio, elasticidad, funciones de oferta y demanda, excedentes y análisis microeconómico.")
 
 with col2:
@@ -189,13 +189,13 @@ col_dev1, col_dev2 = st.columns(2)
 
 with col_dev1:
     with st.container(border=True):
-        st.markdown("#### 👨‍💻 José Alberto Fernández Cendejas")
+        st.markdown("#### José Alberto Fernández Cendejas")
         st.caption("Licenciatura en Actuaría — UNAM")
         st.write("✉️ **Correo:** jose.fernandezcendejas@ciencias.unam.mx")
 
 with col_dev2:
     with st.container(border=True):
-        st.markdown("#### 👩‍💻 Ingrid Rebeca Ortega Flores")
+        st.markdown("#### Ingrid Rebeca Ortega Flores")
         st.caption("Licenciatura en Actuaría — UNAM")
         st.write("✉️ **Correo:** i.rebecaorfi@ciencias.unam.mx")
 
