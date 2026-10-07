@@ -1,9 +1,9 @@
 import streamlit as st
 
-# 1. Configuración de la página con el nuevo nombre formal
+# 1. Configuración de la página 
 st.set_page_config(page_title="MATHESIS", page_icon="🧮", layout="centered")
 
-# CSS Limpio: Quitamos el bloqueo del header para que SIEMPRE aparezca la flecha del menú en celulares
+# Quitamos el bloqueo del header para que SIEMPRE aparezca la flecha del menú en celulares
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -12,16 +12,14 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. Encabezados Corregidos (Con el espacio necesario después del '#' para que se vean grandes)
 st.markdown("# MATHESIS ")
-st.markdown("## Plataforma Computacional para Matemáticas y Análisis Cuantitativo")
+st.markdown("## Matemáticas que se calculan, se exploran y se visualizan.")
 st.markdown("### Desarrollado por: José Fernández y Rebeca Ortega")
 
 st.write("") 
 
 st.markdown("""
-¡Bienvenidos a Mathesis! Esta herramienta ha sido diseñada como un entorno computacional riguroso para 
-asistir en cálculos complejos de nivel universitario.
+¡Bienvenidos a Mathesis! Aquí encontrarás distintas herramientas para explorar, resolver y visualizar problemas matemáticos de forma interactiva.
 
 *📱 **Nota para celular:** Si no ve el menú de páginas, toque la pequeña flecha **( > )** en la esquina superior izquierda para desplegar los módulos.*
 """)
@@ -29,7 +27,7 @@ asistir en cálculos complejos de nivel universitario.
 st.write("")
 st.write("")
 
-# 3. Estructura de Viñetas en Dos Columnas (Ecuaciones/Campos Vectoriales al final)
+# 3. Menus con losque contamos
 col1, col2 = st.columns(2)
 
 with col1:
