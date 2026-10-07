@@ -9,10 +9,18 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .block-container {padding-top: 1.5rem;}
+    .about-card {
+        background-color: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 10px;
+        padding: 18px;
+        margin-top: 10px;
+        margin-bottom: 15px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("# MATHESIS ")
+st.markdown("# MATHESIS")
 st.markdown("## Matemáticas que se calculan, se exploran y se visualizan.")
 st.markdown("### Desarrollado por: José Fernández y Rebeca Ortega")
 
@@ -27,7 +35,7 @@ st.markdown("""
 st.write("")
 st.write("")
 
-# 3. Menus con losque contamos
+# 3. Menús con los que contamos
 col1, col2 = st.columns(2)
 
 with col1:
@@ -86,16 +94,45 @@ with col2:
                 Estudio de sistemas lineales y no lineales, retratos de fase, isoclinas y linealización Jacobiana en R<sup>2</sup>.
             </span>
         </li>
-       
     </ul>
     """, unsafe_allow_html=True)
 
-st.write("")
-st.write("")
+st.write("---")
 
-# 4. Nota de Sesión
+# 4. Acerca de MATHESIS
+st.markdown("## ℹ️ Acerca de MATHESIS")
+
 st.markdown("""
-<p style="color: #8a8d93; font-size: 13px;">
-    ***Nota de Sesión:** La persistencia de variables (como matrices guardadas) se mantendrá activa mientras navega entre los módulos.*
-</p>
-""", unsafe_allow_html=True)
+**MATHESIS** es un proyecto computacional interactivo desarrollado para facilitar el análisis, 
+la exploración intuitiva y la resolución práctica de modelos cuantitativos en **Álgebra, Geometría, 
+Análisis Vectorial, Economía y Matemáticas Financieras**.
+""")
+
+st.markdown("#### 🏛️ Desarrolladores & Contacto")
+st.markdown("Estudiantes de la Licenciatura en **Actuaría** | **Facultad de Ciencias, UNAM**")
+
+col_dev1, col_dev2 = st.columns(2)
+
+with col_dev1:
+    st.markdown("""
+    <div class="about-card">
+        <h4 style="margin: 0; color: #38bdf8;">👨‍💻 José Alberto Fernández Cendejas</h4>
+        <p style="color: #94a3b8; font-size: 13px; margin-top: 5px; margin-bottom: 10px;">Licenciatura en Actuaría — UNAM</p>
+        <p style="font-size: 13px; color: #cbd5e1; margin: 0;">
+            ✉️ <b>Correo:</b> <a href="mailto:jose.fernandezcendejas@ciencias.unam.mx" style="color: #38bdf8; text-decoration: none;">jose.fernandezcendejas@ciencias.unam.mx</a>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_dev2:
+    st.markdown("""
+    <div class="about-card">
+        <h4 style="margin: 0; color: #38bdf8;">👩‍💻 Ingrid Rebeca Ortega Flores</h4>
+        <p style="color: #94a3b8; font-size: 13px; margin-top: 5px; margin-bottom: 10px;">Licenciatura en Actuaría — UNAM</p>
+        <p style="font-size: 13px; color: #cbd5e1; margin: 0;">
+            ✉️ <b>Correo:</b> <a href="mailto:i.rebecaorfi@ciencias.unam.mx" style="color: #38bdf8; text-decoration: none;">i.rebecaorfi@ciencias.unam.mx</a>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.caption("MATHESIS © 2026 — Facultad de Ciencias, UNAM")
