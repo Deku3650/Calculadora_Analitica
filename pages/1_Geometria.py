@@ -39,30 +39,46 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
 
-    /* --------------------------------------
+   /* --------------------------------------
        2. ESTILIZACIÓN DE PESTAÑAS (ST.TABS)
        -------------------------------------- */
+    /* Botón base de las pestañas */
+    div[data-baseweb="tab-highlight-container"] + div button,
     button[data-baseweb="tab"] {
-        border-radius: 10px 10px 0px 0px !important;
-        padding: 10px 22px !important;
+        border-radius: 12px 12px 0px 0px !important;
+        padding: 10px 24px !important;
         font-weight: 700 !important;
         font-size: 15px !important;
-        transition: all 0.25s ease-in-out !important;
+        color: #94a3b8 !important; /* Texto inactivo en tono gris/azul noble */
+        background: transparent !important;
+        transition: all 0.3s ease-in-out !important;
         border: none !important;
     }
-    
+
     /* Pestaña activa / seleccionada */
+    div[data-baseweb="tab-highlight-container"] + div button[aria-selected="true"],
     button[data-baseweb="tab"][aria-selected="true"] {
+        color: #38bdf8 !important; /* Texto azul brillante */
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%) !important;
+        border-bottom: 3px solid #38bdf8 !important;
+        box-shadow: 0 -2px 10px rgba(2, 132, 199, 0.2) !important;
+    }
+
+    /* Texto dentro de la pestaña activa */
+    button[data-baseweb="tab"][aria-selected="true"] p {
         color: #38bdf8 !important;
-        border-bottom: 3px solid #0284c7 !important;
-        background: linear-gradient(135deg, rgba(2, 132, 199, 0.18) 0%, rgba(79, 70, 229, 0.18) 100%) !important;
-        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15) !important;
+        font-weight: 800 !important;
     }
 
     /* Efecto hover en pestañas no activas */
     button[data-baseweb="tab"]:hover {
-        color: #0284c7 !important;
-        background: rgba(2, 132, 199, 0.08) !important;
+        color: #38bdf8 !important;
+        background: rgba(2, 132, 199, 0.12) !important;
+    }
+
+    /* Ocultar la línea roja por defecto de Streamlit */
+    div[data-baseweb="tab-highlight"] {
+        background-color: #0284c7 !important;
     }
 
     /* --------------------------------------
