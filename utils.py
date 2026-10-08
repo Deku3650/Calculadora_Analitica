@@ -5,6 +5,7 @@
 # ---------------------------------------------------------- #
 
 import math
+import ast
 import numpy as np
 import matplotlib.pyplot as plt
 import sympy as sp
@@ -12,6 +13,7 @@ from sympy.parsing.sympy_parser import parse_expr, standard_transformations, imp
 import streamlit as st
 import re
 import multiprocessing
+
 # ==============================================================================
 # 1. CONFIGURACIÓN INICIAL DE LA PÁGINA Y MEMORIA (SESSION STATE)
 # ==============================================================================
@@ -29,6 +31,41 @@ if 'mis_complejos' not in st.session_state:
 # ==============================================================================
 # 2. FUNCIONES DE APOYO
 # ==============================================================================
+
+def parse_seguro(entrada_str, transformaciones=None, local_dict=None):
+    """
+    Analiza una cadena matemática de forma segura usando AST.
+    Bloquea atributos (.) y variables con dunders (__) para prevenir inyección de código.
+    """
+    if not entrada_str.strip():
+        return None
+        
+    try:
+        arbol = ast.parse(entrada_str, mode='eval')
+        permitidos = (
+            ast.Expression, ast.BinOp, ast.UnaryOp, ast.operator, 
+            ast.unaryop, ast.cmpop, ast.Constant, ast.Name, ast.Load, ast.Call,
+            ast.Tuple, ast.Compare, ast.List
+        )
+        if hasattr(ast, 'Num'):
+            permitidos += (ast.Num, ast.Str, ast.NameConstant)
+
+        for n in ast.walk(arbol):
+            if isinstance(n, ast.Attribute):
+                raise ValueError("El acceso a atributos (.) no está permitido por seguridad.")
+            if isinstance(n, ast.Name) and '__' in n.id:
+                raise ValueError(f"Uso de variables o métodos no permitidos: {n.id}")
+            if not isinstance(n, permitidos):
+                raise ValueError(f"Estructura sintáctica no permitida: {type(n).__name__}")
+    except Exception as e:
+        raise ValueError(f"Sintaxis inválida o insegura: {e}")
+
+    global_dict = {}
+    if local_dict is None:
+        local_dict = {}
+        
+    return parse_expr(entrada_str, transformations=transformaciones, global_dict=global_dict, local_dict=local_dict)
+
 
 def evaluar_numerico(matriz_sp):
     """
@@ -84,7 +121,7 @@ def leer_expresion_st(entrada_str, solo_reales=False):
         return None
 
     try:
-        expresion = parse_expr(entrada_str, transformations=transformaciones, local_dict=diccionario_imaginario)
+        expresion = parse_seguro(entrada_str, transformaciones=transformaciones, local_dict=diccionario_imaginario)
 
         if not isinstance(expresion, sp.Expr):
             st.error(f"'{entrada_str}' es una palabra reservada, no una expresión.")
@@ -97,6 +134,9 @@ def leer_expresion_st(entrada_str, solo_reales=False):
             return None
 
         return expresion
+    except ValueError as ve:
+        st.error(str(ve))
+        return None
     except Exception:
         st.error(f"La expresión '{entrada_str}' no es válida matemáticamente.")
         return None
@@ -144,7 +184,11 @@ def Crear_Matriz_Simbolica_UI(nombre_matriz=""):
                     ).strip()
                     
                     try:
-                        val_sym = sp.sympify(val_str)
+                        val_sym = parse_seguro(
+                            val_str, 
+                            transformaciones=standard_transformations + (implicit_multiplication_application, convert_xor),
+                            local_dict={"i": sp.I, "j": sp.I, "I": sp.I}
+                        )
                         fila_vals.append(val_sym)
                     except Exception:
                         error_sintaxis = True
@@ -288,8 +332,8 @@ def Crear_Transformacion_UI():
             💡 **Sintaxis del Motor de Cálculo (SymPy):** Use **`p`** para referirse al polinomio, **`x`** como variable principal y **`t`** como auxiliar.
             * **Derivada ($p'(x)$):** `diff(p, x)` | Segunda derivada: `diff(p, x, 2)`
             * **Integral Indefinida ($\int p(x)dx$):** `integrate(p, x)`
-            * **Integral Definida ($\int_0^x p(t)dt$):** `integrate(p.subs(x, t), (t, 0, x))`
             * **Combinaciones Lineales:** `2*diff(p,x) + x*p`
+            * *Nota: Debido a los nuevos filtros de seguridad, ya no se admite la notación `.subs`. Si necesitas evaluar integrandos, utiliza funciones base.*
             """)
             regla_str = st.text_input("Ingrese el operador T(p) =", value="diff(p, x)", key="tl_regla_op")
             
@@ -299,7 +343,7 @@ def Crear_Transformacion_UI():
                 diccionario_local = {'p': p_poly, 'x': x_sym, 't': t_sym, 'diff': sp.diff, 'integrate': sp.integrate}
                 
                 try:
-                    expr_evaluada = sp.expand(parse_expr(regla_str, local_dict=diccionario_local))
+                    expr_evaluada = sp.expand(parse_seguro(regla_str, local_dict=diccionario_local))
                     st.success("Operador evaluado con éxito:")
                     st.latex(f"T(p(x)) = {sp.latex(expr_evaluada)}")
                     
@@ -312,7 +356,6 @@ def Crear_Transformacion_UI():
                     
                     A_can = matriz_regla.jacobian(variables_simbolicas)
                     
-                    # --- SOLUCIÓN 3: Eliminar los 'sp.simplify()' masivos aquí ---
                     M_asociada = Base2.inv() * A_can * Base1
                     
                     st.session_state.temp_tl_mat = M_asociada
@@ -350,7 +393,6 @@ def Crear_Transformacion_UI():
                         else:
                             A_can = matriz_regla.jacobian(variables_simbolicas)
                             
-                            # --- SOLUCIÓN 3: Eliminar 'sp.simplify()' destructivos ---
                             M_asociada = Base2.inv() * A_can * Base1
                             
                             st.session_state.temp_tl_mat = M_asociada
