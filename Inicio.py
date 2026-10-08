@@ -207,31 +207,109 @@ with col2:
 st.write("---")
 
 # ==========================================
-# SECCIÓN ACERCA DE
+# ACERCA DE
 # ==========================================
-st.markdown("## ℹ️ Acerca de MATHESIS")
+st.markdown("---")
 
 st.markdown("""
-**MATHESIS** es un proyecto computacional interactivo desarrollado para facilitar el análisis, 
-la exploración intuitiva y la resolución práctica de modelos cuantitativos en **Álgebra, Geometría, 
-Análisis Vectorial, Economía y Matemáticas Financieras**.
-""")
+    <style>
+    /* Estilos formales para la Ficha Técnica y Autores */
+    .formal-card {
+        background-color: rgba(128, 128, 128, 0.05);
+        border: 1px solid rgba(128, 128, 128, 0.2);
+        border-left: 4px solid #1e3a8a; /* Azul Institucional Sobrio */
+        padding: 20px 24px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .formal-title {
+        font-size: 22px;
+        font-weight: 700;
+        margin-bottom: 12px;
+        letter-spacing: 0.5px;
+    }
+    
+    .author-card {
+        background-color: rgba(128, 128, 128, 0.03);
+        border: 1px solid rgba(128, 128, 128, 0.18);
+        border-radius: 8px;
+        padding: 18px 20px;
+        height: 100%;
+    }
 
-st.markdown("#### 🏛️ Desarrolladores y Contacto")
-st.markdown("Estudiantes de la Licenciatura en **Actuaría** | **Facultad de Ciencias, UNAM**")
+    .author-name {
+        font-size: 17px;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+
+    .author-role {
+        font-size: 13px;
+        opacity: 0.8;
+        margin-bottom: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .author-email {
+        font-size: 13px;
+        font-family: monospace;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="formal-title">ℹ️ Acerca de MATHESIS</div>', unsafe_allow_html=True)
+
+st.markdown("""
+    <div class="formal-card">
+        <p style="margin-top: 0; font-size: 15px; line-height: 1.6;">
+            <b>MATHESIS</b> es un entorno computacional interactivo desarrollado como soporte académico para la modelación, exploración cuantitativa y análisis práctico de sistemas en <b>Álgebra, Geometría, Análisis Vectorial, Economía y Matemáticas Financieras</b>.
+        </p>
+        <hr style="border: 0; border-top: 1px solid rgba(128, 128, 128, 0.2); margin: 14px 0;">
+        <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
+            <tr>
+                <td style="padding: 3px 0; width: 30%;"><b>Institución:</b></td>
+                <td style="padding: 3px 0;">Universidad Nacional Autónoma de México (UNAM)</td>
+            </tr>
+            <tr>
+                <td style="padding: 3px 0;"><b>Entidad Académica:</b></td>
+                <td style="padding: 3px 0;">Facultad de Ciencias</td>
+            </tr>
+            <tr>
+                <td style="padding: 3px 0;"><b>Programa Académico:</b></td>
+                <td style="padding: 3px 0;">Licenciatura en Actuaría</td>
+            </tr>
+        </table>
+    </div>
+""", unsafe_allow_html=True)
+
+st.markdown("##### **Desarrolladores del Programa**")
 
 col_dev1, col_dev2 = st.columns(2)
 
 with col_dev1:
-    with st.container(border=True):
-        st.markdown("#### José Alberto Fernández Cendejas")
-        st.caption("Licenciatura en Actuaría — UNAM")
-        st.write("✉️ **Correo:** jose.fernandezcendejas@ciencias.unam.mx")
+    st.markdown("""
+        <div class="author-card">
+            <div class="author-name">José Alberto Fernández Cendejas</div>
+            <div class="author-role">Licenciatura en Actuaría • UNAM</div>
+            <div class="author-email">✉️ jose.fernandezcendejas@ciencias.unam.mx</div>
+        </div>
+    """, unsafe_allow_html=True)
 
 with col_dev2:
-    with st.container(border=True):
-        st.markdown("#### Ingrid Rebeca Ortega Flores")
-        st.caption("Licenciatura en Actuaría — UNAM")
-        st.write("✉️ **Correo:** i.rebecaorfi@ciencias.unam.mx")
+    st.markdown("""
+        <div class="author-card">
+            <div class="author-name">Ingrid Rebeca Ortega Flores</div>
+            <div class="author-role">Licenciatura en Actuaría • UNAM</div>
+            <div class="author-email">✉️ i.rebecaorfi@ciencias.unam.mx</div>
+        </div>
+    """, unsafe_allow_html=True)
 
-st.caption("MATHESIS © 2026 — Facultad de Ciencias, UNAM")
+st.write("")
+
+st.markdown("""
+    <div style="text-align: center; font-size: 12px; opacity: 0.75; padding-top: 20px; border-top: 1px solid rgba(128, 128, 128, 0.2);">
+        MATHESIS © 2026 • Universidad Nacional Autónoma de México • Facultad de Ciencias
+    </div>
+""", unsafe_allow_html=True)
