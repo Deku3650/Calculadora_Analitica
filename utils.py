@@ -35,7 +35,7 @@ if 'mis_complejos' not in st.session_state:
 def parse_seguro(entrada_str, transformaciones=None, local_dict=None):
     """
     Analiza una cadena matemática de forma segura usando AST.
-    Bloquea atributos (.) y variables con dunders (__) para prevenir inyección de código.
+    Bloquea atributos (.) y comandos de ejecución para prevenir inyección de código.
     """
     if not entrada_str.strip():
         return None
@@ -47,24 +47,27 @@ def parse_seguro(entrada_str, transformaciones=None, local_dict=None):
             ast.unaryop, ast.cmpop, ast.Constant, ast.Name, ast.Load, ast.Call,
             ast.Tuple, ast.Compare, ast.List
         )
+        # Compatibilidad con versiones de Python < 3.8
         if hasattr(ast, 'Num'):
             permitidos += (ast.Num, ast.Str, ast.NameConstant)
 
         for n in ast.walk(arbol):
             if isinstance(n, ast.Attribute):
                 raise ValueError("El acceso a atributos (.) no está permitido por seguridad.")
-            if isinstance(n, ast.Name) and '__' in n.id:
-                raise ValueError(f"Uso de variables o métodos no permitidos: {n.id}")
+            if isinstance(n, ast.Name):
+                # Bloqueo estricto de variables ocultas y funciones de ejecución nativas
+                if '__' in n.id or n.id in {'eval', 'exec', 'compile', 'open', 'globals', 'locals', 'getattr', 'setattr', 'delattr', '__import__'}:
+                    raise ValueError(f"Uso de variables o métodos no permitidos: {n.id}")
             if not isinstance(n, permitidos):
                 raise ValueError(f"Estructura sintáctica no permitida: {type(n).__name__}")
     except Exception as e:
         raise ValueError(f"Sintaxis inválida o insegura: {e}")
 
-    global_dict = {}
     if local_dict is None:
         local_dict = {}
         
-    return parse_expr(entrada_str, transformations=transformaciones, global_dict=global_dict, local_dict=local_dict)
+    # CORRECCIÓN: global_dict=None permite a SymPy cargar sus propias clases (Integer, Float, Symbol) de forma segura.
+    return parse_expr(entrada_str, transformations=transformaciones, global_dict=None, local_dict=local_dict)
 
 
 def evaluar_numerico(matriz_sp):
