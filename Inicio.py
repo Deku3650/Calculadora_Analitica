@@ -209,24 +209,25 @@ st.write("---")
 # ==========================================
 # ACERCA DE
 # ==========================================
+
 st.markdown("---")
 
 st.markdown("""
     <style>
-    /* Estilos formales para la Ficha Técnica y Autores */
+    /* Estilos formales y sobrios */
     .formal-card {
         background-color: rgba(128, 128, 128, 0.05);
         border: 1px solid rgba(128, 128, 128, 0.2);
-        border-left: 4px solid #1e3a8a; /* Azul Institucional Sobrio */
+        border-left: 4px solid #1e3a8a; /* Azul Institucional */
         padding: 20px 24px;
         border-radius: 8px;
-        margin-bottom: 20px;
+        margin-bottom: 24px;
     }
     
     .formal-title {
         font-size: 22px;
         font-weight: 700;
-        margin-bottom: 12px;
+        margin-bottom: 14px;
         letter-spacing: 0.5px;
     }
     
@@ -244,12 +245,11 @@ st.markdown("""
         margin-bottom: 4px;
     }
 
-    .author-role {
+    .author-affiliation {
         font-size: 13px;
-        opacity: 0.8;
-        margin-bottom: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        opacity: 0.85;
+        margin-bottom: 10px;
+        line-height: 1.4;
     }
 
     .author-email {
@@ -263,24 +263,9 @@ st.markdown('<div class="formal-title">ℹ️ Acerca de MATHESIS</div>', unsafe_
 
 st.markdown("""
     <div class="formal-card">
-        <p style="margin-top: 0; font-size: 15px; line-height: 1.6;">
-            <b>MATHESIS</b> es un entorno computacional interactivo desarrollado como soporte académico para la modelación, exploración cuantitativa y análisis práctico de sistemas en <b>Álgebra, Geometría, Análisis Vectorial, Economía y Matemáticas Financieras</b>.
+        <p style="margin: 0; font-size: 15px; line-height: 1.6;">
+            <b>MATHESIS</b> es un entorno computacional interactivo diseñado para facilitar el análisis, la exploración cuantitativa y la resolución práctica de modelos matemáticos aplicados en <b>Álgebra, Geometría, Análisis Vectorial, Economía y Matemáticas Financieras</b>.
         </p>
-        <hr style="border: 0; border-top: 1px solid rgba(128, 128, 128, 0.2); margin: 14px 0;">
-        <table style="width: 100%; font-size: 13px; border-collapse: collapse;">
-            <tr>
-                <td style="padding: 3px 0; width: 30%;"><b>Institución:</b></td>
-                <td style="padding: 3px 0;">Universidad Nacional Autónoma de México (UNAM)</td>
-            </tr>
-            <tr>
-                <td style="padding: 3px 0;"><b>Entidad Académica:</b></td>
-                <td style="padding: 3px 0;">Facultad de Ciencias</td>
-            </tr>
-            <tr>
-                <td style="padding: 3px 0;"><b>Programa Académico:</b></td>
-                <td style="padding: 3px 0;">Licenciatura en Actuaría</td>
-            </tr>
-        </table>
     </div>
 """, unsafe_allow_html=True)
 
@@ -292,7 +277,10 @@ with col_dev1:
     st.markdown("""
         <div class="author-card">
             <div class="author-name">José Alberto Fernández Cendejas</div>
-            <div class="author-role">Licenciatura en Actuaría • UNAM</div>
+            <div class="author-affiliation">
+                Licenciatura en Actuaría<br>
+                Facultad de Ciencias, UNAM
+            </div>
             <div class="author-email">✉️ jose.fernandezcendejas@ciencias.unam.mx</div>
         </div>
     """, unsafe_allow_html=True)
@@ -301,7 +289,10 @@ with col_dev2:
     st.markdown("""
         <div class="author-card">
             <div class="author-name">Ingrid Rebeca Ortega Flores</div>
-            <div class="author-role">Licenciatura en Actuaría • UNAM</div>
+            <div class="author-affiliation">
+                Licenciatura en Actuaría<br>
+                Facultad de Ciencias, UNAM
+            </div>
             <div class="author-email">✉️ i.rebecaorfi@ciencias.unam.mx</div>
         </div>
     """, unsafe_allow_html=True)
