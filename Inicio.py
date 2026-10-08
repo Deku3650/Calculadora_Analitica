@@ -1,30 +1,37 @@
+import matplotlib
+matplotlib.use('Agg')  # Configuración para evitar problemas de memoria/display en servidores
+import matplotlib.pyplot as plt
 import streamlit as st
 
+# ==========================================
 # 1. Configuración de la página
+# ==========================================
 st.set_page_config(page_title="MATHESIS", layout="centered")
 
-# CSS para darle el estilo neón/oscuro a los st.container nativos de Streamlit
+# ============================================
+# CSS ADAPTATIVO PARA EL MODO CLARO Y OSCURO
+# ============================================
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .block-container {padding-top: 1.5rem;}
     
-    /* Personalizar los contenedores nativos de Streamlit para darles aspecto neón/oscuro */
+    /* Adaptación dinámica de contenedores (Cards de módulos) */
     [data-testid="stVerticalBlockBorderWrapper"] {
-        background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%) !important;
-        border: 1px solid #334155 !important;
         border-radius: 16px !important;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
         transition: all 0.25s ease-in-out !important;
+        border: 1px solid rgba(128, 128, 128, 0.25) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
     }
     
     [data-testid="stVerticalBlockBorderWrapper"]:hover {
-        border-color: #38bdf8 !important;
-        box-shadow: 0 8px 22px rgba(56, 189, 248, 0.25) !important;
+        border-color: #0284c7 !important;
+        box-shadow: 0 6px 18px rgba(2, 132, 199, 0.2) !important;
+        transform: translateY(-2px);
     }
 
-    /* Estilar el enlace nativo st.page_link para que parezca el título interactivo */
+    /* Enlaces st.page_link estilizados */
     [data-testid="stPageLink-NavLink"] {
         background-color: transparent !important;
         border: none !important;
@@ -32,62 +39,89 @@ st.markdown("""
     }
     
     [data-testid="stPageLink-NavLink"] p {
-        color: #38bdf8 !important;
-        font-size: 20px !important;
+        color: #0284c7 !important;
+        font-size: 19px !important;
         font-weight: 800 !important;
     }
     
     [data-testid="stPageLink-NavLink"]:hover p {
-        color: #818cf8 !important;
+        color: #6366f1 !important;
         text-decoration: underline !important;
     }
     
-    /* Estilo del Badge/Etiqueta superior */
+    /* Badges / Etiquetas superiores de cada tarjeta */
     .module-badge {
-        background: linear-gradient(90deg, rgba(56, 189, 248, 0.15), rgba(129, 140, 248, 0.15));
-        color: #38bdf8;
+        background: rgba(2, 132, 199, 0.12);
+        color: #0284c7;
         font-size: 11px;
         font-weight: 700;
         padding: 3px 10px;
         border-radius: 8px;
-        border: 1px solid rgba(56, 189, 248, 0.3);
+        border: 1px solid rgba(2, 132, 199, 0.3);
         text-transform: uppercase;
         letter-spacing: 0.8px;
         display: inline-block;
         margin-bottom: 6px;
     }
+
+    /* Subtítulo de Menú de Opciones */
+    .menu-header-container {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 25px;
+        margin-bottom: 20px;
+    }
+
+    .menu-header-title {
+        background: linear-gradient(135deg, #0284c7 0%, #4f46e5 100%);
+        color: #ffffff !important;
+        font-size: 16px;
+        font-weight: 800;
+        letter-spacing: 1.5px;
+        padding: 8px 18px;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+        text-transform: uppercase;
+    }
+
+    .menu-header-line {
+        flex-grow: 1;
+        height: 2px;
+        background: linear-gradient(90deg, rgba(2, 132, 199, 0.4), transparent);
+        border-radius: 2px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-#  ENCABEZADO DESTACADO 
+# ENCABEZADO 
 # ==========================================
 st.markdown("""
     <div style="
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f172a 100%);
-        padding: 35px 25px;
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        padding: 32px 24px;
         border-radius: 20px;
-        border: 1px solid #334155;
-        border-left: 6px solid #38bdf8;
-        box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
         margin-bottom: 25px;
         text-align: center;
     ">
         <span style="
-            background: linear-gradient(90deg, #0284c7, #0369a1);
-            color: #f0f9ff;
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
             font-size: 11px;
             font-weight: 700;
-            letter-spacing: 1.8px;
-            padding: 5px 14px;
+            letter-spacing: 1.5px;
+            padding: 6px 14px;
             border-radius: 20px;
             text-transform: uppercase;
             display: inline-block;
-            margin-bottom: 14px;
-            border: 1px solid #38bdf8;
+            margin-bottom: 12px;
+            border: 1px solid rgba(56, 189, 248, 0.4);
         ">🏛️ UNAM • Facultad de Ciencias • Actuaría</span>
         <h1 style="
-            font-size: 52px;
+            font-size: 50px;
             font-weight: 900;
             margin: 0;
             letter-spacing: 4px;
@@ -97,49 +131,52 @@ st.markdown("""
             line-height: 1.1;
         ">MATHESIS</h1>
         <p style="
-            color: #e2e8f0;
-            font-size: 18px;
+            color: #cbd5e1;
+            font-size: 17px;
             font-weight: 500;
-            margin-top: 12px;
+            margin-top: 10px;
             margin-bottom: 0px;
         ">Matemáticas que se calculan, se exploran y se visualizan.</p>
     </div>
 """, unsafe_allow_html=True)
 
+st.markdown(
+    "¡Bienvenidos a **MATHESIS**! Aquí encontrarás distintas herramientas para explorar, resolver y visualizar problemas matemáticos de forma interactiva."
+)
+
+st.markdown(
+    "Toca el **nombre de cualquiera de los módulos** para acceder directamente a la herramienta interactiva."
+)
+
+# ==========================================
+#  MENÚ DE MÓDULOS
+# ==========================================
 st.markdown("""
-Bienvenidos a Mathesis! Aquí encontrarás distintas herramientas para explorar, resolver y visualizar problemas matemáticos de forma interactiva.
-Toca el **nombre de cualquiera de los módulos** para acceder directamente a la herramienta interactiva.
-""")
-
-st.write("")
-
-# ==========================================
-# MENÚ DE MÓDULOS 
-# ==========================================
-st.markdown("### MENU DE OPCIONES")
+    <div class="menu-header-container">
+        <div class="menu-header-title">📌 Menú de Opciones</div>
+        <div class="menu-header-line"></div>
+    </div>
+""", unsafe_allow_html=True)
 
 col1, col2 = st.columns(2)
 
 with col1:
-    # Módulo 1
+
     with st.container(border=True):
         st.markdown('<span class="module-badge">Visualización</span>', unsafe_allow_html=True)
         st.page_link("pages/1_Geometria.py", label="📐 Geometría")
         st.caption("Áreas, volúmenes, modelado y visualización 3D interactiva.")
 
-    # Módulo 2
     with st.container(border=True):
         st.markdown('<span class="module-badge">Álgebra Lineal</span>', unsafe_allow_html=True)
         st.page_link("pages/3_Transformaciones.py", label="🔄 Transformaciones Lineales")
         st.caption("Núcleo, imagen, isomorfismos y matrices de cambio de base.")
 
-    # 
     with st.container(border=True):
         st.markdown('<span class="module-badge">Actuarial</span>', unsafe_allow_html=True)
         st.page_link("pages/6_Matematicas_Financieras.py", label="📈 Matemáticas Financieras")
         st.caption("Plataforma actuarial de valuación, tasas equivalentes, escenarios dinámicos y cuadros de amortización.")
 
-    
     with st.container(border=True):
         st.markdown('<span class="module-badge">Análisis</span>', unsafe_allow_html=True)
         st.page_link("pages/8_Economia_microeconomia.py", label="💰 Economía y Microeconomía")
@@ -152,19 +189,16 @@ with col2:
         st.page_link("pages/2_Matrices.py", label="🧮 Matrices")
         st.caption("Operaciones lineales, determinantes, matrices Hessianas y análisis espectral.")
 
-
     with st.container(border=True):
         st.markdown('<span class="module-badge">Fundamentos</span>', unsafe_allow_html=True)
         st.page_link("pages/4_Algebra_Superior.py", label="🔢 Álgebra Superior")
         st.caption("Aritmética modular, identidad de Bézout y números complejos.")
-
 
     with st.container(border=True):
         st.markdown('<span class="module-badge">Sistemas A|b</span>', unsafe_allow_html=True)
         st.page_link("pages/5_Vectores_Ecuaciones.py", label="↗️ Vectores y Sistemas")
         st.caption("Proyecciones, ángulos, Gram-Schmidt y resolución de sistemas lineales.")
 
-    
     with st.container(border=True):
         st.markdown('<span class="module-badge">Avanzado</span>', unsafe_allow_html=True)
         st.page_link("pages/7_Ecuaciones_Diferenciales.py", label="🌪️ Análisis Vectorial & Dinámico")
