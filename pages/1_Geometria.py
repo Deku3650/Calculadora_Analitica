@@ -9,10 +9,18 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 st.set_page_config(page_title="Geometría - MATHESIS", page_icon="📐", layout="wide")
 
 # ==============================================================================
-# CSS ESTILIZADO COMPLETO (TÍTULO, PESTAÑAS Y BARRA LATERAL EN AZUL)
+# CSS ESTILIZADO COMPLETO (FUERZA AZUL Y ELIMINA EL ROJO)
 # ==============================================================================
 st.markdown("""
     <style>
+    /* --------------------------------------
+       0. REESCRIBIR VARIABLES GLOBALES DE ROJO A AZUL
+       -------------------------------------- */
+    :root {
+        --primary-color: #0284c7 !important;
+        --stConfig-primaryColor: #0284c7 !important;
+    }
+
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .block-container {padding-top: 1.5rem;}
@@ -39,46 +47,46 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
 
-   /* --------------------------------------
-       2. ESTILIZACIÓN DE PESTAÑAS (ST.TABS)
+    /* --------------------------------------
+       2. ELIMINAR LÍNEA Y BORDES ROJOS DE STREAMLIT (ST.TABS)
        -------------------------------------- */
-    /* Botón base de las pestañas */
-    div[data-baseweb="tab-highlight-container"] + div button,
+    /* Indicador inferior animado de la pestaña activa */
+    div[data-baseweb="tab-highlight"],
+    div[data-baseweb="tab-border"],
+    [data-testid="stTabHeader"] div[aria-selected="true"] {
+        background-color: #38bdf8 !important;
+        border-color: #38bdf8 !important;
+    }
+
+    /* Botones de las pestañas */
     button[data-baseweb="tab"] {
-        border-radius: 12px 12px 0px 0px !important;
-        padding: 10px 24px !important;
+        border-radius: 10px 10px 0px 0px !important;
+        padding: 10px 22px !important;
         font-weight: 700 !important;
         font-size: 15px !important;
-        color: #94a3b8 !important; /* Texto inactivo en tono gris/azul noble */
-        background: transparent !important;
-        transition: all 0.3s ease-in-out !important;
+        transition: all 0.25s ease-in-out !important;
         border: none !important;
+        color: #94a3b8 !important;
     }
-
+    
     /* Pestaña activa / seleccionada */
-    div[data-baseweb="tab-highlight-container"] + div button[aria-selected="true"],
     button[data-baseweb="tab"][aria-selected="true"] {
-        color: #38bdf8 !important; /* Texto azul brillante */
-        background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%) !important;
-        border-bottom: 3px solid #38bdf8 !important;
-        box-shadow: 0 -2px 10px rgba(2, 132, 199, 0.2) !important;
+        color: #38bdf8 !important;
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.2) 0%, rgba(79, 70, 229, 0.2) 100%) !important;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15) !important;
     }
 
-    /* Texto dentro de la pestaña activa */
-    button[data-baseweb="tab"][aria-selected="true"] p {
+    /* Modificar texto interno de la pestaña activa */
+    button[data-baseweb="tab"][aria-selected="true"] p,
+    button[data-baseweb="tab"][aria-selected="true"] span {
         color: #38bdf8 !important;
         font-weight: 800 !important;
     }
 
-    /* Efecto hover en pestañas no activas */
+    /* Hover en pestañas */
     button[data-baseweb="tab"]:hover {
-        color: #38bdf8 !important;
-        background: rgba(2, 132, 199, 0.12) !important;
-    }
-
-    /* Ocultar la línea roja por defecto de Streamlit */
-    div[data-baseweb="tab-highlight"] {
-        background-color: #0284c7 !important;
+        color: #0284c7 !important;
+        background: rgba(2, 132, 199, 0.08) !important;
     }
 
     /* --------------------------------------
@@ -88,7 +96,6 @@ st.markdown("""
         border-right: 1px solid rgba(2, 132, 199, 0.2) !important;
     }
 
-    /* Botones/Enlaces del menú de navegación */
     [data-testid="stSidebarNav"] ul li div a {
         border-radius: 12px !important;
         padding: 10px 14px !important;
@@ -97,7 +104,6 @@ st.markdown("""
         transition: all 0.25s ease-in-out !important;
     }
 
-    /* Hover en elementos del menú */
     [data-testid="stSidebarNav"] ul li div a:hover {
         border-color: #0284c7 !important;
         background: rgba(2, 132, 199, 0.12) !important;
@@ -105,7 +111,6 @@ st.markdown("""
         transform: translateX(4px);
     }
 
-    /* Elemento seleccionado actualmente en la sidebar */
     [data-testid="stSidebarNav"] ul li div a[aria-current="page"] {
         background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(79, 70, 229, 0.25) 100%) !important;
         border: 1px solid #38bdf8 !important;
@@ -115,12 +120,6 @@ st.markdown("""
     [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span {
         color: #38bdf8 !important;
         font-weight: 800 !important;
-        letter-spacing: 0.4px !important;
-    }
-
-    [data-testid="stSidebarNav"] ul li div a span {
-        font-size: 14px !important;
-        font-weight: 600 !important;
     }
 
     /* --------------------------------------
