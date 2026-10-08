@@ -9,7 +9,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 st.set_page_config(page_title="Geometría - MATHESIS", page_icon="📐", layout="wide")
 
 # ==============================================================================
-# CSS ESTILIZADO (ADAPTATIVO, PESTAÑAS Y BARRA LATERAL)
+# CSS ESTILIZADO (TÍTULO Y PESTAÑAS)
 # ==============================================================================
 st.markdown("""
     <style>
@@ -18,70 +18,61 @@ st.markdown("""
     .block-container {padding-top: 1.5rem;}
     
     /* --------------------------------------
-       1. ESTILIZACIÓN DE PESTAÑAS (ST.TABS)
+       1. ESTILO DEL TÍTULO PRINCIPAL
        -------------------------------------- */
-    button[data-baseweb="tab"] {
-        border-radius: 10px 10px 0px 0px !important;
-        padding: 10px 20px !important;
-        font-weight: 700 !important;
-        font-size: 15px !important;
-        transition: all 0.2s ease-in-out !important;
+    .title-container {
+        padding: 1.2rem 1.5rem;
+        border-radius: 16px;
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.15) 0%, rgba(79, 70, 229, 0.15) 100%);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
     }
     
-    /* Pestaña seleccionada */
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #38bdf8 !important;
-        border-bottom: 3px solid #0284c7 !important;
-        background: rgba(2, 132, 199, 0.1) !important;
+    .title-text {
+        font-size: 2.2rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #0284c7 0%, #6366f1 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 0;
+        letter-spacing: -0.5px;
     }
 
     /* --------------------------------------
-       2. CONTENEDORES Y CONTROLES
+       2. ESTILIZACIÓN DE PESTAÑAS (ST.TABS)
+       -------------------------------------- */
+    button[data-baseweb="tab"] {
+        border-radius: 10px 10px 0px 0px !important;
+        padding: 10px 22px !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        transition: all 0.25s ease-in-out !important;
+        border: none !important;
+    }
+    
+    /* Pestaña activa / seleccionada */
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #38bdf8 !important;
+        border-bottom: 3px solid #0284c7 !important;
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.18) 0%, rgba(79, 70, 229, 0.18) 100%) !important;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15) !important;
+    }
+
+    /* Efecto hover en pestañas no activas */
+    button[data-baseweb="tab"]:hover {
+        color: #0284c7 !important;
+        background: rgba(2, 132, 199, 0.08) !important;
+    }
+
+    /* --------------------------------------
+       3. CONTENEDORES DE TARJETAS
        -------------------------------------- */
     [data-testid="stVerticalBlockBorderWrapper"] {
         border-radius: 16px !important;
         transition: all 0.25s ease-in-out !important;
         border: 1px solid rgba(128, 128, 128, 0.25) !important;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
-    }
-
-    /* --------------------------------------
-       3. MENÚ LATERAL (SIDEBAR)
-       -------------------------------------- */
-    [data-testid="stSidebar"] {
-        border-right: 1px solid rgba(128, 128, 128, 0.2) !important;
-    }
-
-    [data-testid="stSidebarNav"] ul li div a {
-        border-radius: 12px !important;
-        padding: 10px 14px !important;
-        margin: 4px 8px !important;
-        border: 1px solid rgba(128, 128, 128, 0.15) !important;
-        transition: all 0.25s ease-in-out !important;
-    }
-
-    [data-testid="stSidebarNav"] ul li div a:hover {
-        border-color: #0284c7 !important;
-        background: rgba(2, 132, 199, 0.12) !important;
-        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2) !important;
-        transform: translateX(4px);
-    }
-
-    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] {
-        background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(79, 70, 229, 0.25) 100%) !important;
-        border: 1px solid #38bdf8 !important;
-        box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25) !important;
-    }
-
-    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span {
-        color: #38bdf8 !important;
-        font-weight: 800 !important;
-        letter-spacing: 0.4px !important;
-    }
-
-    [data-testid="stSidebarNav"] ul li div a span {
-        font-size: 14px !important;
-        font-weight: 600 !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -196,7 +187,13 @@ def renderizar_figura_3d_st(figura, params):
 # ==============================================================================
 # INTERFAZ PRINCIPAL
 # ==============================================================================
-st.title("📐 Módulo de Geometría")
+
+# Encabezado con estilo personalizado
+st.markdown("""
+    <div class="title-container">
+        <h1 class="title-text">📐 Módulo de Geometría</h1>
+    </div>
+""", unsafe_allow_html=True)
 
 tab1, tab2, tab3 = st.tabs(["Figuras 2D", "Geometría Analítica", "Figuras 3D (Áreas y Volúmenes)"])
 
@@ -303,9 +300,8 @@ with tab2:
         st.success(f"La distancia euclidiana es: **{dist:.3f}**")
 
 # ---------------------------------------------------------
-# PESTAÑA 3: FIGURAS 3D  (Área y Volumen)
-# -----------------------------------------------------------------
-
+# PESTAÑA 3: FIGURAS 3D (Consolida Área y Volumen)
+# ---------------------------------------------------------
 with tab3:
     st.subheader("Cálculo Espacial 3D")
     figura_3d = st.selectbox("Figura:", ["Cilindro", "Esfera", "Cono", "Pirámide base cuadrada", "Prisma rectangular", "Prisma triangular"])
