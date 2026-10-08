@@ -60,7 +60,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-#  ENCABEZADO DESTACADO (HERO BANNER)
+#  ENCABEZADO DESTACADO 
 # ==========================================
 st.markdown("""
     <div style="
@@ -107,15 +107,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("""
-¡Bienvenidos a Mathesis! Toca el **nombre de cualquiera de los módulos** para acceder directamente a la herramienta interactiva.
+Bienvenidos a Mathesis! Aquí encontrarás distintas herramientas para explorar, resolver y visualizar problemas matemáticos de forma interactiva.
+Toca el **nombre de cualquiera de los módulos** para acceder directamente a la herramienta interactiva.
 """)
 
 st.write("")
 
 # ==========================================
-# MENÚ DE MÓDULOS (COMPATIBLE AL 100% CON MÓVILES)
+# MENÚ DE MÓDULOS 
 # ==========================================
-st.markdown("### 🛠️ Módulos Disponibles")
+st.markdown("### MENU DE OPCIONES")
 
 col1, col2 = st.columns(2)
 
