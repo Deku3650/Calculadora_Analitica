@@ -91,9 +91,52 @@ st.markdown("""
         background: linear-gradient(90deg, rgba(2, 132, 199, 0.4), transparent);
         border-radius: 2px;
     }
+
+    /* ==========================================
+       ESTILOS PARA LAS PESTAÑAS DEL MENÚ LATERAL
+       ========================================== */
+    [data-testid="stSidebar"] {
+        border-right: 1px solid rgba(128, 128, 128, 0.2) !important;
+    }
+
+    /* Botones/pestañas inactivas */
+    [data-testid="stSidebarNav"] ul li div a {
+        border-radius: 12px !important;
+        padding: 10px 14px !important;
+        margin: 4px 8px !important;
+        border: 1px solid rgba(128, 128, 128, 0.15) !important;
+        transition: all 0.25s ease-in-out !important;
+    }
+
+    /* Efecto al pasar el cursor (Hover) */
+    [data-testid="stSidebarNav"] ul li div a:hover {
+        border-color: #0284c7 !important;
+        background: rgba(2, 132, 199, 0.12) !important;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2) !important;
+        transform: translateX(4px);
+    }
+
+    /* Pestaña ACTIVA (Página actual) */
+    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] {
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(79, 70, 229, 0.25) 100%) !important;
+        border: 1px solid #38bdf8 !important;
+        box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25) !important;
+    }
+
+    /* Texto de la pestaña activa */
+    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span {
+        color: #38bdf8 !important;
+        font-weight: 800 !important;
+        letter-spacing: 0.4px !important;
+    }
+
+    /* Texto general de pestañas */
+    [data-testid="stSidebarNav"] ul li div a span {
+        font-size: 14px !important;
+        font-weight: 600 !important;
+    }
     </style>
 """, unsafe_allow_html=True)
-
 # ==========================================
 # ENCABEZADO 
 # ==========================================
