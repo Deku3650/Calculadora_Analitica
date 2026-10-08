@@ -5,7 +5,86 @@ import sympy as sp
 import math
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-st.set_page_config(page_title="Geometría", layout="wide")
+# 1. CONFIGURACIÓN DE PÁGINA
+st.set_page_config(page_title="Geometría - MATHESIS", page_icon="📐", layout="wide")
+
+# ==============================================================================
+# CSS ESTILIZADO (ADAPTATIVO, PESTAÑAS Y BARRA LATERAL)
+# ==============================================================================
+st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .block-container {padding-top: 1.5rem;}
+    
+    /* --------------------------------------
+       1. ESTILIZACIÓN DE PESTAÑAS (ST.TABS)
+       -------------------------------------- */
+    button[data-baseweb="tab"] {
+        border-radius: 10px 10px 0px 0px !important;
+        padding: 10px 20px !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+    
+    /* Pestaña seleccionada */
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #38bdf8 !important;
+        border-bottom: 3px solid #0284c7 !important;
+        background: rgba(2, 132, 199, 0.1) !important;
+    }
+
+    /* --------------------------------------
+       2. CONTENEDORES Y CONTROLES
+       -------------------------------------- */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        border-radius: 16px !important;
+        transition: all 0.25s ease-in-out !important;
+        border: 1px solid rgba(128, 128, 128, 0.25) !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+    }
+
+    /* --------------------------------------
+       3. MENÚ LATERAL (SIDEBAR)
+       -------------------------------------- */
+    [data-testid="stSidebar"] {
+        border-right: 1px solid rgba(128, 128, 128, 0.2) !important;
+    }
+
+    [data-testid="stSidebarNav"] ul li div a {
+        border-radius: 12px !important;
+        padding: 10px 14px !important;
+        margin: 4px 8px !important;
+        border: 1px solid rgba(128, 128, 128, 0.15) !important;
+        transition: all 0.25s ease-in-out !important;
+    }
+
+    [data-testid="stSidebarNav"] ul li div a:hover {
+        border-color: #0284c7 !important;
+        background: rgba(2, 132, 199, 0.12) !important;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2) !important;
+        transform: translateX(4px);
+    }
+
+    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] {
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(79, 70, 229, 0.25) 100%) !important;
+        border: 1px solid #38bdf8 !important;
+        box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25) !important;
+    }
+
+    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span {
+        color: #38bdf8 !important;
+        font-weight: 800 !important;
+        letter-spacing: 0.4px !important;
+    }
+
+    [data-testid="stSidebarNav"] ul li div a span {
+        font-size: 14px !important;
+        font-weight: 600 !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # ==============================================================================
 # FUNCIONES DE APOYO (Gráficas)
@@ -14,12 +93,12 @@ def graficar_cuadratica_st(a, b, c):
     x = np.linspace(-10, 10, 400)
     y = a*x**2 + b*x + c
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(x, y, label=f"{a}x² + {b}x + {c}", color='blue')
-    ax.axhline(0, color='black', linewidth=1)
-    ax.axvline(0, color='black', linewidth=1)
-    ax.set_title("Representación Gráfica de la Ecuación")
-    ax.grid(True, linestyle='--')
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.plot(x, y, label=f"{a}x² + {b}x + {c}", color='#0284c7', linewidth=2)
+    ax.axhline(0, color='gray', linewidth=1, linestyle='--')
+    ax.axvline(0, color='gray', linewidth=1, linestyle='--')
+    ax.set_title("Representación Gráfica de la Ecuación", fontsize=12, fontweight='bold')
+    ax.grid(True, linestyle=':', alpha=0.6)
     ax.legend()
     return fig
 
@@ -29,12 +108,11 @@ def renderizar_figura_3d_st(figura, params):
     ax = fig.add_subplot(111, projection='3d')
     ax.set_box_aspect([1,1,1])
 
-    color_cara = 'cyan'
+    color_cara = '#38bdf8'
     alfa = 0.5 
 
     if figura == 1: # Cilindro
         r, h = params['r'], params['h']
-        # OPTIMIZACIÓN: Reducción de 50 a 30 puntos
         z = np.linspace(0, h, 30)
         theta = np.linspace(0, 2*np.pi, 30)
         theta_grid, z_grid = np.meshgrid(theta, z)
@@ -45,7 +123,6 @@ def renderizar_figura_3d_st(figura, params):
 
     elif figura == 2: # Esfera
         r = params['r']
-        # OPTIMIZACIÓN: Reducción de 50 a 30 puntos
         u = np.linspace(0, 2 * np.pi, 30)
         v = np.linspace(0, np.pi, 30)
         x = r * np.outer(np.cos(u), np.sin(v))
@@ -65,7 +142,6 @@ def renderizar_figura_3d_st(figura, params):
                 return None
             h = math.sqrt(s**2 - r**2)
 
-        # OPTIMIZACIÓN: Reducción de 50 a 30 puntos
         z = np.linspace(0, h, 30)
         theta = np.linspace(0, 2*np.pi, 30)
         theta_grid, z_grid = np.meshgrid(theta, z)
@@ -120,7 +196,7 @@ def renderizar_figura_3d_st(figura, params):
 # ==============================================================================
 # INTERFAZ PRINCIPAL
 # ==============================================================================
-st.header("📐 Módulo de Geometría")
+st.title("📐 Módulo de Geometría")
 
 tab1, tab2, tab3 = st.tabs(["Figuras 2D", "Geometría Analítica", "Figuras 3D (Áreas y Volúmenes)"])
 
@@ -227,8 +303,9 @@ with tab2:
         st.success(f"La distancia euclidiana es: **{dist:.3f}**")
 
 # ---------------------------------------------------------
-# PESTAÑA 3: FIGURAS 3D (Consolida Área y Volumen)
-# ---------------------------------------------------------
+# PESTAÑA 3: FIGURAS 3D  (Área y Volumen)
+# -----------------------------------------------------------------
+
 with tab3:
     st.subheader("Cálculo Espacial 3D")
     figura_3d = st.selectbox("Figura:", ["Cilindro", "Esfera", "Cono", "Pirámide base cuadrada", "Prisma rectangular", "Prisma triangular"])
