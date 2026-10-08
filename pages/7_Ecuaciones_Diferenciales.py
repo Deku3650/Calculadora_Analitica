@@ -2,11 +2,11 @@ import streamlit as st
 import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy.integrate as spi # AGREGADO: Necesario para simular trayectorias (Retrato de Fase 3D)
-from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application, convert_xor
+import scipy.integrate as spi
+from sympy.parsing.sympy_parser import standard_transformations, implicit_multiplication_application, convert_xor
 
 try:
-    from utils import leer_expresion_st, imprimir_matriz_simbolica
+    from utils import leer_expresion_st, imprimir_matriz_simbolica, parse_seguro
 except ImportError:
     st.error("Error crítico: No se pudo cargar el analizador matemático desde utils.py. Asegúrese de ejecutar la app desde la raíz.")
     st.stop()
@@ -22,19 +22,18 @@ if 'sys_P' not in st.session_state:
     st.session_state.sys_P = None
 if 'sys_Q' not in st.session_state:
     st.session_state.sys_Q = None
-# AGREGADO: Memoria para la tercera dimensión
 if 'sys_R' not in st.session_state:
     st.session_state.sys_R = None
 
 st.title("🌪️ Análisis de Campos Vectoriales y Sistemas Dinámicos")
-st.markdown("Estudio de sistemas lineales y no lineales, retratos de fase, diagonalización, límites asintóticos e isoclinas en $\mathbb{R}^2$ y $\mathbb{R}^3$.")
+st.markdown(r"Estudio de sistemas lineales y no lineales, retratos de fase, diagonalización, límites asintóticos e isoclinas en $\mathbb{R}^2$ y $\mathbb{R}^3$.")
 
 tab_sistemas, tab_edo1 = st.tabs([
     "Sistemas y Plano Fase",
     "Resolutor de EDOs (1er Orden)"
 ])
 
-# Símbolos base globales (Agregados z y c3)
+# Símbolos base globales
 t_sym, x_sym, y_sym, z_sym = sp.symbols('t x y z')
 c1_sym, c2_sym, c3_sym = sp.symbols('c_1 c_2 c_3')
 transf = standard_transformations + (implicit_multiplication_application, convert_xor)
@@ -48,28 +47,26 @@ with tab_sistemas:
     
     with col_input:
         st.subheader("Definición del Campo Vectorial")
-        st.info("💡 Exprese su campo $V(x, y)$ o $V(x, y, z)$.")
+        st.info(r"💡 Exprese su campo $V(x, y)$ o $V(x, y, z)$.")
         
-        # AGREGADO: Opción para Matriz 3x3 en el radio button
         fuente_matriz = st.radio("Entrada:", ["Ecuaciones Explícitas", "Matriz $2\\times2$ (Lineal)", "Matriz $3\\times3$ (Lineal)", "Importar del Módulo de Matrices"])
         
         if fuente_matriz == "Ecuaciones Explícitas":
             with st.form("form_ecuaciones"):
                 str_P = st.text_input("dx/dt = P(x, y, z, t)", value="-x*(y^2 - x^6)")
                 str_Q = st.text_input("dy/dt = Q(x, y, z, t)", value="0")
-                # AGREGADO: Campo opcional para Z
                 str_R = st.text_input("dz/dt = R(x, y, z, t) [Opcional para 3D]", value="")
                 
                 if st.form_submit_button("Analizar Campo Vectorial"):
                     try:
-                        st.session_state.sys_P = parse_expr(str_P, transformations=transf, local_dict=dicc_loc)
-                        st.session_state.sys_Q = parse_expr(str_Q, transformations=transf, local_dict=dicc_loc)
+                        st.session_state.sys_P = parse_seguro(str_P, transformaciones=transf, local_dict=dicc_loc)
+                        st.session_state.sys_Q = parse_seguro(str_Q, transformaciones=transf, local_dict=dicc_loc)
                         if str_R.strip():
-                            st.session_state.sys_R = parse_expr(str_R, transformations=transf, local_dict=dicc_loc)
+                            st.session_state.sys_R = parse_seguro(str_R, transformaciones=transf, local_dict=dicc_loc)
                         else:
                             st.session_state.sys_R = None
                     except Exception as e:
-                        st.error(f"Error de sintaxis: {e}. Revise los paréntesis.")
+                        st.error(f"Error de sintaxis o seguridad: {e}. Revise los caracteres ingresados.")
                         
         elif fuente_matriz == "Matriz $2\\times2$ (Lineal)":
             with st.form("form_matriz_sist"):
@@ -87,7 +84,6 @@ with tab_sistemas:
                         st.session_state.sys_R = None
                     except: st.error("Error en las entradas.")
                     
-        # AGREGADO: Formulario para ingresar Matriz 3x3 manualmente
         elif fuente_matriz == "Matriz $3\\times3$ (Lineal)":
             with st.form("form_matriz_sist_3x3"):
                 c1, c2, c3 = st.columns(3)
@@ -111,10 +107,9 @@ with tab_sistemas:
                     except: st.error("Error en las entradas.")
 
         elif fuente_matriz == "Importar del Módulo de Matrices":
-            # AGREGADO: Compatibilidad con matrices de 3x3
             matrices_compatibles = {k: v for k, v in st.session_state.mis_matrices.items() if v.shape in [(2, 2), (3, 3)]}
             if not matrices_compatibles:
-                st.warning("No hay matrices $2 \times 2$ o $3 \times 3$ guardadas.")
+                st.warning(r"No hay matrices $2 \times 2$ o $3 \times 3$ guardadas.")
             else:
                 nombre_mat = st.selectbox("Seleccione Matriz:", list(matrices_compatibles.keys()))
                 mat = matrices_compatibles[nombre_mat]
@@ -138,18 +133,13 @@ with tab_sistemas:
         P_expr = st.session_state.sys_P
         Q_expr = st.session_state.sys_Q
         es_3d = st.session_state.sys_R is not None
-        Lambda_sym = None # Variable global de seguridad para las gráficas
+        Lambda_sym = None 
         
         if es_3d:
             R_expr = st.session_state.sys_R
             es_autonomo = not (P_expr.has(t_sym) or Q_expr.has(t_sym) or R_expr.has(t_sym))
-            es_lineal = not (P_expr.has(x_sym**2, y_sym**2, z_sym**2, x_sym*y_sym, sp.sin, sp.exp) or 
-                             Q_expr.has(x_sym**2, y_sym**2, z_sym**2, x_sym*y_sym, sp.sin, sp.exp) or 
-                             R_expr.has(x_sym**2, y_sym**2, z_sym**2, x_sym*y_sym, sp.sin, sp.exp))
         else:
             es_autonomo = not (P_expr.has(t_sym) or Q_expr.has(t_sym))
-            es_lineal = not (P_expr.has(x_sym**2, y_sym**2, x_sym*y_sym, sp.sin, sp.exp) or 
-                             Q_expr.has(x_sym**2, y_sym**2, x_sym*y_sym, sp.sin, sp.exp))
         
         with col_info:
             st.subheader("1. Campo Vectorial Interpretado")
@@ -179,8 +169,16 @@ with tab_sistemas:
                     [sp.diff(P_f, x_sym), sp.diff(P_f, y_sym)],
                     [sp.diff(Q_f, x_sym), sp.diff(Q_f, y_sym)]
                 ])
+                
+            # Detección rigurosa de linealidad: Si el Jacobiano no tiene variables de estado, es lineal.
+            if es_3d:
+                es_lineal = not bool(J_sym.free_symbols.intersection({x_sym, y_sym, z_sym}))
+            else:
+                es_lineal = not bool(J_sym.free_symbols.intersection({x_sym, y_sym}))
             
             x0_val, y0_val, z0_val = 0.0, 0.0, 0.0
+            es_equilibrio = True 
+            
             if not es_lineal:
                 st.info("💡 El sistema es **No Lineal**. Evalúe la matriz Jacobiana en un punto crítico para aplicar Hartman-Grobman.")
                 st.latex(rf"J = {sp.latex(J_sym)}")
@@ -193,6 +191,16 @@ with tab_sistemas:
                     c_pt1, c_pt2 = st.columns(2)
                     with c_pt1: x0_val = st.number_input("x_0:", value=0.0)
                     with c_pt2: y0_val = st.number_input("y_0:", value=0.0)
+                    
+                # Verificar que el punto elegido sea realmente un equilibrio
+                sust_pto = {x_sym: x0_val, y_sym: y0_val, z_sym: z0_val} if es_3d else {x_sym: x0_val, y_sym: y0_val}
+                val_P = float(P_f.subs(sust_pto))
+                val_Q = float(Q_f.subs(sust_pto))
+                val_R = float(R_f.subs(sust_pto)) if es_3d else 0.0
+                
+                es_equilibrio = np.isclose(val_P, 0, atol=1e-5) and np.isclose(val_Q, 0, atol=1e-5) and (not es_3d or np.isclose(val_R, 0, atol=1e-5))
+                if not es_equilibrio:
+                    st.warning(rf"⚠️ El punto evaluado **NO es un punto de equilibrio** (el campo vectorial no es nulo ahí: $V \approx [{val_P:.3f}, {val_Q:.3f}{', '+str(round(val_R, 3)) if es_3d else ''}]$). El análisis topológico de Hartman-Grobman carece de sentido fuera de los puntos críticos.")
             else:
                 st.write("El sistema es **Lineal**. El Jacobiano es la matriz de coeficientes constante $A$:")
 
@@ -218,22 +226,45 @@ with tab_sistemas:
 
                 vectores_propios = A_eval.eigenvects()
                 
+                # Verificación de Hiperbolicidad
+                real_parts = [float(sp.re(v[0])) for v in vectores_propios for _ in range(v[1])]
+                es_hiperbolico = all(not np.isclose(r, 0, atol=1e-5) for r in real_parts)
+                
+                if not es_lineal and es_equilibrio and not es_hiperbolico:
+                    st.warning("⚠️ **Punto No Hiperbólico:** Al menos un valor propio tiene parte real cero. El Teorema de Hartman-Grobman falla, por lo que el sistema no lineal podría no comportarse topológicamente igual que su linealización.")
+
                 if not es_3d:
-                    if det < 0: clasificacion = "Punto Silla (Inestable)"
-                    elif det > 0:
-                        if disc > 0: clasificacion = "Nodo Inestable" if traza > 0 else "Nodo Estable"
-                        elif disc < 0: clasificacion = "Foco Inestable (Espiral)" if traza > 0 else "Foco Estable"
-                        else: clasificacion = "Nodo Propio/Impropio " + ("Inestable" if traza > 0 else "Estable")
-                    else: clasificacion = "Punto Crítico Degenerado (Det = 0). Línea de puntos o no aislado."
+                    if np.isclose(float(det), 0, atol=1e-5):
+                        clasificacion = "Punto Crítico Degenerado (Det = 0). Línea de puntos o no aislado."
+                    elif float(det) < 0: 
+                        clasificacion = "Punto Silla (Inestable)"
+                    else: # det > 0
+                        if np.isclose(float(traza), 0, atol=1e-5): 
+                            clasificacion = "Centro (Estable u Oscilatorio)"
+                        elif float(disc) > 0: 
+                            clasificacion = "Nodo Inestable" if float(traza) > 0 else "Nodo Estable"
+                        elif float(disc) < 0: 
+                            clasificacion = "Foco Inestable (Espiral)" if float(traza) > 0 else "Foco Estable"
+                        else: 
+                            clasificacion = "Nodo Propio/Impropio " + ("Inestable" if float(traza) > 0 else "Estable")
                     
                     st.success(f"**Topología Local en $({x0_val}, {y0_val})$:** {clasificacion}")
                 else:
-                    st.success(f"**Topología Local en $({x0_val}, {y0_val}, {z0_val})$:** Análisis 3D (Consulte los valores propios)")
+                    if any(np.isclose(r, 0, atol=1e-5) for r in real_parts):
+                        clasificacion = "Centro, Degenerado o No Hiperbólico (Partes reales nulas)"
+                    elif all(r < -1e-5 for r in real_parts):
+                        clasificacion = "Sumidero / Nodo Estable (Atractor)"
+                    elif all(r > 1e-5 for r in real_parts):
+                        clasificacion = "Fuente / Nodo Inestable (Repulsor)"
+                    elif any(r < -1e-5 for r in real_parts) and any(r > 1e-5 for r in real_parts):
+                        clasificacion = "Punto Silla (Inestable)"
+                    else:
+                        clasificacion = "No clasificado"
+                    st.success(f"**Topología Local en $({x0_val}, {y0_val}, {z0_val})$:** {clasificacion}")
 
                 # ==========================================================
                 # ANÁLISIS PASO A PASO (DIAGONALIZACIÓN Y LÍMITES)
                 # ==========================================================
-                # Blindaje contra componentes imaginarias
                 val_prop_reales = all(v[0].is_real for v in vectores_propios)
                 es_diagonalizable = sum(v[1] for v in vectores_propios) == (3 if es_3d else 2)
                 
@@ -280,14 +311,13 @@ with tab_sistemas:
                                     y2_sol = c2_sym * sp.exp(lambdas[1] * t_sym)
                                     Y_sol = sp.Matrix([y1_sol, y2_sol])
                                 
-                                st.write("**1. Solución en el eje canónico desacoplado $\dot{y} = \Lambda y$:**")
+                                st.write(r"**1. Solución en el eje canónico desacoplado $\dot{y} = \Lambda y$:**")
                                 st.latex(rf"y(t) = {sp.latex(Y_sol)}")
                                 
                                 X_sol = P_sym * Y_sol
                                 st.write("**2. Solución en el sistema original $x(t) = P y(t)$:**")
                                 st.latex(rf"x(t) = {sp.latex(sp.simplify(X_sol))}")
 
-                                # Prevención de errores con límites si es complejo
                                 if val_prop_reales:
                                     if not es_3d and lambdas[0] != lambdas[1]:
                                         st.markdown("### Comportamiento Asintótico (Límites)")
@@ -295,7 +325,7 @@ with tab_sistemas:
                                         y_t_expr = X_sol[1]
                                         razon_expr = y_t_expr / x_t_expr
                                         
-                                        st.write("Pendiente de las trayectorias $m(t) = \\frac{y(t)}{x(t)}$:")
+                                        st.write(r"Pendiente de las trayectorias $m(t) = \frac{y(t)}{x(t)}$:")
                                         st.latex(rf"m(t) = \frac{{{sp.latex(y_t_expr)}}}{{{sp.latex(x_t_expr)}}}")
                                         
                                         try:
@@ -304,10 +334,10 @@ with tab_sistemas:
                                             
                                             c_lim1, c_lim2 = st.columns(2)
                                             with c_lim1:
-                                                st.write("Dirección cuando $t \\to \infty$:")
+                                                st.write(r"Dirección cuando $t \to \infty$:")
                                                 st.latex(rf"\lim_{{t \to \infty}} m(t) = {sp.latex(lim_inf_pos)}")
                                             with c_lim2:
-                                                st.write("Dirección cuando $t \\to -\infty$:")
+                                                st.write(r"Dirección cuando $t \to -\infty$:")
                                                 st.latex(rf"\lim_{{t \to -\infty}} m(t) = {sp.latex(lim_inf_neg)}")
                                                 
                                             st.caption("Los límites asintóticos confirman que las trayectorias nacen o mueren siendo tangentes/paralelas a los vectores propios.")
@@ -326,13 +356,11 @@ with tab_sistemas:
         st.divider()
         st.subheader("3. Análisis Gráfico del Sistema")
         
-        # AGREGADO: Funciones lambdificadas para uso global en gráficas
         func_U = sp.lambdify((x_sym, y_sym, z_sym) if es_3d else (x_sym, y_sym), P_f, modules=['numpy'])
         func_V = sp.lambdify((x_sym, y_sym, z_sym) if es_3d else (x_sym, y_sym), Q_f, modules=['numpy'])
         if es_3d: func_W = sp.lambdify((x_sym, y_sym, z_sym), R_f, modules=['numpy'])
         
         if es_3d:
-            # AGREGADO: Pestañas para 3D y Proyecciones
             tab_vect3d, tab_fase3d, tab_proy = st.tabs(["🔀 Campo Vectorial 3D (Quiver)", "🌌 Retrato de Fase 3D (Trayectorias)", "🪞 Proyecciones en 2D"])
             
             with tab_vect3d:
@@ -353,7 +381,7 @@ with tab_sistemas:
                     st.error(f"Error al generar gráfica 3D: {e}")
                     
             with tab_fase3d:
-                st.write("Generando trayectorias representativas en el espacio fase $\\mathbb{R}^3$...")
+                st.write(r"Generando trayectorias representativas en el espacio fase $\mathbb{R}^3$...")
                 try:
                     fig3d_fase = plt.figure(figsize=(8, 7))
                     ax3d_fase = fig3d_fase.add_subplot(111, projection='3d')
@@ -365,14 +393,13 @@ with tab_sistemas:
                         w = func_W(x_v, y_v, z_v)
                         return [u, v, w]
                     
-                    # Semillas iniciales para las órbitas
                     ics = [
                         [1, 1, 1], [-1, -1, -1], [1, -1, 1], [-1, 1, -1],
                         [2, 0, 0], [0, 2, 0], [0, 0, 2],
                         [-2, 0, 0], [0, -2, 0], [0, 0, -2]
                     ]
-                    t_span = np.linspace(0, 5, 200) # Hacia adelante
-                    t_span_rev = np.linspace(0, -5, 200) # Hacia atrás
+                    t_span = np.linspace(0, 5, 200) 
+                    t_span_rev = np.linspace(0, -5, 200) 
                     
                     for ic in ics:
                         try:
@@ -382,7 +409,7 @@ with tab_sistemas:
                             ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='blue', alpha=0.6, linewidth=1.2)
                             ax3d_fase.plot(traj_b[:,0], traj_b[:,1], traj_b[:,2], color='red', alpha=0.6, linewidth=1.2)
                         except Exception:
-                            pass # Ignorar trayectorias que divergen a infinito
+                            pass 
                     
                     ax3d_fase.set_xlabel("x")
                     ax3d_fase.set_ylabel("y")
@@ -441,10 +468,9 @@ with tab_sistemas:
                 tab_fase, tab_vect = st.tabs(["🌊 Retrato de Fase (Original)", "🔀 Campo Vectorial (Quiver)"])
                 mostrar_canonico = False
 
-            # Se desactiva el caché @st.cache_data que congelaba las gráficas en las tabs.
             def generar_graficas_sistema(str_p, str_q, t_val, str_A=None):
-                p_eq = parse_expr(str_p, transformations=transf, local_dict=dicc_loc).subs(t_sym, t_val)
-                q_eq = parse_expr(str_q, transformations=transf, local_dict=dicc_loc).subs(t_sym, t_val)
+                p_eq = parse_seguro(str_p, transformaciones=transf, local_dict=dicc_loc).subs(t_sym, t_val)
+                q_eq = parse_seguro(str_q, transformaciones=transf, local_dict=dicc_loc).subs(t_sym, t_val)
                 
                 puntos_criticos = []
                 try:
@@ -452,7 +478,6 @@ with tab_sistemas:
                     if isinstance(equilibrios, list):
                         for sol in equilibrios:
                             if x_sym in sol and y_sym in sol:
-                                # Blindaje complejo en los puntos
                                 if sol[x_sym].is_real and sol[y_sym].is_real:
                                     puntos_criticos.append((float(sol[x_sym]), float(sol[y_sym])))
                 except Exception:
@@ -501,15 +526,14 @@ with tab_sistemas:
                         ax1.plot(pt[0], pt[1], 'ro', markersize=8, markeredgecolor='black', zorder=5)
                         ax2.plot(pt[0], pt[1], 'ro', markersize=8, markeredgecolor='black', zorder=5)
 
-                # --- DIBUJAR EJES PROPIOS (VARIEDADES INVARIANTES) ---
                 if str_A is not None:
                     try:
-                        A_mat = parse_expr(str_A, transformations=transf)
+                        A_mat = parse_seguro(str_A, transformaciones=transf)
                         vecs = A_mat.eigenvects()
                         colores_vp = ['orange', 'cyan']
                         idx_c = 0
                         for val, mult, vectores in vecs:
-                            if val.is_real: # Blindaje: Sólo grafica ejes si lambda es real
+                            if val.is_real: 
                                 for v in vectores:
                                     try:
                                         vx, vy = float(v[0]), float(v[1])
@@ -521,7 +545,7 @@ with tab_sistemas:
                                         else:
                                             ax2.axvline(0, color=colores_vp[idx_c % 2], linestyle='--', linewidth=2.5, label=f"Eje Propio $\lambda={val}$")
                                         idx_c += 1
-                                    except: pass # Falla limpia si los componentes del vector son complejos
+                                    except: pass 
                     except:
                         pass
 
@@ -541,7 +565,7 @@ with tab_sistemas:
                 fig3 = None
                 if str_A is not None:
                     try:
-                        A_mat = parse_expr(str_A, transformations=transf)
+                        A_mat = parse_seguro(str_A, transformaciones=transf)
                         vecs = A_mat.eigenvects()
                         if all(v[0].is_real for v in vecs) and sum(v[1] for v in vecs) == 2:
                             lambdas_diag = []
@@ -590,7 +614,7 @@ with tab_sistemas:
                             st.pyplot(fig_canonico)
                         with c_txt2:
                             st.write("**Interpretación:**")
-                            st.write("Este es el plano desacoplado $\dot{y} = \Lambda y$. Aquí los ejes representan directamente las direcciones de los vectores propios. La matriz $P$ aplica una transformación lineal que rota y estira este espacio para formar el retrato de fase original.")
+                            st.write(r"Este es el plano desacoplado $\dot{y} = \Lambda y$. Aquí los ejes representan directamente las direcciones de los vectores propios. La matriz $P$ aplica una transformación lineal que rota y estira este espacio para formar el retrato de fase original.")
 
             except Exception as e:
                 st.error(f"Fallo en renderizado. Es posible que el campo contenga singularidades insolubles en la malla. Detalle: {e}")
@@ -633,13 +657,12 @@ with tab_edo1:
         y = sp.Function('y')(x)
         
         try:
-            eq_parseada = parse_expr(eq_str, transformations=transf, local_dict={'x': x, 'y': y, 'diff': sp.diff, 'exp': sp.exp, 'sin': sp.sin, 'cos': sp.cos})
+            eq_parseada = parse_seguro(eq_str, transformaciones=transf, local_dict={'x': x, 'y': y, 'diff': sp.diff, 'exp': sp.exp, 'sin': sp.sin, 'cos': sp.cos})
             ecuacion_formal = sp.Eq(eq_parseada, 0)
             
             st.latex(sp.latex(ecuacion_formal))
             
             if usar_pvi:
-                from utils import leer_expresion_st
                 x0_val = leer_expresion_st(x0_str)
                 y0_val = leer_expresion_st(y0_str)
                 sol = sp.dsolve(ecuacion_formal, y, ics={y.subs(x, x0_val): y0_val})
