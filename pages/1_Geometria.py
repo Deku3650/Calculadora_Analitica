@@ -9,7 +9,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 st.set_page_config(page_title="Geometría - MATHESIS", page_icon="📐", layout="wide")
 
 # ==============================================================================
-# CSS ESTILIZADO (TÍTULO Y PESTAÑAS)
+# CSS ESTILIZADO COMPLETO (TÍTULO, PESTAÑAS Y BARRA LATERAL EN AZUL)
 # ==============================================================================
 st.markdown("""
     <style>
@@ -66,12 +66,54 @@ st.markdown("""
     }
 
     /* --------------------------------------
-       3. CONTENEDORES DE TARJETAS
+       3. MENÚ LATERAL (SIDEBAR EN AZUL)
+       -------------------------------------- */
+    [data-testid="stSidebar"] {
+        border-right: 1px solid rgba(2, 132, 199, 0.2) !important;
+    }
+
+    /* Botones/Enlaces del menú de navegación */
+    [data-testid="stSidebarNav"] ul li div a {
+        border-radius: 12px !important;
+        padding: 10px 14px !important;
+        margin: 4px 8px !important;
+        border: 1px solid rgba(2, 132, 199, 0.15) !important;
+        transition: all 0.25s ease-in-out !important;
+    }
+
+    /* Hover en elementos del menú */
+    [data-testid="stSidebarNav"] ul li div a:hover {
+        border-color: #0284c7 !important;
+        background: rgba(2, 132, 199, 0.12) !important;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2) !important;
+        transform: translateX(4px);
+    }
+
+    /* Elemento seleccionado actualmente en la sidebar */
+    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] {
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(79, 70, 229, 0.25) 100%) !important;
+        border: 1px solid #38bdf8 !important;
+        box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25) !important;
+    }
+
+    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span {
+        color: #38bdf8 !important;
+        font-weight: 800 !important;
+        letter-spacing: 0.4px !important;
+    }
+
+    [data-testid="stSidebarNav"] ul li div a span {
+        font-size: 14px !important;
+        font-weight: 600 !important;
+    }
+
+    /* --------------------------------------
+       4. CONTENEDORES DE TARJETAS
        -------------------------------------- */
     [data-testid="stVerticalBlockBorderWrapper"] {
         border-radius: 16px !important;
         transition: all 0.25s ease-in-out !important;
-        border: 1px solid rgba(128, 128, 128, 0.25) !important;
+        border: 1px solid rgba(2, 132, 199, 0.25) !important;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
     }
     </style>
