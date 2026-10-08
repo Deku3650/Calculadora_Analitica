@@ -3,7 +3,7 @@ import sympy as sp
 import numpy as np
 
 try:
-    from utils import Crear_Matriz_Simbolica_UI, imprimir_matriz_simbolica, calcular_con_limite, evaluar_numerico
+    from utils import Crear_Matriz_Simbolica_UI, imprimir_matriz_simbolica, calcular_con_limite, evaluar_numerico, leer_expresion_st
 except ImportError:
     st.error("Error al cargar utils.py. Asegúrese de ejecutar la aplicación correctamente.")
 
@@ -96,8 +96,12 @@ with tab_gestion:
                         ).strip()
                         
                         try:
-                            val_sym = sp.sympify(val_str)
-                            fila_vals.append(val_sym)
+                            # CORRECCIÓN PUNTO 1: Blindaje de SymPy usando la función con AST
+                            val_sym = leer_expresion_st(val_str)
+                            if val_sym is not None:
+                                fila_vals.append(val_sym)
+                            else:
+                                error_sintaxis = True
                         except Exception:
                             error_sintaxis = True
                 matriz_elementos.append(fila_vals)
@@ -213,8 +217,12 @@ with tab_basicas:
             
             if operacion == "* Escalar":
                 try:
-                    esc = sp.sympify(escalar_str)
-                    res = esc * matA # Eliminado sp.simplify()
+                    # CORRECCIÓN PUNTO 1: Blindaje de SymPy usando la función con AST
+                    esc = leer_expresion_st(escalar_str)
+                    if esc is not None:
+                        res = esc * matA # Eliminado sp.simplify()
+                    else:
+                        st.error("Escalar inválido.")
                 except Exception:
                     st.error("Escalar inválido.")
             else:
@@ -382,16 +390,18 @@ with tab_avanzadas:
         
         if st.button("Calcular Hessiana"):
             try:
-                f = sp.sympify(expr_str)
-                vars_list = list(f.free_symbols)
-                if not vars_list:
-                    st.error("La función es constante.")
-                else:
-                    vars_list.sort(key=lambda v: v.name)
-                    # BLINDAJE CON TIMEOUT
-                    H = calcular_con_limite(sp.hessian, args=(f, vars_list), timeout=5)
-                    st.success(f"Función detectada: \(f({', '.join([v.name for v in vars_list])})\)")
-                    st.session_state.temp_avanzada = H
+                # CORRECCIÓN PUNTO 1: Blindaje de SymPy usando la función con AST
+                f = leer_expresion_st(expr_str)
+                if f is not None:
+                    vars_list = list(f.free_symbols)
+                    if not vars_list:
+                        st.error("La función es constante.")
+                    else:
+                        vars_list.sort(key=lambda v: v.name)
+                        # BLINDAJE CON TIMEOUT
+                        H = calcular_con_limite(sp.hessian, args=(f, vars_list), timeout=5)
+                        st.success(f"Función detectada: \(f({', '.join([v.name for v in vars_list])})\)")
+                        st.session_state.temp_avanzada = H
             except TimeoutError as e:
                 st.error(str(e))
             except Exception:
@@ -477,13 +487,20 @@ with tab_espectral:
                     
                     st.divider()
                     st.write("**3. Diagonalización**")
-                    if len(columnas_P) == A.shape[0]:
-                        st.success("La matriz **SÍ** es diagonalizable.")
+                    
+                    # CORRECCIÓN PUNTO 2: Verificación estricta del rango de la matriz de eigenvectores
+                    rango_P = np.linalg.matrix_rank(v, tol=1e-5)
+                    
+                    if rango_P == A.shape[0]:
+                        st.success("La matriz **SÍ** es diagonalizable (Aproximación Numérica).")
+                        st.warning("⚠️ **Nota:** Estos resultados son aproximaciones de punto flotante. Debido al redondeo, $P \cdot D \cdot P^{-1}$ podría diferir ligeramente de $A$.")
+                        
                         P = sp.Matrix.hstack(*columnas_P)
                         D = sp.diag(*[np.round(val, 4) for val in w])
                         
                         try:
-                            P_inv = sp.Matrix(np.round(np.linalg.inv(np.array(P).astype(np.float64)), 4))
+                            # Numpy inversion is generally safer/faster for purely numerical matrices
+                            P_inv = sp.Matrix(np.round(np.linalg.inv(v), 4))
                         except Exception:
                             P_inv = calcular_con_limite(P.inv, timeout=5)
                         
@@ -498,7 +515,7 @@ with tab_espectral:
                             st.write("Inversa ($P^{-1}$)")
                             imprimir_matriz_simbolica(P_inv)
                     else:
-                        st.error("La matriz **NO** es diagonalizable de forma numérica.")
+                        st.error(f"La matriz **NO** es diagonalizable numéricamente. La matriz de vectores propios es defectuosa (Rango numérico de P es {rango_P} de {A.shape[0]}).")
                         
                 else:
                     # BLINDAJE POR TIMEOUT PARA MATRICES SIMBÓLICAS O PEQUEÑAS
