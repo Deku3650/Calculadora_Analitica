@@ -5,134 +5,14 @@ import sympy as sp
 import math
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
+# Importar el módulo centralizado de estilos globales
+from estilos import cargar_estilos_globales
+
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Geometría - MATHESIS", page_icon="📐", layout="wide")
 
-# ==============================================================================
-# CSS ESTILIZADO COMPLETO (FUERZA AZUL Y ELIMINA EL ROJO)
-# ==============================================================================
-st.markdown("""
-    <style>
-    /* --------------------------------------
-       0. REESCRIBIR VARIABLES GLOBALES DE ROJO A AZUL
-       -------------------------------------- */
-    :root {
-        --primary-color: #0284c7 !important;
-        --stConfig-primaryColor: #0284c7 !important;
-    }
-
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    .block-container {padding-top: 1.5rem;}
-    
-    /* --------------------------------------
-       1. ESTILO DEL TÍTULO PRINCIPAL
-       -------------------------------------- */
-    .title-container {
-        padding: 1.2rem 1.5rem;
-        border-radius: 16px;
-        background: linear-gradient(135deg, rgba(2, 132, 199, 0.15) 0%, rgba(79, 70, 229, 0.15) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.3);
-        margin-bottom: 1.5rem;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-    }
-    
-    .title-text {
-        font-size: 2.2rem;
-        font-weight: 800;
-        background: linear-gradient(135deg, #0284c7 0%, #6366f1 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin: 0;
-        letter-spacing: -0.5px;
-    }
-
-    /* --------------------------------------
-       2. ELIMINAR LÍNEA Y BORDES ROJOS DE STREAMLIT (ST.TABS)
-       -------------------------------------- */
-    /* Indicador inferior animado de la pestaña activa */
-    div[data-baseweb="tab-highlight"],
-    div[data-baseweb="tab-border"],
-    [data-testid="stTabHeader"] div[aria-selected="true"] {
-        background-color: #38bdf8 !important;
-        border-color: #38bdf8 !important;
-    }
-
-    /* Botones de las pestañas */
-    button[data-baseweb="tab"] {
-        border-radius: 10px 10px 0px 0px !important;
-        padding: 10px 22px !important;
-        font-weight: 700 !important;
-        font-size: 15px !important;
-        transition: all 0.25s ease-in-out !important;
-        border: none !important;
-        color: #94a3b8 !important;
-    }
-    
-    /* Pestaña activa / seleccionada */
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #38bdf8 !important;
-        background: linear-gradient(135deg, rgba(2, 132, 199, 0.2) 0%, rgba(79, 70, 229, 0.2) 100%) !important;
-        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15) !important;
-    }
-
-    /* Modificar texto interno de la pestaña activa */
-    button[data-baseweb="tab"][aria-selected="true"] p,
-    button[data-baseweb="tab"][aria-selected="true"] span {
-        color: #38bdf8 !important;
-        font-weight: 800 !important;
-    }
-
-    /* Hover en pestañas */
-    button[data-baseweb="tab"]:hover {
-        color: #0284c7 !important;
-        background: rgba(2, 132, 199, 0.08) !important;
-    }
-
-    /* --------------------------------------
-       3. MENÚ LATERAL (SIDEBAR EN AZUL)
-       -------------------------------------- */
-    [data-testid="stSidebar"] {
-        border-right: 1px solid rgba(2, 132, 199, 0.2) !important;
-    }
-
-    [data-testid="stSidebarNav"] ul li div a {
-        border-radius: 12px !important;
-        padding: 10px 14px !important;
-        margin: 4px 8px !important;
-        border: 1px solid rgba(2, 132, 199, 0.15) !important;
-        transition: all 0.25s ease-in-out !important;
-    }
-
-    [data-testid="stSidebarNav"] ul li div a:hover {
-        border-color: #0284c7 !important;
-        background: rgba(2, 132, 199, 0.12) !important;
-        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2) !important;
-        transform: translateX(4px);
-    }
-
-    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] {
-        background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(79, 70, 229, 0.25) 100%) !important;
-        border: 1px solid #38bdf8 !important;
-        box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25) !important;
-    }
-
-    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span {
-        color: #38bdf8 !important;
-        font-weight: 800 !important;
-    }
-
-    /* --------------------------------------
-       4. CONTENEDORES DE TARJETAS
-       -------------------------------------- */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        border-radius: 16px !important;
-        transition: all 0.25s ease-in-out !important;
-        border: 1px solid rgba(2, 132, 199, 0.25) !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# 2. CARGAR ESTILOS GLOBALES (AZUL)
+cargar_estilos_globales()
 
 # ==============================================================================
 # FUNCIONES DE APOYO (Gráficas)
@@ -245,7 +125,7 @@ def renderizar_figura_3d_st(figura, params):
 # INTERFAZ PRINCIPAL
 # ==============================================================================
 
-# Encabezado con estilo personalizado
+# Encabezado estilizado
 st.markdown("""
     <div class="title-container">
         <h1 class="title-text">📐 Módulo de Geometría</h1>
