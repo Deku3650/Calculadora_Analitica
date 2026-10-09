@@ -312,15 +312,16 @@ with tab_sistemas:
                                             eq_fila += A_eval[i,j] * funcs[j]
                                         eqs_lin.append(sp.Eq(funcs[i].diff(t_sym), eq_fila))
                                         
-                                    # BLINDAJE DE RESOLUTOR: Evitar congelamiento en sistemas inmensos
                                     sol_real = calcular_con_limite(sp.dsolve, args=(eqs_lin,), timeout=10)
                                     
-                                    st.write("**Solución analítica del sistema original (Expresión Real Analítica):**")
+                                    st.write("**Solución analítica del sistema original:**")
                                     for eq_sol in sol_real:
-                                        st.latex(sp.latex(eq_sol))
+                                        # Transformar exponenciales complejas a senos y cosenos reales
+                                        eq_trig = sp.trigsimp(eq_sol.rewrite(sp.sin))
+                                        st.latex(sp.latex(eq_trig))
                                         
                                 except Exception:
-                                    st.warning("No se pudo forzar la simplificación a senos y cosenos reales. Mostrando solución compleja.")
+                                    st.warning("No se pudo simplificar la solución explícita.")
 
                                 if val_prop_reales:
                                     if not es_3d and lambdas[0] != lambdas[1]:
@@ -348,7 +349,7 @@ with tab_sistemas:
                                         except:
                                             st.warning("Los límites asintóticos dependen fuertemente de las condiciones iniciales.")
                                 else:
-                                    st.info("💡 **Nota Importante:** Los valores propios son imaginarios/complejos. Esto indica un comportamiento oscilatorio (rotaciones, focos o centros). Las soluciones se expresan mediante funciones trigonométricas (seno y coseno), por lo que el análisis de asíntotas lineales no aplica.")
+                                    st.info("💡 **Nota Matemática:** Los valores propios son complejos. El comportamiento oscilatorio (rotaciones) implica funciones periódicas (senos y cosenos), por lo que las trayectorias giran en torno a los ejes en lugar de tender a una asíntota lineal directa.")
 
                             except Exception as e:
                                 st.error(f"Error en la diagonalización: {e}")
@@ -389,7 +390,7 @@ with tab_sistemas:
                     st.error(f"Error al generar gráfica 3D: {e}")
                     
             with tab_fase3d:
-                st.write(r"Generando trayectorias reales en $\mathbb{R}^3$...")
+                st.write(r"Generando trayectorias dinámicas hacia adelante ($t \ge 0$) en $\mathbb{R}^3$...")
                 try:
                     fig3d_fase = plt.figure(figsize=(8, 8))
                     ax3d_fase = fig3d_fase.add_subplot(111, projection='3d')
@@ -403,61 +404,45 @@ with tab_sistemas:
                         x_v, y_v, z_v = Y
                         return [func_U(x_v, y_v, z_v), func_V(x_v, y_v, z_v), func_W(x_v, y_v, z_v)]
                     
-                    # Semillas iniciales cruzadas y microscópicas para garantizar que los resortes 
-                    # altamente inestables logren dar vueltas visibles antes de escapar
-                    ics = [
-                        [2, 2, 2], [-2, -2, -2], [2, -2, 2], [-2, 2, -2],
-                        [3, 3, 1e-3], [-3, -3, 1e-3], [3, -3, -1e-3], [-3, 3, -1e-3],
-                        [1e-3, 1e-3, 3], [-1e-3, -1e-3, -3], [1e-3, -1e-3, 3], [-1e-3, 1e-3, -3],
-                        [1e-4, 1e-4, 1e-4], [-1e-4, -1e-4, -1e-4]
+                    # Condiciones Iniciales Distribuidas Geométricamente
+                    # Capturan el comportamiento cerca y lejos del origen en sistemas estables/inestables
+                    radios = [0.1, 1.0, 3.0]
+                    puntos_base = [
+                        [1,0,0], [0,1,0], [0,0,1],
+                        [-1,0,0], [0,-1,0], [0,0,-1],
+                        [0.577, 0.577, 0.577], [-0.577, -0.577, -0.577],
+                        [0.577, -0.577, 0.577], [-0.577, 0.577, -0.577]
                     ]
+                    ics = [r * np.array(pt) for r in radios for pt in puntos_base]
                     
-                    t_span = np.linspace(0, 15, 3000) 
-                    t_span_rev = np.linspace(0, -15, 3000) 
-                    
+                    t_span = np.linspace(0, 30, 3000) 
                     trayectorias_f = []
-                    trayectorias_b = []
                     
                     for ic in ics:
                         try:
-                            # BLINDAJE DE INTEGRACIÓN: Limitamos los pasos máximos para evitar que matrices explosivas congelen scipy
-                            traj_f = spi.odeint(vector_field_3d, ic, t_span, mxstep=1500)
-                            traj_b = spi.odeint(vector_field_3d, ic, t_span_rev, mxstep=1500)
+                            traj_f = spi.odeint(vector_field_3d, ic, t_span, mxstep=2000)
                             
-                            mask_f = np.max(np.abs(traj_f), axis=1) <= 5.0
-                            mask_b = np.max(np.abs(traj_b), axis=1) <= 5.0
+                            # CORTE EXACTO: Si la trayectoria escapa del cubo [-5, 5], la cortamos en ese instante
+                            fueras = np.where(np.max(np.abs(traj_f), axis=1) > 5.0)[0]
+                            if len(fueras) > 0:
+                                traj_f = traj_f[:fueras[0]]
                             
-                            traj_f_filt = traj_f[mask_f]
-                            traj_b_filt = traj_b[mask_b]
-                            
-                            if len(traj_f_filt) > 1:
-                                trayectorias_f.append(traj_f_filt)
-                                ax3d_fase.plot(traj_f_filt[:,0], traj_f_filt[:,1], traj_f_filt[:,2], color='royalblue', alpha=0.8, linewidth=1.5)
-                            if len(traj_b_filt) > 1:
-                                trayectorias_b.append(traj_b_filt)
-                                ax3d_fase.plot(traj_b_filt[:,0], traj_b_filt[:,1], traj_b_filt[:,2], color='crimson', alpha=0.8, linewidth=1.5)
-                            
-                            # UNA SOLA FLECHA DIRECCIONAL POR CURVA
-                            for trayecto in [traj_f_filt, traj_b_filt]:
-                                if len(trayecto) > 20:
-                                    mid_idx = len(trayecto) // 2
-                                    pt = trayecto[mid_idx]
-                                    u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
-                                    norm = np.linalg.norm([u, v, w])
-                                    if norm > 1e-5:
-                                        ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, 
-                                                         color='black', length=0.8, normalize=True, arrow_length_ratio=0.5, linewidth=1.5)
+                            if len(traj_f) > 5:
+                                trayectorias_f.append(traj_f)
+                                ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='royalblue', alpha=0.8, linewidth=1.2)
+                                
+                                # Indicador de dirección (Punto de inicio en t=0)
+                                ax3d_fase.plot([traj_f[0,0]], [traj_f[0,1]], [traj_f[0,2]], marker='o', markersize=3, color='darkblue')
                         except Exception:
                             pass 
                     
                     st.session_state.trayectorias_f = trayectorias_f
-                    st.session_state.trayectorias_b = trayectorias_b
                     
                     ax3d_fase.set_xlabel("x")
                     ax3d_fase.set_ylabel("y")
                     ax3d_fase.set_zlabel("z")
                     ax3d_fase.set_xlim([-5, 5]); ax3d_fase.set_ylim([-5, 5]); ax3d_fase.set_zlim([-5, 5])
-                    ax3d_fase.set_title("Retrato de Fase 3D (Rojo: t<0, Azul: t>0)")
+                    ax3d_fase.set_title("Retrato de Fase 3D (Tiempo Adelante)")
                     st.pyplot(fig3d_fase)
                 except Exception as e:
                     st.error(f"Error al generar trayectorias 3D: {e}")
@@ -469,36 +454,21 @@ with tab_sistemas:
                     inv_yz = sp.simplify(P_f.subs(x_sym, 0)) == 0
                     
                     if not (inv_xy or inv_xz or inv_yz):
-                        st.info("💡 **Nota Matemática:** Este sistema no posee planos cartesianos invariantes. Esto significa que cualquier trayectoria que inicie en un plano z=0, y=0 o x=0 escapará inevitablemente hacia la tercera dimensión. Por rigor topológico, las proyecciones 2D de campos estáticos se han omitido, ya que graficarlas resultaría en campos que no representan el flujo real.")
+                        st.info("💡 **Nota Matemática:** Este sistema no posee planos cartesianos invariantes. Esto significa que cualquier trayectoria que inicie en un plano z=0, y=0 o x=0 escapará hacia la tercera dimensión. Por rigor topológico, graficar vectores 2D estáticos carece de sentido.")
+                        st.write("A continuación se muestran las **proyecciones de las trayectorias espaciales (resortes)** sobre los planos:")
                         
-                        st.write("Sin embargo, aquí están las **proyecciones de las trayectorias espaciales reales** sobre los planos cartesianos:")
                         fig_proy, (ax_xy, ax_xz, ax_yz) = plt.subplots(1, 3, figsize=(15, 5))
                         
                         if 'trayectorias_f' in st.session_state:
-                            for traj_f, traj_b in zip(st.session_state.trayectorias_f, st.session_state.trayectorias_b):
-                                ax_xy.plot(traj_f[:,0], traj_f[:,1], color='royalblue', alpha=0.5)
-                                ax_xy.plot(traj_b[:,0], traj_b[:,1], color='crimson', alpha=0.5)
-                                ax_xz.plot(traj_f[:,0], traj_f[:,2], color='royalblue', alpha=0.5)
-                                ax_xz.plot(traj_b[:,0], traj_b[:,2], color='crimson', alpha=0.5)
-                                ax_yz.plot(traj_f[:,1], traj_f[:,2], color='royalblue', alpha=0.5)
-                                ax_yz.plot(traj_b[:,1], traj_b[:,2], color='crimson', alpha=0.5)
-                                
-                                # UNA SOLA FLECHA PROYECTADA POR CURVA
-                                for trayecto in [traj_f, traj_b]:
-                                    if len(trayecto) > 20:
-                                        mid_idx = len(trayecto) // 2
-                                        pt = trayecto[mid_idx]
-                                        u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
-                                        
-                                        norm_xy = np.hypot(u, v)
-                                        if norm_xy > 1e-5:
-                                            ax_xy.quiver(pt[0], pt[1], u/norm_xy, v/norm_xy, color='black', scale=20, width=0.015)
-                                        norm_xz = np.hypot(u, w)
-                                        if norm_xz > 1e-5:
-                                            ax_xz.quiver(pt[0], pt[2], u/norm_xz, w/norm_xz, color='black', scale=20, width=0.015)
-                                        norm_yz = np.hypot(v, w)
-                                        if norm_yz > 1e-5:
-                                            ax_yz.quiver(pt[1], pt[2], v/norm_yz, w/norm_yz, color='black', scale=20, width=0.015)
+                            for traj_f in st.session_state.trayectorias_f:
+                                ax_xy.plot(traj_f[:,0], traj_f[:,1], color='royalblue', alpha=0.6)
+                                ax_xy.plot([traj_f[0,0]], [traj_f[0,1]], marker='o', markersize=3, color='darkblue')
+
+                                ax_xz.plot(traj_f[:,0], traj_f[:,2], color='royalblue', alpha=0.6)
+                                ax_xz.plot([traj_f[0,0]], [traj_f[0,2]], marker='o', markersize=3, color='darkblue')
+
+                                ax_yz.plot(traj_f[:,1], traj_f[:,2], color='royalblue', alpha=0.6)
+                                ax_yz.plot([traj_f[0,1]], [traj_f[0,2]], marker='o', markersize=3, color='darkblue')
 
                         ax_xy.set_title("Proyección XY"); ax_xy.set_xlabel("x"); ax_xy.set_ylabel("y")
                         ax_xy.grid(True, linestyle='--', alpha=0.5); ax_xy.axhline(0, color='black'); ax_xy.axvline(0, color='black')
@@ -524,7 +494,6 @@ with tab_sistemas:
                         
                         if inv_xy:
                             try:
-                                # Aplicar cálculo de equilibrio seguro
                                 equilibrios_xy = calcular_con_limite(sp.solve, args=([P_f.subs(z_sym,0), Q_f.subs(z_sym,0)], (x_sym, y_sym)), kwargs={'dict':True}, timeout=5)
                             except Exception: pass
                             
@@ -532,7 +501,7 @@ with tab_sistemas:
                             U_xy = np.broadcast_to(func_U(X_m, Y_m, 0), X_m.shape).astype(np.float64)
                             V_xy = np.broadcast_to(func_V(X_m, Y_m, 0), X_m.shape).astype(np.float64)
                             vel_xy = np.sqrt(U_xy**2 + V_xy**2)
-                            ax.streamplot(X_m, Y_m, U_xy, V_xy, color=vel_xy, cmap='viridis', density=1.2, arrowsize=1.5)
+                            ax.streamplot(X_m, Y_m, U_xy, V_xy, color=vel_xy, cmap='viridis', density=1.2)
                             ax.set_title("Plano Invariante XY (z=0)")
                             ax.set_xlabel("x"); ax.set_ylabel("y")
                             ax.grid(True, linestyle='--', alpha=0.5)
@@ -544,7 +513,7 @@ with tab_sistemas:
                             U_xz = np.broadcast_to(func_U(X_m, 0, Y_m), X_m.shape).astype(np.float64)
                             W_xz = np.broadcast_to(func_W(X_m, 0, Y_m), X_m.shape).astype(np.float64)
                             vel_xz = np.sqrt(U_xz**2 + W_xz**2)
-                            ax.streamplot(X_m, Y_m, U_xz, W_xz, color=vel_xz, cmap='viridis', density=1.2, arrowsize=1.5)
+                            ax.streamplot(X_m, Y_m, U_xz, W_xz, color=vel_xz, cmap='viridis', density=1.2)
                             ax.set_title("Plano Invariante XZ (y=0)")
                             ax.set_xlabel("x"); ax.set_ylabel("z")
                             ax.grid(True, linestyle='--', alpha=0.5)
@@ -556,7 +525,7 @@ with tab_sistemas:
                             V_yz = np.broadcast_to(func_V(0, X_m, Y_m), X_m.shape).astype(np.float64)
                             W_yz = np.broadcast_to(func_W(0, X_m, Y_m), X_m.shape).astype(np.float64)
                             vel_yz = np.sqrt(V_yz**2 + W_yz**2)
-                            ax.streamplot(X_m, Y_m, V_yz, W_yz, color=vel_yz, cmap='viridis', density=1.2, arrowsize=1.5)
+                            ax.streamplot(X_m, Y_m, V_yz, W_yz, color=vel_yz, cmap='viridis', density=1.2)
                             ax.set_title("Plano Invariante YZ (x=0)")
                             ax.set_xlabel("y"); ax.set_ylabel("z")
                             ax.grid(True, linestyle='--', alpha=0.5)
@@ -580,7 +549,6 @@ with tab_sistemas:
                 
                 puntos_criticos = []
                 try:
-                    # BLINDAJE DE PUNTOS CRÍTICOS (Evitar cuelgues en funciones complejas)
                     equilibrios = calcular_con_limite(sp.solve, args=([p_eq, q_eq], (x_sym, y_sym)), kwargs={'dict':True}, timeout=5)
                     if isinstance(equilibrios, list):
                         for sol in equilibrios:
@@ -621,7 +589,7 @@ with tab_sistemas:
                 V_s = np.broadcast_to(func_V(X_s, Y_s), X_s.shape).astype(np.float64)
                 velocidad = np.sqrt(U_s**2 + V_s**2)
                 
-                ax2.streamplot(X_s, Y_s, U_s, V_s, color=velocidad, cmap='viridis', linewidth=1.2, arrowsize=1.5, density=1.5)
+                ax2.streamplot(X_s, Y_s, U_s, V_s, color=velocidad, cmap='viridis', linewidth=1.2)
                 
                 try:
                     if np.ptp(U_s) > 0: ax2.contour(X_s, Y_s, U_s, levels=[0], colors=['red'], alpha=0.6, linewidths=2.0)
@@ -686,7 +654,7 @@ with tab_sistemas:
                             V_c = lambdas_diag[1] * Y_c
                             velocidad_c = np.sqrt(U_c**2 + V_c**2)
                             
-                            ax3.streamplot(X_c, Y_c, U_c, V_c, color=velocidad_c, cmap='plasma', linewidth=1.2, arrowsize=1.5, density=1.5)
+                            ax3.streamplot(X_c, Y_c, U_c, V_c, color=velocidad_c, cmap='plasma', linewidth=1.2)
                             ax3.set_xlim([-5, 5]); ax3.set_ylim([-5, 5])
                             ax3.axhline(0, color='black', linewidth=1.5); ax3.axvline(0, color='black', linewidth=1.5)
                             ax3.plot(0, 0, 'ro', markersize=8, markeredgecolor='black', zorder=5)
