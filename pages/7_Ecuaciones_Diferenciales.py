@@ -134,7 +134,6 @@ with tab_sistemas:
         Q_expr = st.session_state.sys_Q
         es_3d = st.session_state.sys_R is not None
         Lambda_sym = None 
-        lambdas_diag = [] # Guardará los eigenvalores para las proyecciones canónicas
         
         if es_3d:
             R_expr = st.session_state.sys_R
@@ -199,7 +198,7 @@ with tab_sistemas:
                 
                 es_equilibrio = np.isclose(val_P, 0, atol=1e-5) and np.isclose(val_Q, 0, atol=1e-5) and (not es_3d or np.isclose(val_R, 0, atol=1e-5))
                 if not es_equilibrio:
-                    st.warning(rf"⚠️ El punto evaluado **NO es un punto de equilibrio** (el campo vectorial no es nulo ahí: $V \approx [{val_P:.3f}, {val_Q:.3f}{', '+str(round(val_R, 3)) if es_3d else ''}]$). El análisis topológico de Hartman-Grobman carece de sentido fuera de los puntos críticos.")
+                    st.warning(rf"⚠️ El punto evaluado **NO es un punto de equilibrio** (el campo vectorial no es nulo ahí). El análisis topológico de Hartman-Grobman carece de sentido fuera de los puntos críticos.")
             else:
                 st.write("El sistema es **Lineal**. El Jacobiano es la matriz de coeficientes constante $A$:")
 
@@ -229,11 +228,11 @@ with tab_sistemas:
                 es_hiperbolico = all(not np.isclose(r, 0, atol=1e-5) for r in real_parts)
                 
                 if not es_lineal and es_equilibrio and not es_hiperbolico:
-                    st.warning("⚠️ **Punto No Hiperbólico:** Al menos un valor propio tiene parte real cero. El Teorema de Hartman-Grobman falla, por lo que el sistema no lineal podría no comportarse topológicamente igual que su linealización.")
+                    st.warning("⚠️ **Punto No Hiperbólico:** Al menos un valor propio tiene parte real cero. El Teorema de Hartman-Grobman falla.")
 
                 if not es_3d:
                     if np.isclose(float(det), 0, atol=1e-5):
-                        clasificacion = "Punto Crítico Degenerado (Det = 0). Línea de puntos o no aislado."
+                        clasificacion = "Punto Crítico Degenerado (Det = 0)."
                     elif float(det) < 0: 
                         clasificacion = "Punto Silla (Inestable)"
                     else: 
@@ -279,7 +278,6 @@ with tab_sistemas:
                             for vec in vecs:
                                 P_mat.append(vec)
                                 lambdas.append(val)
-                                lambdas_diag.append(val) # Guardar para gráficos canónicos
                                 
                         if len(P_mat) == (3 if es_3d else 2):
                             P_sym = sp.Matrix.hstack(*P_mat)
@@ -318,9 +316,8 @@ with tab_sistemas:
                                     
                                     st.write("**Solución analítica del sistema original:**")
                                     for eq_sol in sol_real:
-                                        # Transformar exponenciales complejas a senos y cosenos reales (Identidad de Euler)
-                                        eq_trig = sp.trigsimp(eq_sol.rewrite(sp.sin))
-                                        st.latex(sp.latex(eq_trig))
+                                        # Eliminar el rewrite forzado que causaba sinh/cosh
+                                        st.latex(sp.latex(sp.simplify(eq_sol)))
                                         
                                 except Exception:
                                     st.warning("No se pudo simplificar la solución explícita.")
@@ -349,7 +346,7 @@ with tab_sistemas:
                                                 
                                             st.caption("Los límites asintóticos confirman que las trayectorias nacen o mueren siendo tangentes/paralelas a los vectores propios.")
                                         except:
-                                            st.warning("Los límites asintóticos dependen fuertemente de las condiciones iniciales.")
+                                            pass
                                 else:
                                     st.info("💡 **Nota Matemática:** Los valores propios son complejos. El comportamiento oscilatorio (rotaciones) implica funciones periódicas (senos y cosenos), por lo que el análisis de asíntotas lineales no aplica.")
 
@@ -368,145 +365,15 @@ with tab_sistemas:
         if es_3d: func_W = sp.lambdify((x_sym, y_sym, z_sym), R_f, modules=['numpy'])
         
         if es_3d:
-            # Reestructuración de Pestañas: Fase 3D, Cartesianas y Canónicas (Si es diagonalizable)
+            # Reestructuración de Pestañas: Prioridad total a los Planos Canónicos
             if es_diagonalizable and es_lineal and val_prop_reales:
-                tab_fase3d, tab_proy_cart, tab_canonico3d = st.tabs(["🌌 Retrato de Fase 3D", "🪞 Proyecciones Cartesianas (XY, XZ, YZ)", "📐 Planos Canónicos (Eigenespacios)"])
-                mostrar_canonico3d = True
-            else:
-                tab_fase3d, tab_proy_cart = st.tabs(["🌌 Retrato de Fase 3D", "🪞 Proyecciones Cartesianas (XY, XZ, YZ)"])
-                mostrar_canonico3d = False
-                    
-            with tab_fase3d:
-                st.write(r"Generando trayectorias reales en $\mathbb{R}^3$...")
-                try:
-                    fig3d_fase = plt.figure(figsize=(8, 8))
-                    ax3d_fase = fig3d_fase.add_subplot(111, projection='3d')
-                    ax3d_fase.set_box_aspect([1, 1, 1]) 
-                    
-                    # Dibujar ejes de coordenadas principales
-                    ax3d_fase.plot([-5, 5], [0, 0], [0, 0], 'k--', alpha=0.5, linewidth=1)
-                    ax3d_fase.plot([0, 0], [-5, 5], [0, 0], 'k--', alpha=0.5, linewidth=1)
-                    ax3d_fase.plot([0, 0], [0, 0], [-5, 5], 'k--', alpha=0.5, linewidth=1)
-                    
-                    def vector_field_3d(Y, t):
-                        x_v, y_v, z_v = Y
-                        return [func_U(x_v, y_v, z_v), func_V(x_v, y_v, z_v), func_W(x_v, y_v, z_v)]
-                    
-                    # Semillas iniciales distribuidas en esferas concéntricas para generar la estructura de la silla/nodo perfecta
-                    ics = []
-                    for r in [0.5, 2.0, 4.0]:
-                        for th in np.linspace(0, np.pi, 5):
-                            for ph in np.linspace(0, 2*np.pi, 8):
-                                ics.append([r*np.sin(th)*np.cos(ph), r*np.sin(th)*np.sin(ph), r*np.cos(th)])
-                    # Ejes explícitos
-                    for r in [0.1, 1, 3]:
-                        ics.extend([[r,0,0], [-r,0,0], [0,r,0], [0,-r,0], [0,0,r], [0,0,-r]])
-                    
-                    # Densidad alta para que las espirales se vean suaves
-                    t_span = np.linspace(0, 15, 3000) 
-                    t_span_rev = np.linspace(0, -15, 3000) 
-                    
-                    trayectorias_f = []
-                    trayectorias_b = []
-                    
-                    for ic in ics:
-                        try:
-                            traj_f = spi.odeint(vector_field_3d, ic, t_span, mxstep=1500)
-                            traj_b = spi.odeint(vector_field_3d, ic, t_span_rev, mxstep=1500)
-                            
-                            # FILTRADO DE PUNTOS AL INFINITO (Recorte en la caja [-5, 5])
-                            mask_f = np.max(np.abs(traj_f), axis=1) <= 5.0
-                            mask_b = np.max(np.abs(traj_b), axis=1) <= 5.0
-                            
-                            traj_f_filt = traj_f[mask_f]
-                            traj_b_filt = traj_b[mask_b]
-                            
-                            if len(traj_f_filt) > 1:
-                                trayectorias_f.append(traj_f_filt)
-                                ax3d_fase.plot(traj_f_filt[:,0], traj_f_filt[:,1], traj_f_filt[:,2], color='royalblue', alpha=0.6, linewidth=1.2)
-                            if len(traj_b_filt) > 1:
-                                trayectorias_b.append(traj_b_filt)
-                                ax3d_fase.plot(traj_b_filt[:,0], traj_b_filt[:,1], traj_b_filt[:,2], color='crimson', alpha=0.6, linewidth=1.2)
-                            
-                            # UNA SOLA FLECHA DIRECCIONAL POR CURVA (en el centro visible de la trayectoria)
-                            for trayecto in [traj_f_filt, traj_b_filt]:
-                                if len(trayecto) > 15:
-                                    mid_idx = len(trayecto) // 2
-                                    pt = trayecto[mid_idx]
-                                    u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
-                                    norm = np.linalg.norm([u, v, w])
-                                    if norm > 1e-5:
-                                        ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='black', length=0.8, normalize=True)
-                        except Exception:
-                            pass 
-                    
-                    st.session_state.trayectorias_f = trayectorias_f
-                    st.session_state.trayectorias_b = trayectorias_b
-                    
-                    ax3d_fase.set_xlabel("x")
-                    ax3d_fase.set_ylabel("y")
-                    ax3d_fase.set_zlabel("z")
-                    ax3d_fase.set_xlim([-5, 5]); ax3d_fase.set_ylim([-5, 5]); ax3d_fase.set_zlim([-5, 5])
-                    ax3d_fase.set_title("Retrato de Fase 3D (Rojo: t<0, Azul: t>0)")
-                    st.pyplot(fig3d_fase)
-                except Exception as e:
-                    st.error(f"Error al generar trayectorias 3D: {e}")
-                    
-            with tab_proy_cart:
-                st.write("Proyecciones cartesianas de las trayectorias espaciales simuladas sobre los planos principales.")
-                try:
-                    fig_proy, (ax_xy, ax_xz, ax_yz) = plt.subplots(1, 3, figsize=(15, 5))
-                    
-                    if 'trayectorias_f' in st.session_state:
-                        for traj_f, traj_b in zip(st.session_state.trayectorias_f, st.session_state.trayectorias_b):
-                            ax_xy.plot(traj_f[:,0], traj_f[:,1], color='royalblue', alpha=0.4)
-                            ax_xy.plot(traj_b[:,0], traj_b[:,1], color='crimson', alpha=0.4)
-                            ax_xz.plot(traj_f[:,0], traj_f[:,2], color='royalblue', alpha=0.4)
-                            ax_xz.plot(traj_b[:,0], traj_b[:,2], color='crimson', alpha=0.4)
-                            ax_yz.plot(traj_f[:,1], traj_f[:,2], color='royalblue', alpha=0.4)
-                            ax_yz.plot(traj_b[:,1], traj_b[:,2], color='crimson', alpha=0.4)
-                            
-                            # UNA SOLA FLECHA DIRECCIONAL PARA LA PROYECCIÓN 2D
-                            for trayecto in [traj_f, traj_b]:
-                                if len(trayecto) > 15:
-                                    mid_idx = len(trayecto) // 2
-                                    pt = trayecto[mid_idx]
-                                    u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
-                                    
-                                    norm_xy = np.hypot(u, v)
-                                    if norm_xy > 1e-5:
-                                        ax_xy.quiver(pt[0], pt[1], u/norm_xy, v/norm_xy, color='black', scale=20, width=0.015, zorder=5)
-                                    norm_xz = np.hypot(u, w)
-                                    if norm_xz > 1e-5:
-                                        ax_xz.quiver(pt[0], pt[2], u/norm_xz, w/norm_xz, color='black', scale=20, width=0.015, zorder=5)
-                                    norm_yz = np.hypot(v, w)
-                                    if norm_yz > 1e-5:
-                                        ax_yz.quiver(pt[1], pt[2], v/norm_yz, w/norm_yz, color='black', scale=20, width=0.015, zorder=5)
-
-                    ax_xy.set_title("Proyección XY"); ax_xy.set_xlabel("x"); ax_xy.set_ylabel("y")
-                    ax_xy.grid(True, linestyle='--', alpha=0.5); ax_xy.axhline(0, color='black'); ax_xy.axvline(0, color='black')
-                    ax_xy.set_xlim([-5, 5]); ax_xy.set_ylim([-5, 5])
-                    
-                    ax_xz.set_title("Proyección XZ"); ax_xz.set_xlabel("x"); ax_xz.set_ylabel("z")
-                    ax_xz.grid(True, linestyle='--', alpha=0.5); ax_xz.axhline(0, color='black'); ax_xz.axvline(0, color='black')
-                    ax_xz.set_xlim([-5, 5]); ax_xz.set_ylim([-5, 5])
-                    
-                    ax_yz.set_title("Proyección YZ"); ax_yz.set_xlabel("y"); ax_yz.set_ylabel("z")
-                    ax_yz.grid(True, linestyle='--', alpha=0.5); ax_yz.axhline(0, color='black'); ax_yz.axvline(0, color='black')
-                    ax_yz.set_xlim([-5, 5]); ax_yz.set_ylim([-5, 5])
-                    
-                    plt.tight_layout()
-                    st.pyplot(fig_proy)
-                except Exception as e:
-                    st.error(f"Error al generar proyecciones: {e}")
-            
-            # NUEVO: PLANOS CANÓNICOS (y1-y2, y1-y3, y2-y3)
-            if mostrar_canonico3d:
+                tab_canonico3d, tab_fase3d = st.tabs(["📐 Planos Canónicos (Subespacios Invariantes)", "🌌 Retrato de Fase 3D (Limpio)"])
+                
                 with tab_canonico3d:
-                    st.write(r"Descomposición del sistema en sus **Planos Canónicos** (Subespacios generados por los vectores propios). Las trayectorias están completamente desacopladas.")
+                    st.write(r"Descomposición matemática del sistema en sus **Planos Canónicos**. Las trayectorias están completamente desacopladas sobre los ejes generados por los vectores propios.")
                     try:
                         fig_can, axs_can = plt.subplots(1, 3, figsize=(15, 5))
-                        l1, l2, l3 = lambdas_diag
+                        l1, l2, l3 = lambdas
                         Y_c, X_c = np.mgrid[-5:5:50j, -5:5:50j]
                         
                         # y1 - y2
@@ -535,6 +402,56 @@ with tab_sistemas:
                         st.pyplot(fig_can)
                     except Exception as e:
                         st.error(f"Error al generar planos canónicos: {e}")
+
+            else:
+                tab_fase3d, = st.tabs(["🌌 Retrato de Fase 3D (Limpio)"])
+                    
+            with tab_fase3d:
+                st.write(r"Generando trayectorias dinámicas limpias en $\mathbb{R}^3$...")
+                try:
+                    fig3d_fase = plt.figure(figsize=(8, 8))
+                    ax3d_fase = fig3d_fase.add_subplot(111, projection='3d')
+                    ax3d_fase.set_box_aspect([1, 1, 1]) 
+                    
+                    # Ejes
+                    ax3d_fase.plot([-5, 5], [0, 0], [0, 0], 'k--', alpha=0.3, linewidth=1)
+                    ax3d_fase.plot([0, 0], [-5, 5], [0, 0], 'k--', alpha=0.3, linewidth=1)
+                    ax3d_fase.plot([0, 0], [0, 0], [-5, 5], 'k--', alpha=0.3, linewidth=1)
+                    
+                    def vector_field_3d(Y, t):
+                        x_v, y_v, z_v = Y
+                        return [func_U(x_v, y_v, z_v), func_V(x_v, y_v, z_v), func_W(x_v, y_v, z_v)]
+                    
+                    ics = []
+                    for r in [0.5, 2.0, 4.0]:
+                        for th in np.linspace(0, np.pi, 5):
+                            for ph in np.linspace(0, 2*np.pi, 8):
+                                ics.append([r*np.sin(th)*np.cos(ph), r*np.sin(th)*np.sin(ph), r*np.cos(th)])
+                    
+                    t_span = np.linspace(0, 15, 2000) 
+                    
+                    for ic in ics:
+                        try:
+                            traj_f = spi.odeint(vector_field_3d, ic, t_span, mxstep=1000)
+                            
+                            # Filtro estricto: cortar si sale de la caja
+                            fueras = np.where(np.max(np.abs(traj_f), axis=1) > 5.0)[0]
+                            if len(fueras) > 0:
+                                traj_f = traj_f[:fueras[0]]
+                            
+                            if len(traj_f) > 5:
+                                ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='royalblue', alpha=0.7, linewidth=1.2)
+                        except Exception:
+                            pass 
+                    
+                    ax3d_fase.set_xlabel("x")
+                    ax3d_fase.set_ylabel("y")
+                    ax3d_fase.set_zlabel("z")
+                    ax3d_fase.set_xlim([-5, 5]); ax3d_fase.set_ylim([-5, 5]); ax3d_fase.set_zlim([-5, 5])
+                    ax3d_fase.set_title("Trayectorias Dinámicas en el Espacio")
+                    st.pyplot(fig3d_fase)
+                except Exception as e:
+                    st.error(f"Error al generar trayectorias 3D: {e}")
 
         else:
             if es_lineal and Lambda_sym is not None and val_prop_reales:
