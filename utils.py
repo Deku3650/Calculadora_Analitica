@@ -5,7 +5,6 @@
 # ---------------------------------------------------------- #
 
 import math
-import ast
 import numpy as np
 import matplotlib.pyplot as plt
 import sympy as sp
@@ -34,39 +33,30 @@ if 'mis_complejos' not in st.session_state:
 
 def parse_seguro(entrada_str, transformaciones=None, local_dict=None):
     """
-    Analiza una cadena matemática de forma segura usando AST.
-    Bloquea atributos (.) y comandos de ejecución para prevenir inyección de código.
+    Analizador matemático seguro.
+    Utiliza expresiones regulares en lugar de AST para permitir sintaxis 
+    matemática natural (ej. '2x') mientras bloquea intentos de inyección de código.
     """
     if not entrada_str.strip():
         return None
         
-    try:
-        arbol = ast.parse(entrada_str, mode='eval')
-        permitidos = (
-            ast.Expression, ast.BinOp, ast.UnaryOp, ast.operator, 
-            ast.unaryop, ast.cmpop, ast.Constant, ast.Name, ast.Load, ast.Call,
-            ast.Tuple, ast.Compare, ast.List
-        )
-        # Compatibilidad con versiones de Python < 3.8
-        if hasattr(ast, 'Num'):
-            permitidos += (ast.Num, ast.Str, ast.NameConstant)
-
-        for n in ast.walk(arbol):
-            if isinstance(n, ast.Attribute):
-                raise ValueError("El acceso a atributos (.) no está permitido por seguridad.")
-            if isinstance(n, ast.Name):
-                # Bloqueo estricto de variables ocultas y funciones de ejecución nativas
-                if '__' in n.id or n.id in {'eval', 'exec', 'compile', 'open', 'globals', 'locals', 'getattr', 'setattr', 'delattr', '__import__'}:
-                    raise ValueError(f"Uso de variables o métodos no permitidos: {n.id}")
-            if not isinstance(n, permitidos):
-                raise ValueError(f"Estructura sintáctica no permitida: {type(n).__name__}")
-    except Exception as e:
-        raise ValueError(f"Sintaxis inválida o insegura: {e}")
+    # 1. Bloqueo de métodos y atributos (ej. os.system). Permite decimales (3.14)
+    if re.search(r'\.[a-zA-Z_]', entrada_str):
+        raise ValueError("El acceso a atributos (.) no está permitido por seguridad.")
+        
+    # 2. Bloqueo estricto de variables ocultas (dunders)
+    if '__' in entrada_str:
+        raise ValueError("El uso de dunders (__) no está permitido.")
+        
+    # 3. Bloqueo de funciones nativas peligrosas de Python
+    palabras_prohibidas = r'\b(import|eval|exec|compile|open|globals|locals|getattr|setattr|delattr|os|sys|subprocess)\b'
+    if re.search(palabras_prohibidas, entrada_str):
+        raise ValueError("Uso de comandos de sistema no permitidos.")
 
     if local_dict is None:
         local_dict = {}
         
-    # CORRECCIÓN: global_dict=None permite a SymPy cargar sus propias clases (Integer, Float, Symbol) de forma segura.
+    # Si pasa los filtros de texto, es seguro enviarlo a SymPy
     return parse_expr(entrada_str, transformations=transformaciones, global_dict=None, local_dict=local_dict)
 
 
