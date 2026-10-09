@@ -2,8 +2,8 @@ import streamlit as st
 import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy.integrate as spi # Necesario para simular trayectorias (Retrato de Fase 3D)
-from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application, convert_xor
+import scipy.integrate as spi
+from sympy.parsing.sympy_parser import standard_transformations, implicit_multiplication_application, convert_xor
 
 try:
     from utils import leer_expresion_st, imprimir_matriz_simbolica, parse_seguro
@@ -33,7 +33,7 @@ tab_sistemas, tab_edo1 = st.tabs([
     "Resolutor de EDOs (1er Orden)"
 ])
 
-# Símbolos base globales 
+# Símbolos base globales
 t_sym, x_sym, y_sym, z_sym = sp.symbols('t x y z')
 c1_sym, c2_sym, c3_sym = sp.symbols('c_1 c_2 c_3')
 transf = standard_transformations + (implicit_multiplication_application, convert_xor)
@@ -298,34 +298,42 @@ with tab_sistemas:
                                     st.latex(rf"\Lambda = {sp.latex(Lambda_sym)}")
                                 
                                 st.markdown("### Soluciones del Sistema")
-                                if es_3d:
-                                    y1_sol = c1_sym * sp.exp(lambdas[0] * t_sym)
-                                    y2_sol = c2_sym * sp.exp(lambdas[1] * t_sym)
-                                    y3_sol = c3_sym * sp.exp(lambdas[2] * t_sym)
-                                    Y_sol = sp.Matrix([y1_sol, y2_sol, y3_sol])
-                                else:
-                                    y1_sol = c1_sym * sp.exp(lambdas[0] * t_sym)
-                                    y2_sol = c2_sym * sp.exp(lambdas[1] * t_sym)
-                                    Y_sol = sp.Matrix([y1_sol, y2_sol])
                                 
-                                st.write(r"**1. Solución en el eje canónico desacoplado $\dot{y} = \Lambda y$:**")
-                                st.latex(rf"y(t) = {sp.latex(Y_sol)}")
-                                
-                                X_sol = P_sym * Y_sol
-                                st.write("**2. Solución en el sistema original $x(t) = P y(t)$:**")
-                                st.latex(rf"x(t) = {sp.latex(sp.simplify(X_sol))}")
+                                # SOLUCIÓN REAL CON DSOLVE (Fuerza Identidad de Euler y Senos/Cosenos)
+                                try:
+                                    x_fun = sp.Function('x')(t_sym)
+                                    y_fun = sp.Function('y')(t_sym)
+                                    funcs = [x_fun, y_fun]
+                                    if es_3d: funcs.append(sp.Function('z')(t_sym))
+                                    
+                                    eqs_lin = []
+                                    for i in range(len(funcs)):
+                                        eq_fila = 0
+                                        for j in range(len(funcs)):
+                                            eq_fila += A_eval[i,j] * funcs[j]
+                                        eqs_lin.append(sp.Eq(funcs[i].diff(t_sym), eq_fila))
+                                        
+                                    sol_real = sp.dsolve(eqs_lin)
+                                    
+                                    st.write("**Solución analítica del sistema original (Expresión Real Analítica):**")
+                                    for eq_sol in sol_real:
+                                        st.latex(sp.latex(eq_sol))
+                                        
+                                except Exception as e:
+                                    st.warning("No se pudo forzar la simplificación a senos y cosenos reales. Mostrando solución compleja.")
 
                                 if val_prop_reales:
                                     if not es_3d and lambdas[0] != lambdas[1]:
                                         st.markdown("### Comportamiento Asintótico (Límites)")
-                                        x_t_expr = X_sol[0]
-                                        y_t_expr = X_sol[1]
-                                        razon_expr = y_t_expr / x_t_expr
-                                        
-                                        st.write(r"Pendiente de las trayectorias $m(t) = \frac{y(t)}{x(t)}$:")
-                                        st.latex(rf"m(t) = \frac{{{sp.latex(y_t_expr)}}}{{{sp.latex(x_t_expr)}}}")
-                                        
+                                        # Extraer componentes si es posible
                                         try:
+                                            x_t_expr = sol_real[0].rhs
+                                            y_t_expr = sol_real[1].rhs
+                                            razon_expr = y_t_expr / x_t_expr
+                                            
+                                            st.write(r"Pendiente de las trayectorias $m(t) = \frac{y(t)}{x(t)}$:")
+                                            st.latex(rf"m(t) = \frac{{{sp.latex(y_t_expr)}}}{{{sp.latex(x_t_expr)}}}")
+                                            
                                             lim_inf_pos = sp.limit(razon_expr, t_sym, sp.oo)
                                             lim_inf_neg = sp.limit(razon_expr, t_sym, -sp.oo)
                                             
@@ -341,7 +349,7 @@ with tab_sistemas:
                                         except:
                                             st.warning("Los límites asintóticos dependen fuertemente de las condiciones iniciales.")
                                 else:
-                                    st.info("💡 **Nota Importante:** Los valores propios son imaginarios/complejos. Esto indica un comportamiento oscilatorio (rotaciones, focos o centros). Las soluciones implican funciones trigonométricas (seno y coseno) mediante la identidad de Euler, por lo que el análisis de asíntotas no aplica de forma directa.")
+                                    st.info("💡 **Nota Importante:** Los valores propios son imaginarios/complejos. Esto indica un comportamiento oscilatorio (rotaciones, focos o centros). Las soluciones se expresan mediante funciones trigonométricas (seno y coseno), por lo que el análisis de asíntotas lineales no aplica.")
 
                             except Exception as e:
                                 st.error(f"Error en la diagonalización: {e}")
@@ -358,12 +366,13 @@ with tab_sistemas:
         if es_3d: func_W = sp.lambdify((x_sym, y_sym, z_sym), R_f, modules=['numpy'])
         
         if es_3d:
-            tab_vect3d, tab_fase3d, tab_proy = st.tabs(["🔀 Campo Vectorial 3D (Quiver)", "🌌 Retrato de Fase 3D (Trayectorias)", "🪞 Proyecciones en 2D"])
+            tab_vect3d, tab_fase3d, tab_proy = st.tabs(["🔀 Campo Vectorial 3D", "🌌 Retrato de Fase 3D (Espirales)", "🪞 Proyecciones en 2D (Planos Invariantes)"])
             
             with tab_vect3d:
                 try:
-                    fig3d = plt.figure(figsize=(7, 6))
+                    fig3d = plt.figure(figsize=(7, 7))
                     ax3d = fig3d.add_subplot(111, projection='3d')
+                    ax3d.set_box_aspect([1, 1, 1])
                     
                     X_q, Y_q, Z_q = np.mgrid[-4:4:6j, -4:4:6j, -4:4:6j]
                     U_q = np.broadcast_to(func_U(X_q, Y_q, Z_q), X_q.shape).astype(np.float64)
@@ -371,8 +380,11 @@ with tab_sistemas:
                     W_q = np.broadcast_to(func_W(X_q, Y_q, Z_q), X_q.shape).astype(np.float64)
                     
                     ax3d.quiver(X_q, Y_q, Z_q, U_q, V_q, W_q, length=0.6, normalize=True, color='mediumpurple', alpha=0.7)
+                    ax3d.plot([-4, 4], [0, 0], [0, 0], 'k--', alpha=0.4)
+                    ax3d.plot([0, 0], [-4, 4], [0, 0], 'k--', alpha=0.4)
+                    ax3d.plot([0, 0], [0, 0], [-4, 4], 'k--', alpha=0.4)
                     ax3d.set_xlabel("x"); ax3d.set_ylabel("y"); ax3d.set_zlabel("z")
-                    ax3d.set_title("Campo Vectorial en 3D")
+                    ax3d.set_title("Campo Vectorial Direccional")
                     st.pyplot(fig3d)
                 except Exception as e:
                     st.error(f"Error al generar gráfica 3D: {e}")
@@ -380,121 +392,115 @@ with tab_sistemas:
             with tab_fase3d:
                 st.write(r"Generando trayectorias reales en $\mathbb{R}^3$...")
                 try:
-                    fig3d_fase = plt.figure(figsize=(8, 7))
+                    fig3d_fase = plt.figure(figsize=(8, 8))
                     ax3d_fase = fig3d_fase.add_subplot(111, projection='3d')
+                    ax3d_fase.set_box_aspect([1, 1, 1]) # Centrar ejes isométricamente
+                    
+                    # Dibujar Ejes de Coordenadas principales
+                    ax3d_fase.plot([-4, 4], [0, 0], [0, 0], 'k--', alpha=0.5, linewidth=1)
+                    ax3d_fase.plot([0, 0], [-4, 4], [0, 0], 'k--', alpha=0.5, linewidth=1)
+                    ax3d_fase.plot([0, 0], [0, 0], [-4, 4], 'k--', alpha=0.5, linewidth=1)
                     
                     def vector_field_3d(Y, t):
                         x_v, y_v, z_v = Y
-                        u = func_U(x_v, y_v, z_v)
-                        v = func_V(x_v, y_v, z_v)
-                        w = func_W(x_v, y_v, z_v)
-                        return [u, v, w]
+                        return [func_U(x_v, y_v, z_v), func_V(x_v, y_v, z_v), func_W(x_v, y_v, z_v)]
                     
-                    # Diversas condiciones iniciales para capturar espirales en todos los ejes
+                    # Condiciones iniciales separadas de los ejes para provocar el efecto espiral si hay eigenvalores complejos
                     ics = [
-                        [1, 1, 1], [-1, -1, -1], [1, -1, 1], [-1, 1, -1],
-                        [2, 0, 0], [0, 2, 0], [0, 0, 2],
-                        [-2, 0, 0], [0, -2, 0], [0, 0, -2],
-                        [1, 0, 1], [0, 1, 1], [1, 1, 0],
-                        [0.5, 0.5, 0.5], [-0.5, 0.5, -0.5]
+                        [2, 2, 2], [-2, -2, -2], [2, -2, 2], [-2, 2, -2],
+                        [3, 0, 1], [0, 3, 1], [1, 0, 3],
+                        [1.5, 1.5, 0.5], [-1.5, 1.5, -0.5]
                     ]
                     
-                    # Tiempo ampliado drásticamente para permitir que los "resortes" o espirales se formen
-                    t_span = np.linspace(0, 15, 600) 
-                    t_span_rev = np.linspace(0, -15, 600) 
-                    
-                    trayectorias_f = []
-                    trayectorias_b = []
+                    # Tiempo masivo para permitir que los "resortes" den varias vueltas
+                    t_span = np.linspace(0, 25, 2000) 
+                    t_span_rev = np.linspace(0, -25, 2000) 
                     
                     for ic in ics:
                         try:
                             traj_f = spi.odeint(vector_field_3d, ic, t_span)
                             traj_b = spi.odeint(vector_field_3d, ic, t_span_rev)
                             
-                            trayectorias_f.append(traj_f)
-                            trayectorias_b.append(traj_b)
+                            ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='royalblue', alpha=0.8, linewidth=1.2)
+                            ax3d_fase.plot(traj_b[:,0], traj_b[:,1], traj_b[:,2], color='crimson', alpha=0.8, linewidth=1.2)
                             
-                            ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='blue', alpha=0.6, linewidth=1.2)
-                            ax3d_fase.plot(traj_b[:,0], traj_b[:,1], traj_b[:,2], color='red', alpha=0.6, linewidth=1.2)
-                            
-                            # Generación explícita de vectores de dirección sobre la trayectoria
-                            for idx in [150, 450]:
-                                if idx < len(traj_f):
-                                    pt = traj_f[idx]
-                                    dir_vec = np.array([func_U(*pt), func_V(*pt), func_W(*pt)])
-                                    norm = np.linalg.norm(dir_vec)
-                                    if norm > 1e-5:
-                                        dir_vec = (dir_vec / norm) * 0.8
-                                        ax3d_fase.quiver(pt[0], pt[1], pt[2], dir_vec[0], dir_vec[1], dir_vec[2], color='darkblue', arrow_length_ratio=0.5, linewidth=1.5)
+                            # Quiver sobre la trayectoria para indicar dirección del tiempo (Flechas en R3)
+                            step = len(traj_f) // 5
+                            for idx in range(step, len(traj_f) - step, step):
+                                pt = traj_f[idx]
+                                u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
+                                norm = np.linalg.norm([u, v, w])
+                                if norm > 1e-5:
+                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, 
+                                                     color='black', length=0.7, normalize=True, arrow_length_ratio=0.5, pivot='middle')
                         except Exception:
                             pass 
-                    
-                    st.session_state.trayectorias_f = trayectorias_f
-                    st.session_state.trayectorias_b = trayectorias_b
                     
                     ax3d_fase.set_xlabel("x")
                     ax3d_fase.set_ylabel("y")
                     ax3d_fase.set_zlabel("z")
                     ax3d_fase.set_xlim([-4, 4]); ax3d_fase.set_ylim([-4, 4]); ax3d_fase.set_zlim([-4, 4])
-                    ax3d_fase.set_title("Trayectorias en el Espacio de Fase 3D (Rojo: t<0, Azul: t>0)")
+                    ax3d_fase.set_title("Retrato de Fase 3D (Rojo: t<0, Azul: t>0)")
                     st.pyplot(fig3d_fase)
                 except Exception as e:
                     st.error(f"Error al generar trayectorias 3D: {e}")
                     
             with tab_proy:
-                st.write("Proyecciones matemáticas exactas del flujo 3D sobre los planos cartesianos.")
                 try:
-                    fig_proy, (ax_xy, ax_xz, ax_yz) = plt.subplots(1, 3, figsize=(15, 5))
+                    # VERIFICACIÓN RIGUROSA DE PLANOS INVARIANTES
+                    inv_xy = sp.simplify(R_f.subs(z_sym, 0)) == 0
+                    inv_xz = sp.simplify(Q_f.subs(y_sym, 0)) == 0
+                    inv_yz = sp.simplify(P_f.subs(x_sym, 0)) == 0
                     
-                    # Dibujamos las componentes 2D de las trayectorias 3D ya simuladas en lugar de forzar planos estáticos
-                    if 'trayectorias_f' in st.session_state:
-                        for traj_f, traj_b in zip(st.session_state.trayectorias_f, st.session_state.trayectorias_b):
-                            # Trazos Proyectados
-                            ax_xy.plot(traj_f[:,0], traj_f[:,1], color='blue', alpha=0.5)
-                            ax_xy.plot(traj_b[:,0], traj_b[:,1], color='red', alpha=0.5)
-                            ax_xz.plot(traj_f[:,0], traj_f[:,2], color='blue', alpha=0.5)
-                            ax_xz.plot(traj_b[:,0], traj_b[:,2], color='red', alpha=0.5)
-                            ax_yz.plot(traj_f[:,1], traj_f[:,2], color='blue', alpha=0.5)
-                            ax_yz.plot(traj_b[:,1], traj_b[:,2], color='red', alpha=0.5)
+                    if not (inv_xy or inv_xz or inv_yz):
+                        st.info("💡 **Nota Matemática:** Este sistema no posee planos cartesianos invariantes. Esto significa que cualquier trayectoria que inicie en un plano z=0, y=0 o x=0 escapará inevitablemente hacia la tercera dimensión. Por rigor topológico, las proyecciones 2D estándar se han omitido, ya que graficarlas resultaría en líneas cruzadas que no representan un campo vectorial bidimensional válido.")
+                    else:
+                        st.write("Visualización estricta de subespacios: Se muestran únicamente los planos que conforman **variedades invariantes** del sistema.")
+                        fig_proy, axs = plt.subplots(1, sum([inv_xy, inv_xz, inv_yz]), figsize=(5 * sum([inv_xy, inv_xz, inv_yz]), 5))
+                        if sum([inv_xy, inv_xz, inv_yz]) == 1: axs = [axs]
+                        
+                        idx_ax = 0
+                        Y_m, X_m = np.mgrid[-4:4:50j, -4:4:50j]
+                        
+                        if inv_xy:
+                            ax = axs[idx_ax]
+                            U_xy = np.broadcast_to(func_U(X_m, Y_m, 0), X_m.shape).astype(np.float64)
+                            V_xy = np.broadcast_to(func_V(X_m, Y_m, 0), X_m.shape).astype(np.float64)
+                            vel_xy = np.sqrt(U_xy**2 + V_xy**2)
+                            ax.streamplot(X_m, Y_m, U_xy, V_xy, color=vel_xy, cmap='viridis', density=1.2, arrowsize=1.5)
+                            ax.set_title("Plano Invariante XY (z=0)")
+                            ax.set_xlabel("x"); ax.set_ylabel("y")
+                            ax.grid(True, linestyle='--', alpha=0.5)
+                            ax.axhline(0, color='black'); ax.axvline(0, color='black')
+                            idx_ax += 1
                             
-                            # Flechas proyectadas
-                            for idx in [150, 450]:
-                                if idx < len(traj_f):
-                                    pt = traj_f[idx]
-                                    u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
-                                    
-                                    norm_xy = np.hypot(u, v)
-                                    if norm_xy > 1e-5:
-                                        ax_xy.quiver(pt[0], pt[1], u/norm_xy, v/norm_xy, color='darkblue', scale=15, width=0.015)
-                                    norm_xz = np.hypot(u, w)
-                                    if norm_xz > 1e-5:
-                                        ax_xz.quiver(pt[0], pt[2], u/norm_xz, w/norm_xz, color='darkblue', scale=15, width=0.015)
-                                    norm_yz = np.hypot(v, w)
-                                    if norm_yz > 1e-5:
-                                        ax_yz.quiver(pt[1], pt[2], v/norm_yz, w/norm_yz, color='darkblue', scale=15, width=0.015)
-
-                    ax_xy.set_title("Proyección XY")
-                    ax_xy.set_xlabel("x"); ax_xy.set_ylabel("y")
-                    ax_xy.grid(True, linestyle='--', alpha=0.5)
-                    ax_xy.axhline(0, color='black'); ax_xy.axvline(0, color='black')
-                    ax_xy.set_xlim([-4, 4]); ax_xy.set_ylim([-4, 4])
-                    
-                    ax_xz.set_title("Proyección XZ")
-                    ax_xz.set_xlabel("x"); ax_xz.set_ylabel("z")
-                    ax_xz.grid(True, linestyle='--', alpha=0.5)
-                    ax_xz.axhline(0, color='black'); ax_xz.axvline(0, color='black')
-                    ax_xz.set_xlim([-4, 4]); ax_xz.set_ylim([-4, 4])
-                    
-                    ax_yz.set_title("Proyección YZ")
-                    ax_yz.set_xlabel("y"); ax_yz.set_ylabel("z")
-                    ax_yz.grid(True, linestyle='--', alpha=0.5)
-                    ax_yz.axhline(0, color='black'); ax_yz.axvline(0, color='black')
-                    ax_yz.set_xlim([-4, 4]); ax_yz.set_ylim([-4, 4])
-                    
-                    plt.tight_layout()
-                    st.pyplot(fig_proy)
+                        if inv_xz:
+                            ax = axs[idx_ax]
+                            U_xz = np.broadcast_to(func_U(X_m, 0, Y_m), X_m.shape).astype(np.float64)
+                            W_xz = np.broadcast_to(func_W(X_m, 0, Y_m), X_m.shape).astype(np.float64)
+                            vel_xz = np.sqrt(U_xz**2 + W_xz**2)
+                            ax.streamplot(X_m, Y_m, U_xz, W_xz, color=vel_xz, cmap='viridis', density=1.2, arrowsize=1.5)
+                            ax.set_title("Plano Invariante XZ (y=0)")
+                            ax.set_xlabel("x"); ax.set_ylabel("z")
+                            ax.grid(True, linestyle='--', alpha=0.5)
+                            ax.axhline(0, color='black'); ax.axvline(0, color='black')
+                            idx_ax += 1
+                            
+                        if inv_yz:
+                            ax = axs[idx_ax]
+                            V_yz = np.broadcast_to(func_V(0, X_m, Y_m), X_m.shape).astype(np.float64)
+                            W_yz = np.broadcast_to(func_W(0, X_m, Y_m), X_m.shape).astype(np.float64)
+                            vel_yz = np.sqrt(V_yz**2 + W_yz**2)
+                            ax.streamplot(X_m, Y_m, V_yz, W_yz, color=vel_yz, cmap='viridis', density=1.2, arrowsize=1.5)
+                            ax.set_title("Plano Invariante YZ (x=0)")
+                            ax.set_xlabel("y"); ax.set_ylabel("z")
+                            ax.grid(True, linestyle='--', alpha=0.5)
+                            ax.axhline(0, color='black'); ax.axvline(0, color='black')
+                            
+                        plt.tight_layout()
+                        st.pyplot(fig_proy)
                 except Exception as e:
-                    st.error(f"Error al generar proyecciones: {e}")
+                    st.error(f"Error al analizar subespacios invariantes: {e}")
         else:
             if es_lineal and Lambda_sym is not None and val_prop_reales:
                 tab_fase, tab_vect, tab_canonico = st.tabs(["🌊 Retrato de Fase (Original)", "🔀 Campo Vectorial (Quiver)", "📐 Plano Canónico (y1, y2)"])
@@ -549,7 +555,7 @@ with tab_sistemas:
                 V_s = np.broadcast_to(func_V(X_s, Y_s), X_s.shape).astype(np.float64)
                 velocidad = np.sqrt(U_s**2 + V_s**2)
                 
-                ax2.streamplot(X_s, Y_s, U_s, V_s, color=velocidad, cmap='viridis', linewidth=1.2, arrowsize=1.2, density=1.5)
+                ax2.streamplot(X_s, Y_s, U_s, V_s, color=velocidad, cmap='viridis', linewidth=1.2, arrowsize=1.5, density=1.5)
                 
                 try:
                     if np.ptp(U_s) > 0: ax2.contour(X_s, Y_s, U_s, levels=[0], colors=['red'], alpha=0.6, linewidths=2.0)
@@ -614,7 +620,7 @@ with tab_sistemas:
                             V_c = lambdas_diag[1] * Y_c
                             velocidad_c = np.sqrt(U_c**2 + V_c**2)
                             
-                            ax3.streamplot(X_c, Y_c, U_c, V_c, color=velocidad_c, cmap='plasma', linewidth=1.2, density=1.5)
+                            ax3.streamplot(X_c, Y_c, U_c, V_c, color=velocidad_c, cmap='plasma', linewidth=1.2, arrowsize=1.5, density=1.5)
                             ax3.set_xlim([-5, 5]); ax3.set_ylim([-5, 5])
                             ax3.axhline(0, color='black', linewidth=1.5); ax3.axvline(0, color='black', linewidth=1.5)
                             ax3.plot(0, 0, 'ro', markersize=8, markeredgecolor='black', zorder=5)
