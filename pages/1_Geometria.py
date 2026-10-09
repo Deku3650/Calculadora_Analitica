@@ -5,13 +5,13 @@ import sympy as sp
 import math
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-# Importar el módulo centralizado de estilos globales
+# Importar estilos centralizados
 from estilos import cargar_estilos_globales
 
 # 1. CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Geometría - MATHESIS", page_icon="📐", layout="wide")
 
-# 2. CARGAR ESTILOS GLOBALES (AZUL)
+# 2. CARGAR ESTILOS GLOBALES
 cargar_estilos_globales()
 
 # ==============================================================================
@@ -125,7 +125,7 @@ def renderizar_figura_3d_st(figura, params):
 # INTERFAZ PRINCIPAL
 # ==============================================================================
 
-# Encabezado estilizado
+# ENCABEZADO CON BANNER PERSONALIZADO
 st.markdown("""
     <div class="title-container">
         <h1 class="title-text">📐 Módulo de Geometría</h1>
