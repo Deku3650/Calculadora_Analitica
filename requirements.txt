@@ -3,4 +3,3 @@ sympy
 numpy
 matplotlib
 scipy
-ast
