@@ -2,8 +2,8 @@ import streamlit as st
 import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy.integrate as spi 
-from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application, convert_xor
+import scipy.integrate as spi
+from sympy.parsing.sympy_parser import standard_transformations, implicit_multiplication_application, convert_xor
 
 try:
     from utils import leer_expresion_st, imprimir_matriz_simbolica, parse_seguro
@@ -26,7 +26,7 @@ if 'sys_R' not in st.session_state:
     st.session_state.sys_R = None
 
 st.title("🌪️ Análisis de Campos Vectoriales y Sistemas Dinámicos")
-st.markdown("Estudio de sistemas lineales y no lineales, retratos de fase, diagonalización, límites asintóticos e isoclinas en $\mathbb{R}^2$ y $\mathbb{R}^3$.")
+st.markdown(r"Estudio de sistemas lineales y no lineales, retratos de fase, diagonalización, límites asintóticos e isoclinas en $\mathbb{R}^2$ y $\mathbb{R}^3$.")
 
 tab_sistemas, tab_edo1 = st.tabs([
     "Sistemas y Plano Fase",
@@ -47,7 +47,7 @@ with tab_sistemas:
     
     with col_input:
         st.subheader("Definición del Campo Vectorial")
-        st.info("💡 Exprese su campo $V(x, y)$ o $V(x, y, z)$.")
+        st.info(r"💡 Exprese su campo $V(x, y)$ o $V(x, y, z)$.")
         
         fuente_matriz = st.radio("Entrada:", ["Ecuaciones Explícitas", "Matriz $2\\times2$ (Lineal)", "Matriz $3\\times3$ (Lineal)", "Importar del Módulo de Matrices"])
         
@@ -314,7 +314,7 @@ with tab_sistemas:
                                         
                                     sol_real = sp.dsolve(eqs_lin)
                                     
-                                    st.write("**Solución analítica del sistema original:**")
+                                    st.write("**Solución analítica del sistema original (Expresión Real Analítica):**")
                                     for eq_sol in sol_real:
                                         st.latex(sp.latex(eq_sol))
                                         
@@ -364,7 +364,7 @@ with tab_sistemas:
         if es_3d: func_W = sp.lambdify((x_sym, y_sym, z_sym), R_f, modules=['numpy'])
         
         if es_3d:
-            tab_vect3d, tab_fase3d, tab_proy = st.tabs(["🔀 Campo Vectorial 3D", "🌌 Retrato de Fase 3D (Espirales)", "🪞 Proyecciones en 2D (Planos Invariantes)"])
+            tab_vect3d, tab_fase3d, tab_proy = st.tabs(["🔀 Campo Vectorial 3D", "🌌 Retrato de Fase 3D (Trayectorias)", "🪞 Proyecciones en 2D (Planos Invariantes)"])
             
             with tab_vect3d:
                 try:
@@ -394,22 +394,30 @@ with tab_sistemas:
                     ax3d_fase = fig3d_fase.add_subplot(111, projection='3d')
                     ax3d_fase.set_box_aspect([1, 1, 1]) 
                     
-                    ax3d_fase.plot([-4, 4], [0, 0], [0, 0], 'k--', alpha=0.5, linewidth=1)
-                    ax3d_fase.plot([0, 0], [-4, 4], [0, 0], 'k--', alpha=0.5, linewidth=1)
-                    ax3d_fase.plot([0, 0], [0, 0], [-4, 4], 'k--', alpha=0.5, linewidth=1)
+                    ax3d_fase.plot([-5, 5], [0, 0], [0, 0], 'k--', alpha=0.5, linewidth=1)
+                    ax3d_fase.plot([0, 0], [-5, 5], [0, 0], 'k--', alpha=0.5, linewidth=1)
+                    ax3d_fase.plot([0, 0], [0, 0], [-5, 5], 'k--', alpha=0.5, linewidth=1)
                     
                     def vector_field_3d(Y, t):
                         x_v, y_v, z_v = Y
                         return [func_U(x_v, y_v, z_v), func_V(x_v, y_v, z_v), func_W(x_v, y_v, z_v)]
                     
+                    # Condiciones iniciales separadas de los ejes y en el nivel microscópico
+                    # para permitir que los "resortes" de sistemas muy inestables logren dar vueltas visibles
                     ics = [
+                        # Macro condiciones (Sistemas estables)
+                        [3, 0, 0], [0, 3, 0], [0, 0, 3],
+                        [-3, 0, 0], [0, -3, 0], [0, 0, -3],
                         [2, 2, 2], [-2, -2, -2], [2, -2, 2], [-2, 2, -2],
-                        [3, 0, 1], [0, 3, 1], [1, 0, 3],
-                        [1.5, 1.5, 0.5], [-1.5, 1.5, -0.5]
+                        # Micro condiciones (Sistemas fuertemente inestables)
+                        [1e-3, 0, 1e-3], [0, 1e-3, 1e-3], [1e-3, 1e-3, 0],
+                        [-1e-3, 0, 0], [0, -1e-3, 0], [0, 0, -1e-3],
+                        [1e-4, 1e-4, 1e-4], [-1e-4, -1e-4, -1e-4]
                     ]
                     
-                    t_span = np.linspace(0, 25, 2000) 
-                    t_span_rev = np.linspace(0, -25, 2000) 
+                    # Aumentamos resolución para que las curvas cerradas no se vean poligonales
+                    t_span = np.linspace(0, 20, 3000) 
+                    t_span_rev = np.linspace(0, -20, 3000) 
                     
                     trayectorias_f = []
                     trayectorias_b = []
@@ -419,18 +427,27 @@ with tab_sistemas:
                             traj_f = spi.odeint(vector_field_3d, ic, t_span)
                             traj_b = spi.odeint(vector_field_3d, ic, t_span_rev)
                             
-                            trayectorias_f.append(traj_f)
-                            trayectorias_b.append(traj_b)
+                            # FILTRADO DE PUNTOS AL INFINITO:
+                            # Matplotlib colapsa si grafica valores como 10^30. Cortamos la trayectoria
+                            # exactamente cuando sale del cubo visible [-5, 5]
+                            mask_f = np.max(np.abs(traj_f), axis=1) <= 5.0
+                            mask_b = np.max(np.abs(traj_b), axis=1) <= 5.0
                             
-                            ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='royalblue', alpha=0.8, linewidth=1.2)
-                            ax3d_fase.plot(traj_b[:,0], traj_b[:,1], traj_b[:,2], color='crimson', alpha=0.8, linewidth=1.2)
+                            traj_f_filt = traj_f[mask_f]
+                            traj_b_filt = traj_b[mask_b]
                             
-                            # --- NUEVA LÓGICA DE QUIVER (FILTRADO GEOMÉTRICO) ---
-                            for trayecto in [traj_f, traj_b]:
-                                pts_visibles = [p for p in trayecto if np.max(np.abs(p)) <= 4.0] # Solo intercepta puntos DENTRO de la caja visible
-                                if pts_visibles:
-                                    step_q = max(1, len(pts_visibles) // 3) # Pone ~3 flechas a lo largo de la parte visible de la curva
-                                    for pt in pts_visibles[step_q::step_q]:
+                            if len(traj_f_filt) > 1:
+                                trayectorias_f.append(traj_f_filt)
+                                ax3d_fase.plot(traj_f_filt[:,0], traj_f_filt[:,1], traj_f_filt[:,2], color='royalblue', alpha=0.8, linewidth=1.2)
+                            if len(traj_b_filt) > 1:
+                                trayectorias_b.append(traj_b_filt)
+                                ax3d_fase.plot(traj_b_filt[:,0], traj_b_filt[:,1], traj_b_filt[:,2], color='crimson', alpha=0.8, linewidth=1.2)
+                            
+                            # Flechas direccionales dinámicas a lo largo de la trayectoria validada
+                            for trayecto in [traj_f_filt, traj_b_filt]:
+                                if len(trayecto) > 20:
+                                    step_q = max(1, len(trayecto) // 4)
+                                    for pt in trayecto[step_q::step_q]:
                                         u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
                                         norm = np.linalg.norm([u, v, w])
                                         if norm > 1e-5:
@@ -445,7 +462,7 @@ with tab_sistemas:
                     ax3d_fase.set_xlabel("x")
                     ax3d_fase.set_ylabel("y")
                     ax3d_fase.set_zlabel("z")
-                    ax3d_fase.set_xlim([-4, 4]); ax3d_fase.set_ylim([-4, 4]); ax3d_fase.set_zlim([-4, 4])
+                    ax3d_fase.set_xlim([-5, 5]); ax3d_fase.set_ylim([-5, 5]); ax3d_fase.set_zlim([-5, 5])
                     ax3d_fase.set_title("Retrato de Fase 3D (Rojo: t<0, Azul: t>0)")
                     st.pyplot(fig3d_fase)
                 except Exception as e:
@@ -458,7 +475,49 @@ with tab_sistemas:
                     inv_yz = sp.simplify(P_f.subs(x_sym, 0)) == 0
                     
                     if not (inv_xy or inv_xz or inv_yz):
-                        st.info("💡 **Nota Matemática:** Este sistema no posee planos cartesianos invariantes. Esto significa que cualquier trayectoria que inicie en un plano z=0, y=0 o x=0 escapará inevitablemente hacia la tercera dimensión. Por rigor topológico, las proyecciones 2D estándar se han omitido, ya que graficarlas resultaría en líneas cruzadas que no representan un campo vectorial bidimensional válido.")
+                        st.info("💡 **Nota Matemática:** Este sistema no posee planos cartesianos invariantes. Esto significa que cualquier trayectoria que inicie en un plano z=0, y=0 o x=0 escapará inevitablemente hacia la tercera dimensión. Por rigor topológico, las proyecciones 2D de campos estáticos se han omitido, ya que graficarlas resultaría en campos que no representan el flujo real.")
+                        
+                        st.write("Sin embargo, aquí están las **proyecciones de las trayectorias espaciales reales** sobre los planos cartesianos:")
+                        fig_proy, (ax_xy, ax_xz, ax_yz) = plt.subplots(1, 3, figsize=(15, 5))
+                        
+                        if 'trayectorias_f' in st.session_state:
+                            for traj_f, traj_b in zip(st.session_state.trayectorias_f, st.session_state.trayectorias_b):
+                                ax_xy.plot(traj_f[:,0], traj_f[:,1], color='royalblue', alpha=0.5)
+                                ax_xy.plot(traj_b[:,0], traj_b[:,1], color='crimson', alpha=0.5)
+                                ax_xz.plot(traj_f[:,0], traj_f[:,2], color='royalblue', alpha=0.5)
+                                ax_xz.plot(traj_b[:,0], traj_b[:,2], color='crimson', alpha=0.5)
+                                ax_yz.plot(traj_f[:,1], traj_f[:,2], color='royalblue', alpha=0.5)
+                                ax_yz.plot(traj_b[:,1], traj_b[:,2], color='crimson', alpha=0.5)
+                                
+                                for trayecto in [traj_f, traj_b]:
+                                    if len(trayecto) > 20:
+                                        step_q = max(1, len(trayecto) // 4)
+                                        for pt in trayecto[step_q::step_q]:
+                                            u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
+                                            norm_xy = np.hypot(u, v)
+                                            if norm_xy > 1e-5:
+                                                ax_xy.quiver(pt[0], pt[1], u/norm_xy, v/norm_xy, color='black', scale=15, width=0.015)
+                                            norm_xz = np.hypot(u, w)
+                                            if norm_xz > 1e-5:
+                                                ax_xz.quiver(pt[0], pt[2], u/norm_xz, w/norm_xz, color='black', scale=15, width=0.015)
+                                            norm_yz = np.hypot(v, w)
+                                            if norm_yz > 1e-5:
+                                                ax_yz.quiver(pt[1], pt[2], v/norm_yz, w/norm_yz, color='black', scale=15, width=0.015)
+
+                        ax_xy.set_title("Proyección XY"); ax_xy.set_xlabel("x"); ax_xy.set_ylabel("y")
+                        ax_xy.grid(True, linestyle='--', alpha=0.5); ax_xy.axhline(0, color='black'); ax_xy.axvline(0, color='black')
+                        ax_xy.set_xlim([-5, 5]); ax_xy.set_ylim([-5, 5])
+                        
+                        ax_xz.set_title("Proyección XZ"); ax_xz.set_xlabel("x"); ax_xz.set_ylabel("z")
+                        ax_xz.grid(True, linestyle='--', alpha=0.5); ax_xz.axhline(0, color='black'); ax_xz.axvline(0, color='black')
+                        ax_xz.set_xlim([-5, 5]); ax_xz.set_ylim([-5, 5])
+                        
+                        ax_yz.set_title("Proyección YZ"); ax_yz.set_xlabel("y"); ax_yz.set_ylabel("z")
+                        ax_yz.grid(True, linestyle='--', alpha=0.5); ax_yz.axhline(0, color='black'); ax_yz.axvline(0, color='black')
+                        ax_yz.set_xlim([-5, 5]); ax_yz.set_ylim([-5, 5])
+                        
+                        plt.tight_layout()
+                        st.pyplot(fig_proy)
                     else:
                         st.write("Visualización estricta de subespacios: Se muestran únicamente los planos que conforman **variedades invariantes** del sistema.")
                         fig_proy, axs = plt.subplots(1, sum([inv_xy, inv_xz, inv_yz]), figsize=(5 * sum([inv_xy, inv_xz, inv_yz]), 5))
