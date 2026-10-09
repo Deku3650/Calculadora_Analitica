@@ -2,8 +2,8 @@ import streamlit as st
 import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy.integrate as spi
-from sympy.parsing.sympy_parser import standard_transformations, implicit_multiplication_application, convert_xor
+import scipy.integrate as spi 
+from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application, convert_xor
 
 try:
     from utils import leer_expresion_st, imprimir_matriz_simbolica, parse_seguro
@@ -26,7 +26,7 @@ if 'sys_R' not in st.session_state:
     st.session_state.sys_R = None
 
 st.title("🌪️ Análisis de Campos Vectoriales y Sistemas Dinámicos")
-st.markdown(r"Estudio de sistemas lineales y no lineales, retratos de fase, diagonalización, límites asintóticos e isoclinas en $\mathbb{R}^2$ y $\mathbb{R}^3$.")
+st.markdown("Estudio de sistemas lineales y no lineales, retratos de fase, diagonalización, límites asintóticos e isoclinas en $\mathbb{R}^2$ y $\mathbb{R}^3$.")
 
 tab_sistemas, tab_edo1 = st.tabs([
     "Sistemas y Plano Fase",
@@ -47,7 +47,7 @@ with tab_sistemas:
     
     with col_input:
         st.subheader("Definición del Campo Vectorial")
-        st.info(r"💡 Exprese su campo $V(x, y)$ o $V(x, y, z)$.")
+        st.info("💡 Exprese su campo $V(x, y)$ o $V(x, y, z)$.")
         
         fuente_matriz = st.radio("Entrada:", ["Ecuaciones Explícitas", "Matriz $2\\times2$ (Lineal)", "Matriz $3\\times3$ (Lineal)", "Importar del Módulo de Matrices"])
         
@@ -299,7 +299,6 @@ with tab_sistemas:
                                 
                                 st.markdown("### Soluciones del Sistema")
                                 
-                                # SOLUCIÓN REAL CON DSOLVE (Fuerza Identidad de Euler y Senos/Cosenos)
                                 try:
                                     x_fun = sp.Function('x')(t_sym)
                                     y_fun = sp.Function('y')(t_sym)
@@ -315,7 +314,7 @@ with tab_sistemas:
                                         
                                     sol_real = sp.dsolve(eqs_lin)
                                     
-                                    st.write("**Solución analítica del sistema original (Expresión Real Analítica):**")
+                                    st.write("**Solución analítica del sistema original:**")
                                     for eq_sol in sol_real:
                                         st.latex(sp.latex(eq_sol))
                                         
@@ -325,7 +324,6 @@ with tab_sistemas:
                                 if val_prop_reales:
                                     if not es_3d and lambdas[0] != lambdas[1]:
                                         st.markdown("### Comportamiento Asintótico (Límites)")
-                                        # Extraer componentes si es posible
                                         try:
                                             x_t_expr = sol_real[0].rhs
                                             y_t_expr = sol_real[1].rhs
@@ -394,9 +392,8 @@ with tab_sistemas:
                 try:
                     fig3d_fase = plt.figure(figsize=(8, 8))
                     ax3d_fase = fig3d_fase.add_subplot(111, projection='3d')
-                    ax3d_fase.set_box_aspect([1, 1, 1]) # Centrar ejes isométricamente
+                    ax3d_fase.set_box_aspect([1, 1, 1]) 
                     
-                    # Dibujar Ejes de Coordenadas principales
                     ax3d_fase.plot([-4, 4], [0, 0], [0, 0], 'k--', alpha=0.5, linewidth=1)
                     ax3d_fase.plot([0, 0], [-4, 4], [0, 0], 'k--', alpha=0.5, linewidth=1)
                     ax3d_fase.plot([0, 0], [0, 0], [-4, 4], 'k--', alpha=0.5, linewidth=1)
@@ -405,36 +402,45 @@ with tab_sistemas:
                         x_v, y_v, z_v = Y
                         return [func_U(x_v, y_v, z_v), func_V(x_v, y_v, z_v), func_W(x_v, y_v, z_v)]
                     
-                    # Condiciones iniciales separadas de los ejes para provocar el efecto espiral si hay eigenvalores complejos
                     ics = [
                         [2, 2, 2], [-2, -2, -2], [2, -2, 2], [-2, 2, -2],
                         [3, 0, 1], [0, 3, 1], [1, 0, 3],
                         [1.5, 1.5, 0.5], [-1.5, 1.5, -0.5]
                     ]
                     
-                    # Tiempo masivo para permitir que los "resortes" den varias vueltas
                     t_span = np.linspace(0, 25, 2000) 
                     t_span_rev = np.linspace(0, -25, 2000) 
+                    
+                    trayectorias_f = []
+                    trayectorias_b = []
                     
                     for ic in ics:
                         try:
                             traj_f = spi.odeint(vector_field_3d, ic, t_span)
                             traj_b = spi.odeint(vector_field_3d, ic, t_span_rev)
                             
+                            trayectorias_f.append(traj_f)
+                            trayectorias_b.append(traj_b)
+                            
                             ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='royalblue', alpha=0.8, linewidth=1.2)
                             ax3d_fase.plot(traj_b[:,0], traj_b[:,1], traj_b[:,2], color='crimson', alpha=0.8, linewidth=1.2)
                             
-                            # Quiver sobre la trayectoria para indicar dirección del tiempo (Flechas en R3)
-                            step = len(traj_f) // 5
-                            for idx in range(step, len(traj_f) - step, step):
-                                pt = traj_f[idx]
-                                u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
-                                norm = np.linalg.norm([u, v, w])
-                                if norm > 1e-5:
-                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, 
-                                                     color='black', length=0.7, normalize=True, arrow_length_ratio=0.5, pivot='middle')
+                            # --- NUEVA LÓGICA DE QUIVER (FILTRADO GEOMÉTRICO) ---
+                            for trayecto in [traj_f, traj_b]:
+                                pts_visibles = [p for p in trayecto if np.max(np.abs(p)) <= 4.0] # Solo intercepta puntos DENTRO de la caja visible
+                                if pts_visibles:
+                                    step_q = max(1, len(pts_visibles) // 3) # Pone ~3 flechas a lo largo de la parte visible de la curva
+                                    for pt in pts_visibles[step_q::step_q]:
+                                        u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
+                                        norm = np.linalg.norm([u, v, w])
+                                        if norm > 1e-5:
+                                            ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, 
+                                                             color='black', length=0.8, normalize=True, arrow_length_ratio=0.5)
                         except Exception:
                             pass 
+                    
+                    st.session_state.trayectorias_f = trayectorias_f
+                    st.session_state.trayectorias_b = trayectorias_b
                     
                     ax3d_fase.set_xlabel("x")
                     ax3d_fase.set_ylabel("y")
@@ -447,7 +453,6 @@ with tab_sistemas:
                     
             with tab_proy:
                 try:
-                    # VERIFICACIÓN RIGUROSA DE PLANOS INVARIANTES
                     inv_xy = sp.simplify(R_f.subs(z_sym, 0)) == 0
                     inv_xz = sp.simplify(Q_f.subs(y_sym, 0)) == 0
                     inv_yz = sp.simplify(P_f.subs(x_sym, 0)) == 0
