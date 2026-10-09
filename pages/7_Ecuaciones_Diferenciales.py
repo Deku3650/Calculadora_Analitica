@@ -2,11 +2,11 @@ import streamlit as st
 import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy.integrate as spi
+import scipy.integrate as spi 
 from sympy.parsing.sympy_parser import standard_transformations, implicit_multiplication_application, convert_xor
 
 try:
-    from utils import leer_expresion_st, imprimir_matriz_simbolica, parse_seguro
+    from utils import leer_expresion_st, imprimir_matriz_simbolica, parse_seguro, calcular_con_limite
 except ImportError:
     st.error("Error crítico: No se pudo cargar el analizador matemático desde utils.py. Asegúrese de ejecutar la app desde la raíz.")
     st.stop()
@@ -312,13 +312,14 @@ with tab_sistemas:
                                             eq_fila += A_eval[i,j] * funcs[j]
                                         eqs_lin.append(sp.Eq(funcs[i].diff(t_sym), eq_fila))
                                         
-                                    sol_real = sp.dsolve(eqs_lin)
+                                    # BLINDAJE DE RESOLUTOR: Evitar congelamiento en sistemas inmensos
+                                    sol_real = calcular_con_limite(sp.dsolve, args=(eqs_lin,), timeout=10)
                                     
                                     st.write("**Solución analítica del sistema original (Expresión Real Analítica):**")
                                     for eq_sol in sol_real:
                                         st.latex(sp.latex(eq_sol))
                                         
-                                except Exception as e:
+                                except Exception:
                                     st.warning("No se pudo forzar la simplificación a senos y cosenos reales. Mostrando solución compleja.")
 
                                 if val_prop_reales:
@@ -402,30 +403,27 @@ with tab_sistemas:
                         x_v, y_v, z_v = Y
                         return [func_U(x_v, y_v, z_v), func_V(x_v, y_v, z_v), func_W(x_v, y_v, z_v)]
                     
-                    # Semillas iniciales amplias incluyendo valores microscópicos
-                    # Para garantizar que los "resortes" altamente expansivos sean visibles antes de escapar
+                    # Semillas iniciales cruzadas y microscópicas para garantizar que los resortes 
+                    # altamente inestables logren dar vueltas visibles antes de escapar
                     ics = [
-                        [2, 0, 0], [0, 2, 0], [0, 0, 2], [-2, 0, 0], [0, -2, 0], [0, 0, -2],
-                        [1e-2, 0, 1e-2], [0, 1e-2, 1e-2], [1e-2, 1e-2, 0],
-                        [1e-4, 1e-4, 1e-4], [-1e-4, -1e-4, -1e-4],
-                        [1e-6, 0, 0], [0, 1e-6, 0], [0, 0, 1e-6] 
+                        [2, 2, 2], [-2, -2, -2], [2, -2, 2], [-2, 2, -2],
+                        [3, 3, 1e-3], [-3, -3, 1e-3], [3, -3, -1e-3], [-3, 3, -1e-3],
+                        [1e-3, 1e-3, 3], [-1e-3, -1e-3, -3], [1e-3, -1e-3, 3], [-1e-3, 1e-3, -3],
+                        [1e-4, 1e-4, 1e-4], [-1e-4, -1e-4, -1e-4]
                     ]
                     
-                    # Alta densidad de integración para curvas suaves
-                    t_span = np.linspace(0, 15, 4000) 
-                    t_span_rev = np.linspace(0, -15, 4000) 
+                    t_span = np.linspace(0, 15, 3000) 
+                    t_span_rev = np.linspace(0, -15, 3000) 
                     
                     trayectorias_f = []
                     trayectorias_b = []
                     
                     for ic in ics:
                         try:
-                            traj_f = spi.odeint(vector_field_3d, ic, t_span)
-                            traj_b = spi.odeint(vector_field_3d, ic, t_span_rev)
+                            # BLINDAJE DE INTEGRACIÓN: Limitamos los pasos máximos para evitar que matrices explosivas congelen scipy
+                            traj_f = spi.odeint(vector_field_3d, ic, t_span, mxstep=1500)
+                            traj_b = spi.odeint(vector_field_3d, ic, t_span_rev, mxstep=1500)
                             
-                            # FILTRADO DE PUNTOS AL INFINITO:
-                            # Cortamos la trayectoria en cuanto sale del cubo visible para evitar
-                            # colapsos visuales de matplotlib y deformaciones.
                             mask_f = np.max(np.abs(traj_f), axis=1) <= 5.0
                             mask_b = np.max(np.abs(traj_b), axis=1) <= 5.0
                             
@@ -439,18 +437,16 @@ with tab_sistemas:
                                 trayectorias_b.append(traj_b_filt)
                                 ax3d_fase.plot(traj_b_filt[:,0], traj_b_filt[:,1], traj_b_filt[:,2], color='crimson', alpha=0.8, linewidth=1.5)
                             
-                            # --- CORRECCIÓN: UNA SOLA FLECHA POR CURVA ---
+                            # UNA SOLA FLECHA DIRECCIONAL POR CURVA
                             for trayecto in [traj_f_filt, traj_b_filt]:
                                 if len(trayecto) > 20:
-                                    # Calculamos el punto medio matemático de la curva visible
                                     mid_idx = len(trayecto) // 2
                                     pt = trayecto[mid_idx]
                                     u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
                                     norm = np.linalg.norm([u, v, w])
                                     if norm > 1e-5:
-                                        # Graficamos UNA ÚNICA flecha
                                         ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, 
-                                                         color='black', length=0.6, normalize=True, arrow_length_ratio=0.4, linewidth=1.2)
+                                                         color='black', length=0.8, normalize=True, arrow_length_ratio=0.5, linewidth=1.5)
                         except Exception:
                             pass 
                     
@@ -487,7 +483,7 @@ with tab_sistemas:
                                 ax_yz.plot(traj_f[:,1], traj_f[:,2], color='royalblue', alpha=0.5)
                                 ax_yz.plot(traj_b[:,1], traj_b[:,2], color='crimson', alpha=0.5)
                                 
-                                # --- CORRECCIÓN: UNA SOLA FLECHA PROYECTADA POR CURVA ---
+                                # UNA SOLA FLECHA PROYECTADA POR CURVA
                                 for trayecto in [traj_f, traj_b]:
                                     if len(trayecto) > 20:
                                         mid_idx = len(trayecto) // 2
@@ -496,13 +492,13 @@ with tab_sistemas:
                                         
                                         norm_xy = np.hypot(u, v)
                                         if norm_xy > 1e-5:
-                                            ax_xy.quiver(pt[0], pt[1], u/norm_xy, v/norm_xy, color='black', scale=20, width=0.012)
+                                            ax_xy.quiver(pt[0], pt[1], u/norm_xy, v/norm_xy, color='black', scale=20, width=0.015)
                                         norm_xz = np.hypot(u, w)
                                         if norm_xz > 1e-5:
-                                            ax_xz.quiver(pt[0], pt[2], u/norm_xz, w/norm_xz, color='black', scale=20, width=0.012)
+                                            ax_xz.quiver(pt[0], pt[2], u/norm_xz, w/norm_xz, color='black', scale=20, width=0.015)
                                         norm_yz = np.hypot(v, w)
                                         if norm_yz > 1e-5:
-                                            ax_yz.quiver(pt[1], pt[2], v/norm_yz, w/norm_yz, color='black', scale=20, width=0.012)
+                                            ax_yz.quiver(pt[1], pt[2], v/norm_yz, w/norm_yz, color='black', scale=20, width=0.015)
 
                         ax_xy.set_title("Proyección XY"); ax_xy.set_xlabel("x"); ax_xy.set_ylabel("y")
                         ax_xy.grid(True, linestyle='--', alpha=0.5); ax_xy.axhline(0, color='black'); ax_xy.axvline(0, color='black')
@@ -527,6 +523,11 @@ with tab_sistemas:
                         Y_m, X_m = np.mgrid[-4:4:50j, -4:4:50j]
                         
                         if inv_xy:
+                            try:
+                                # Aplicar cálculo de equilibrio seguro
+                                equilibrios_xy = calcular_con_limite(sp.solve, args=([P_f.subs(z_sym,0), Q_f.subs(z_sym,0)], (x_sym, y_sym)), kwargs={'dict':True}, timeout=5)
+                            except Exception: pass
+                            
                             ax = axs[idx_ax]
                             U_xy = np.broadcast_to(func_U(X_m, Y_m, 0), X_m.shape).astype(np.float64)
                             V_xy = np.broadcast_to(func_V(X_m, Y_m, 0), X_m.shape).astype(np.float64)
@@ -579,7 +580,8 @@ with tab_sistemas:
                 
                 puntos_criticos = []
                 try:
-                    equilibrios = sp.solve([p_eq, q_eq], (x_sym, y_sym), dict=True)
+                    # BLINDAJE DE PUNTOS CRÍTICOS (Evitar cuelgues en funciones complejas)
+                    equilibrios = calcular_con_limite(sp.solve, args=([p_eq, q_eq], (x_sym, y_sym)), kwargs={'dict':True}, timeout=5)
                     if isinstance(equilibrios, list):
                         for sol in equilibrios:
                             if x_sym in sol and y_sym in sol:
