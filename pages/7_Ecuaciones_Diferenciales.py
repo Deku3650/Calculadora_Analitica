@@ -134,6 +134,7 @@ with tab_sistemas:
         Q_expr = st.session_state.sys_Q
         es_3d = st.session_state.sys_R is not None
         Lambda_sym = None 
+        lambdas_diag = [] # Guardará los eigenvalores para las proyecciones canónicas
         
         if es_3d:
             R_expr = st.session_state.sys_R
@@ -278,6 +279,7 @@ with tab_sistemas:
                             for vec in vecs:
                                 P_mat.append(vec)
                                 lambdas.append(val)
+                                lambdas_diag.append(val) # Guardar para gráficos canónicos
                                 
                         if len(P_mat) == (3 if es_3d else 2):
                             P_sym = sp.Matrix.hstack(*P_mat)
@@ -316,7 +318,7 @@ with tab_sistemas:
                                     
                                     st.write("**Solución analítica del sistema original:**")
                                     for eq_sol in sol_real:
-                                        # Transformar exponenciales complejas a senos y cosenos reales
+                                        # Transformar exponenciales complejas a senos y cosenos reales (Identidad de Euler)
                                         eq_trig = sp.trigsimp(eq_sol.rewrite(sp.sin))
                                         st.latex(sp.latex(eq_trig))
                                         
@@ -349,7 +351,7 @@ with tab_sistemas:
                                         except:
                                             st.warning("Los límites asintóticos dependen fuertemente de las condiciones iniciales.")
                                 else:
-                                    st.info("💡 **Nota Matemática:** Los valores propios son complejos. El comportamiento oscilatorio (rotaciones) implica funciones periódicas (senos y cosenos), por lo que las trayectorias giran en torno a los ejes en lugar de tender a una asíntota lineal directa.")
+                                    st.info("💡 **Nota Matemática:** Los valores propios son complejos. El comportamiento oscilatorio (rotaciones) implica funciones periódicas (senos y cosenos), por lo que el análisis de asíntotas lineales no aplica.")
 
                             except Exception as e:
                                 st.error(f"Error en la diagonalización: {e}")
@@ -366,36 +368,22 @@ with tab_sistemas:
         if es_3d: func_W = sp.lambdify((x_sym, y_sym, z_sym), R_f, modules=['numpy'])
         
         if es_3d:
-            tab_vect3d, tab_fase3d, tab_proy = st.tabs(["🔀 Campo Vectorial 3D", "🌌 Retrato de Fase 3D (Espirales)", "🪞 Proyecciones en 2D (Planos Invariantes)"])
-            
-            with tab_vect3d:
-                try:
-                    fig3d = plt.figure(figsize=(7, 7))
-                    ax3d = fig3d.add_subplot(111, projection='3d')
-                    ax3d.set_box_aspect([1, 1, 1])
-                    
-                    X_q, Y_q, Z_q = np.mgrid[-4:4:6j, -4:4:6j, -4:4:6j]
-                    U_q = np.broadcast_to(func_U(X_q, Y_q, Z_q), X_q.shape).astype(np.float64)
-                    V_q = np.broadcast_to(func_V(X_q, Y_q, Z_q), X_q.shape).astype(np.float64)
-                    W_q = np.broadcast_to(func_W(X_q, Y_q, Z_q), X_q.shape).astype(np.float64)
-                    
-                    ax3d.quiver(X_q, Y_q, Z_q, U_q, V_q, W_q, length=0.6, normalize=True, color='mediumpurple', alpha=0.7)
-                    ax3d.plot([-4, 4], [0, 0], [0, 0], 'k--', alpha=0.4)
-                    ax3d.plot([0, 0], [-4, 4], [0, 0], 'k--', alpha=0.4)
-                    ax3d.plot([0, 0], [0, 0], [-4, 4], 'k--', alpha=0.4)
-                    ax3d.set_xlabel("x"); ax3d.set_ylabel("y"); ax3d.set_zlabel("z")
-                    ax3d.set_title("Campo Vectorial Direccional")
-                    st.pyplot(fig3d)
-                except Exception as e:
-                    st.error(f"Error al generar gráfica 3D: {e}")
+            # Reestructuración de Pestañas: Fase 3D, Cartesianas y Canónicas (Si es diagonalizable)
+            if es_diagonalizable and es_lineal and val_prop_reales:
+                tab_fase3d, tab_proy_cart, tab_canonico3d = st.tabs(["🌌 Retrato de Fase 3D", "🪞 Proyecciones Cartesianas (XY, XZ, YZ)", "📐 Planos Canónicos (Eigenespacios)"])
+                mostrar_canonico3d = True
+            else:
+                tab_fase3d, tab_proy_cart = st.tabs(["🌌 Retrato de Fase 3D", "🪞 Proyecciones Cartesianas (XY, XZ, YZ)"])
+                mostrar_canonico3d = False
                     
             with tab_fase3d:
-                st.write(r"Generando trayectorias dinámicas hacia adelante ($t \ge 0$) en $\mathbb{R}^3$...")
+                st.write(r"Generando trayectorias reales en $\mathbb{R}^3$...")
                 try:
                     fig3d_fase = plt.figure(figsize=(8, 8))
                     ax3d_fase = fig3d_fase.add_subplot(111, projection='3d')
                     ax3d_fase.set_box_aspect([1, 1, 1]) 
                     
+                    # Dibujar ejes de coordenadas principales
                     ax3d_fase.plot([-5, 5], [0, 0], [0, 0], 'k--', alpha=0.5, linewidth=1)
                     ax3d_fase.plot([0, 0], [-5, 5], [0, 0], 'k--', alpha=0.5, linewidth=1)
                     ax3d_fase.plot([0, 0], [0, 0], [-5, 5], 'k--', alpha=0.5, linewidth=1)
@@ -404,137 +392,150 @@ with tab_sistemas:
                         x_v, y_v, z_v = Y
                         return [func_U(x_v, y_v, z_v), func_V(x_v, y_v, z_v), func_W(x_v, y_v, z_v)]
                     
-                    # Condiciones Iniciales Distribuidas Geométricamente
-                    # Capturan el comportamiento cerca y lejos del origen en sistemas estables/inestables
-                    radios = [0.1, 1.0, 3.0]
-                    puntos_base = [
-                        [1,0,0], [0,1,0], [0,0,1],
-                        [-1,0,0], [0,-1,0], [0,0,-1],
-                        [0.577, 0.577, 0.577], [-0.577, -0.577, -0.577],
-                        [0.577, -0.577, 0.577], [-0.577, 0.577, -0.577]
-                    ]
-                    ics = [r * np.array(pt) for r in radios for pt in puntos_base]
+                    # Semillas iniciales distribuidas en esferas concéntricas para generar la estructura de la silla/nodo perfecta
+                    ics = []
+                    for r in [0.5, 2.0, 4.0]:
+                        for th in np.linspace(0, np.pi, 5):
+                            for ph in np.linspace(0, 2*np.pi, 8):
+                                ics.append([r*np.sin(th)*np.cos(ph), r*np.sin(th)*np.sin(ph), r*np.cos(th)])
+                    # Ejes explícitos
+                    for r in [0.1, 1, 3]:
+                        ics.extend([[r,0,0], [-r,0,0], [0,r,0], [0,-r,0], [0,0,r], [0,0,-r]])
                     
-                    t_span = np.linspace(0, 30, 3000) 
+                    # Densidad alta para que las espirales se vean suaves
+                    t_span = np.linspace(0, 15, 3000) 
+                    t_span_rev = np.linspace(0, -15, 3000) 
+                    
                     trayectorias_f = []
+                    trayectorias_b = []
                     
                     for ic in ics:
                         try:
-                            traj_f = spi.odeint(vector_field_3d, ic, t_span, mxstep=2000)
+                            traj_f = spi.odeint(vector_field_3d, ic, t_span, mxstep=1500)
+                            traj_b = spi.odeint(vector_field_3d, ic, t_span_rev, mxstep=1500)
                             
-                            # CORTE EXACTO: Si la trayectoria escapa del cubo [-5, 5], la cortamos en ese instante
-                            fueras = np.where(np.max(np.abs(traj_f), axis=1) > 5.0)[0]
-                            if len(fueras) > 0:
-                                traj_f = traj_f[:fueras[0]]
+                            # FILTRADO DE PUNTOS AL INFINITO (Recorte en la caja [-5, 5])
+                            mask_f = np.max(np.abs(traj_f), axis=1) <= 5.0
+                            mask_b = np.max(np.abs(traj_b), axis=1) <= 5.0
                             
-                            if len(traj_f) > 5:
-                                trayectorias_f.append(traj_f)
-                                ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='royalblue', alpha=0.8, linewidth=1.2)
-                                
-                                # Indicador de dirección (Punto de inicio en t=0)
-                                ax3d_fase.plot([traj_f[0,0]], [traj_f[0,1]], [traj_f[0,2]], marker='o', markersize=3, color='darkblue')
+                            traj_f_filt = traj_f[mask_f]
+                            traj_b_filt = traj_b[mask_b]
+                            
+                            if len(traj_f_filt) > 1:
+                                trayectorias_f.append(traj_f_filt)
+                                ax3d_fase.plot(traj_f_filt[:,0], traj_f_filt[:,1], traj_f_filt[:,2], color='royalblue', alpha=0.6, linewidth=1.2)
+                            if len(traj_b_filt) > 1:
+                                trayectorias_b.append(traj_b_filt)
+                                ax3d_fase.plot(traj_b_filt[:,0], traj_b_filt[:,1], traj_b_filt[:,2], color='crimson', alpha=0.6, linewidth=1.2)
+                            
+                            # UNA SOLA FLECHA DIRECCIONAL POR CURVA (en el centro visible de la trayectoria)
+                            for trayecto in [traj_f_filt, traj_b_filt]:
+                                if len(trayecto) > 15:
+                                    mid_idx = len(trayecto) // 2
+                                    pt = trayecto[mid_idx]
+                                    u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
+                                    norm = np.linalg.norm([u, v, w])
+                                    if norm > 1e-5:
+                                        ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='black', length=0.8, normalize=True)
                         except Exception:
                             pass 
                     
                     st.session_state.trayectorias_f = trayectorias_f
+                    st.session_state.trayectorias_b = trayectorias_b
                     
                     ax3d_fase.set_xlabel("x")
                     ax3d_fase.set_ylabel("y")
                     ax3d_fase.set_zlabel("z")
                     ax3d_fase.set_xlim([-5, 5]); ax3d_fase.set_ylim([-5, 5]); ax3d_fase.set_zlim([-5, 5])
-                    ax3d_fase.set_title("Retrato de Fase 3D (Tiempo Adelante)")
+                    ax3d_fase.set_title("Retrato de Fase 3D (Rojo: t<0, Azul: t>0)")
                     st.pyplot(fig3d_fase)
                 except Exception as e:
                     st.error(f"Error al generar trayectorias 3D: {e}")
                     
-            with tab_proy:
+            with tab_proy_cart:
+                st.write("Proyecciones cartesianas de las trayectorias espaciales simuladas sobre los planos principales.")
                 try:
-                    inv_xy = sp.simplify(R_f.subs(z_sym, 0)) == 0
-                    inv_xz = sp.simplify(Q_f.subs(y_sym, 0)) == 0
-                    inv_yz = sp.simplify(P_f.subs(x_sym, 0)) == 0
+                    fig_proy, (ax_xy, ax_xz, ax_yz) = plt.subplots(1, 3, figsize=(15, 5))
                     
-                    if not (inv_xy or inv_xz or inv_yz):
-                        st.info("💡 **Nota Matemática:** Este sistema no posee planos cartesianos invariantes. Esto significa que cualquier trayectoria que inicie en un plano z=0, y=0 o x=0 escapará hacia la tercera dimensión. Por rigor topológico, graficar vectores 2D estáticos carece de sentido.")
-                        st.write("A continuación se muestran las **proyecciones de las trayectorias espaciales (resortes)** sobre los planos:")
-                        
-                        fig_proy, (ax_xy, ax_xz, ax_yz) = plt.subplots(1, 3, figsize=(15, 5))
-                        
-                        if 'trayectorias_f' in st.session_state:
-                            for traj_f in st.session_state.trayectorias_f:
-                                ax_xy.plot(traj_f[:,0], traj_f[:,1], color='royalblue', alpha=0.6)
-                                ax_xy.plot([traj_f[0,0]], [traj_f[0,1]], marker='o', markersize=3, color='darkblue')
+                    if 'trayectorias_f' in st.session_state:
+                        for traj_f, traj_b in zip(st.session_state.trayectorias_f, st.session_state.trayectorias_b):
+                            ax_xy.plot(traj_f[:,0], traj_f[:,1], color='royalblue', alpha=0.4)
+                            ax_xy.plot(traj_b[:,0], traj_b[:,1], color='crimson', alpha=0.4)
+                            ax_xz.plot(traj_f[:,0], traj_f[:,2], color='royalblue', alpha=0.4)
+                            ax_xz.plot(traj_b[:,0], traj_b[:,2], color='crimson', alpha=0.4)
+                            ax_yz.plot(traj_f[:,1], traj_f[:,2], color='royalblue', alpha=0.4)
+                            ax_yz.plot(traj_b[:,1], traj_b[:,2], color='crimson', alpha=0.4)
+                            
+                            # UNA SOLA FLECHA DIRECCIONAL PARA LA PROYECCIÓN 2D
+                            for trayecto in [traj_f, traj_b]:
+                                if len(trayecto) > 15:
+                                    mid_idx = len(trayecto) // 2
+                                    pt = trayecto[mid_idx]
+                                    u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
+                                    
+                                    norm_xy = np.hypot(u, v)
+                                    if norm_xy > 1e-5:
+                                        ax_xy.quiver(pt[0], pt[1], u/norm_xy, v/norm_xy, color='black', scale=20, width=0.015, zorder=5)
+                                    norm_xz = np.hypot(u, w)
+                                    if norm_xz > 1e-5:
+                                        ax_xz.quiver(pt[0], pt[2], u/norm_xz, w/norm_xz, color='black', scale=20, width=0.015, zorder=5)
+                                    norm_yz = np.hypot(v, w)
+                                    if norm_yz > 1e-5:
+                                        ax_yz.quiver(pt[1], pt[2], v/norm_yz, w/norm_yz, color='black', scale=20, width=0.015, zorder=5)
 
-                                ax_xz.plot(traj_f[:,0], traj_f[:,2], color='royalblue', alpha=0.6)
-                                ax_xz.plot([traj_f[0,0]], [traj_f[0,2]], marker='o', markersize=3, color='darkblue')
-
-                                ax_yz.plot(traj_f[:,1], traj_f[:,2], color='royalblue', alpha=0.6)
-                                ax_yz.plot([traj_f[0,1]], [traj_f[0,2]], marker='o', markersize=3, color='darkblue')
-
-                        ax_xy.set_title("Proyección XY"); ax_xy.set_xlabel("x"); ax_xy.set_ylabel("y")
-                        ax_xy.grid(True, linestyle='--', alpha=0.5); ax_xy.axhline(0, color='black'); ax_xy.axvline(0, color='black')
-                        ax_xy.set_xlim([-5, 5]); ax_xy.set_ylim([-5, 5])
-                        
-                        ax_xz.set_title("Proyección XZ"); ax_xz.set_xlabel("x"); ax_xz.set_ylabel("z")
-                        ax_xz.grid(True, linestyle='--', alpha=0.5); ax_xz.axhline(0, color='black'); ax_xz.axvline(0, color='black')
-                        ax_xz.set_xlim([-5, 5]); ax_xz.set_ylim([-5, 5])
-                        
-                        ax_yz.set_title("Proyección YZ"); ax_yz.set_xlabel("y"); ax_yz.set_ylabel("z")
-                        ax_yz.grid(True, linestyle='--', alpha=0.5); ax_yz.axhline(0, color='black'); ax_yz.axvline(0, color='black')
-                        ax_yz.set_xlim([-5, 5]); ax_yz.set_ylim([-5, 5])
-                        
-                        plt.tight_layout()
-                        st.pyplot(fig_proy)
-                    else:
-                        st.write("Visualización estricta de subespacios: Se muestran únicamente los planos que conforman **variedades invariantes** del sistema.")
-                        fig_proy, axs = plt.subplots(1, sum([inv_xy, inv_xz, inv_yz]), figsize=(5 * sum([inv_xy, inv_xz, inv_yz]), 5))
-                        if sum([inv_xy, inv_xz, inv_yz]) == 1: axs = [axs]
-                        
-                        idx_ax = 0
-                        Y_m, X_m = np.mgrid[-4:4:50j, -4:4:50j]
-                        
-                        if inv_xy:
-                            try:
-                                equilibrios_xy = calcular_con_limite(sp.solve, args=([P_f.subs(z_sym,0), Q_f.subs(z_sym,0)], (x_sym, y_sym)), kwargs={'dict':True}, timeout=5)
-                            except Exception: pass
-                            
-                            ax = axs[idx_ax]
-                            U_xy = np.broadcast_to(func_U(X_m, Y_m, 0), X_m.shape).astype(np.float64)
-                            V_xy = np.broadcast_to(func_V(X_m, Y_m, 0), X_m.shape).astype(np.float64)
-                            vel_xy = np.sqrt(U_xy**2 + V_xy**2)
-                            ax.streamplot(X_m, Y_m, U_xy, V_xy, color=vel_xy, cmap='viridis', density=1.2)
-                            ax.set_title("Plano Invariante XY (z=0)")
-                            ax.set_xlabel("x"); ax.set_ylabel("y")
-                            ax.grid(True, linestyle='--', alpha=0.5)
-                            ax.axhline(0, color='black'); ax.axvline(0, color='black')
-                            idx_ax += 1
-                            
-                        if inv_xz:
-                            ax = axs[idx_ax]
-                            U_xz = np.broadcast_to(func_U(X_m, 0, Y_m), X_m.shape).astype(np.float64)
-                            W_xz = np.broadcast_to(func_W(X_m, 0, Y_m), X_m.shape).astype(np.float64)
-                            vel_xz = np.sqrt(U_xz**2 + W_xz**2)
-                            ax.streamplot(X_m, Y_m, U_xz, W_xz, color=vel_xz, cmap='viridis', density=1.2)
-                            ax.set_title("Plano Invariante XZ (y=0)")
-                            ax.set_xlabel("x"); ax.set_ylabel("z")
-                            ax.grid(True, linestyle='--', alpha=0.5)
-                            ax.axhline(0, color='black'); ax.axvline(0, color='black')
-                            idx_ax += 1
-                            
-                        if inv_yz:
-                            ax = axs[idx_ax]
-                            V_yz = np.broadcast_to(func_V(0, X_m, Y_m), X_m.shape).astype(np.float64)
-                            W_yz = np.broadcast_to(func_W(0, X_m, Y_m), X_m.shape).astype(np.float64)
-                            vel_yz = np.sqrt(V_yz**2 + W_yz**2)
-                            ax.streamplot(X_m, Y_m, V_yz, W_yz, color=vel_yz, cmap='viridis', density=1.2)
-                            ax.set_title("Plano Invariante YZ (x=0)")
-                            ax.set_xlabel("y"); ax.set_ylabel("z")
-                            ax.grid(True, linestyle='--', alpha=0.5)
-                            ax.axhline(0, color='black'); ax.axvline(0, color='black')
-                            
-                        plt.tight_layout()
-                        st.pyplot(fig_proy)
+                    ax_xy.set_title("Proyección XY"); ax_xy.set_xlabel("x"); ax_xy.set_ylabel("y")
+                    ax_xy.grid(True, linestyle='--', alpha=0.5); ax_xy.axhline(0, color='black'); ax_xy.axvline(0, color='black')
+                    ax_xy.set_xlim([-5, 5]); ax_xy.set_ylim([-5, 5])
+                    
+                    ax_xz.set_title("Proyección XZ"); ax_xz.set_xlabel("x"); ax_xz.set_ylabel("z")
+                    ax_xz.grid(True, linestyle='--', alpha=0.5); ax_xz.axhline(0, color='black'); ax_xz.axvline(0, color='black')
+                    ax_xz.set_xlim([-5, 5]); ax_xz.set_ylim([-5, 5])
+                    
+                    ax_yz.set_title("Proyección YZ"); ax_yz.set_xlabel("y"); ax_yz.set_ylabel("z")
+                    ax_yz.grid(True, linestyle='--', alpha=0.5); ax_yz.axhline(0, color='black'); ax_yz.axvline(0, color='black')
+                    ax_yz.set_xlim([-5, 5]); ax_yz.set_ylim([-5, 5])
+                    
+                    plt.tight_layout()
+                    st.pyplot(fig_proy)
                 except Exception as e:
-                    st.error(f"Error al analizar subespacios invariantes: {e}")
+                    st.error(f"Error al generar proyecciones: {e}")
+            
+            # NUEVO: PLANOS CANÓNICOS (y1-y2, y1-y3, y2-y3)
+            if mostrar_canonico3d:
+                with tab_canonico3d:
+                    st.write(r"Descomposición del sistema en sus **Planos Canónicos** (Subespacios generados por los vectores propios). Las trayectorias están completamente desacopladas.")
+                    try:
+                        fig_can, axs_can = plt.subplots(1, 3, figsize=(15, 5))
+                        l1, l2, l3 = lambdas_diag
+                        Y_c, X_c = np.mgrid[-5:5:50j, -5:5:50j]
+                        
+                        # y1 - y2
+                        U12 = float(l1) * X_c; V12 = float(l2) * Y_c
+                        axs_can[0].streamplot(X_c, Y_c, U12, V12, color=np.hypot(U12, V12), cmap='viridis', density=1.2, arrowsize=1.5)
+                        axs_can[0].set_title(f"Plano $y_1$-$y_2$ ($\lambda_1={l1}$, $\lambda_2={l2}$)")
+                        axs_can[0].set_xlabel("y_1"); axs_can[0].set_ylabel("y_2")
+                        
+                        # y1 - y3
+                        U13 = float(l1) * X_c; V13 = float(l3) * Y_c
+                        axs_can[1].streamplot(X_c, Y_c, U13, V13, color=np.hypot(U13, V13), cmap='viridis', density=1.2, arrowsize=1.5)
+                        axs_can[1].set_title(f"Plano $y_1$-$y_3$ ($\lambda_1={l1}$, $\lambda_3={l3}$)")
+                        axs_can[1].set_xlabel("y_1"); axs_can[1].set_ylabel("y_3")
+                        
+                        # y2 - y3
+                        U23 = float(l2) * X_c; V23 = float(l3) * Y_c
+                        axs_can[2].streamplot(X_c, Y_c, U23, V23, color=np.hypot(U23, V23), cmap='viridis', density=1.2, arrowsize=1.5)
+                        axs_can[2].set_title(f"Plano $y_2$-$y_3$ ($\lambda_2={l2}$, $\lambda_3={l3}$)")
+                        axs_can[2].set_xlabel("y_2"); axs_can[2].set_ylabel("y_3")
+                        
+                        for ax in axs_can:
+                            ax.axhline(0, color='black'); ax.axvline(0, color='black')
+                            ax.grid(True, linestyle='--', alpha=0.5)
+                        
+                        plt.tight_layout()
+                        st.pyplot(fig_can)
+                    except Exception as e:
+                        st.error(f"Error al generar planos canónicos: {e}")
+
         else:
             if es_lineal and Lambda_sym is not None and val_prop_reales:
                 tab_fase, tab_vect, tab_canonico = st.tabs(["🌊 Retrato de Fase (Original)", "🔀 Campo Vectorial (Quiver)", "📐 Plano Canónico (y1, y2)"])
@@ -589,7 +590,7 @@ with tab_sistemas:
                 V_s = np.broadcast_to(func_V(X_s, Y_s), X_s.shape).astype(np.float64)
                 velocidad = np.sqrt(U_s**2 + V_s**2)
                 
-                ax2.streamplot(X_s, Y_s, U_s, V_s, color=velocidad, cmap='viridis', linewidth=1.2)
+                ax2.streamplot(X_s, Y_s, U_s, V_s, color=velocidad, cmap='viridis', linewidth=1.2, arrowsize=1.5, density=1.5)
                 
                 try:
                     if np.ptp(U_s) > 0: ax2.contour(X_s, Y_s, U_s, levels=[0], colors=['red'], alpha=0.6, linewidths=2.0)
@@ -654,7 +655,7 @@ with tab_sistemas:
                             V_c = lambdas_diag[1] * Y_c
                             velocidad_c = np.sqrt(U_c**2 + V_c**2)
                             
-                            ax3.streamplot(X_c, Y_c, U_c, V_c, color=velocidad_c, cmap='plasma', linewidth=1.2)
+                            ax3.streamplot(X_c, Y_c, U_c, V_c, color=velocidad_c, cmap='plasma', linewidth=1.2, arrowsize=1.5, density=1.5)
                             ax3.set_xlim([-5, 5]); ax3.set_ylim([-5, 5])
                             ax3.axhline(0, color='black', linewidth=1.5); ax3.axvline(0, color='black', linewidth=1.5)
                             ax3.plot(0, 0, 'ro', markersize=8, markeredgecolor='black', zorder=5)
