@@ -7,6 +7,10 @@ from sympy.parsing.sympy_parser import parse_expr, standard_transformations, imp
 
 try:
     from utils import leer_expresion_st, imprimir_matriz_simbolica
+    try:
+        from utils import parse_seguro
+    except ImportError:
+        parse_seguro = parse_expr
 except ImportError:
     st.error("Error crítico: No se pudo cargar el analizador matemático desde utils.py. Asegúrese de ejecutar la app desde la raíz.")
     st.stop()
@@ -59,10 +63,10 @@ with tab_sistemas:
                 
                 if st.form_submit_button("Analizar Campo Vectorial"):
                     try:
-                        st.session_state.sys_P = parse_expr(str_P, transformations=transf, local_dict=dicc_loc)
-                        st.session_state.sys_Q = parse_expr(str_Q, transformations=transf, local_dict=dicc_loc)
+                        st.session_state.sys_P = parse_seguro(str_P, transformaciones=transf, local_dict=dicc_loc)
+                        st.session_state.sys_Q = parse_seguro(str_Q, transformaciones=transf, local_dict=dicc_loc)
                         if str_R.strip():
-                            st.session_state.sys_R = parse_expr(str_R, transformations=transf, local_dict=dicc_loc)
+                            st.session_state.sys_R = parse_seguro(str_R, transformaciones=transf, local_dict=dicc_loc)
                         else:
                             st.session_state.sys_R = None
                     except Exception as e:
@@ -297,7 +301,7 @@ with tab_sistemas:
                                     st.write("Matriz Inversa $P^{-1}$:")
                                     st.latex(rf"P^{{-1}} = {sp.latex(P_inv)}")
                                 with col_p3:
-                                    st.write("Matriz Diagonal $\Lambda = P^{-1}AP$:")
+                                    st.write(r"Matriz Diagonal $\Lambda = P^{-1}AP$:")
                                     st.latex(rf"\Lambda = {sp.latex(Lambda_sym)}")
                                 
                                 st.markdown("### Soluciones del Sistema")
@@ -317,6 +321,7 @@ with tab_sistemas:
                                 X_sol = sp.simplify(P_sym * Y_sol)
                                 st.write("**2. Solución en el sistema original $x(t) = P y(t)$:**")
                                 
+                                # SOLUCIÓN: Reescribir SOLO si hay complejos para usar senos y cosenos
                                 if X_sol.has(sp.I):
                                     try:
                                         x_f, y_f = sp.Function('x')(t_sym), sp.Function('y')(t_sym)
@@ -325,10 +330,19 @@ with tab_sistemas:
                                         eqs = [sp.Eq(funcs[i].diff(t_sym), sum(A_eval[i,j]*funcs[j] for j in range(len(funcs)))) for i in range(len(funcs))]
                                         sol_dsolve = sp.dsolve(eqs)
                                         X_sol = sp.Matrix([eq.rhs for eq in sol_dsolve])
+                                        
+                                        c1_r, c2_r, c3_r = sp.symbols('C_1 C_2 C_3', real=True)
+                                        X_sol = X_sol.subs({c1_sym: c1_r, c2_sym: c2_r, c3_sym: c3_r})
+                                        X_sol = X_sol.replace(
+                                            sp.exp, 
+                                            lambda arg: sp.exp(sp.re(arg)) * (sp.cos(sp.im(arg)) + sp.I * sp.sin(sp.im(arg))) if arg.has(sp.I) else sp.exp(arg)
+                                        )
+                                        X_sol = sp.simplify(sp.re(X_sol.expand()))
+                                        X_sol = X_sol.subs({c1_r: c1_sym, c2_r: c2_sym, c3_r: c3_sym})
                                     except Exception:
                                         pass
-                                        
-                                st.latex(rf"x(t) = {sp.latex(X_sol)}")
+                                
+                                st.latex(rf"x(t) = {sp.latex(sp.simplify(X_sol))}")
 
                                 if val_prop_reales:
                                     if not es_3d and lambdas[0] != lambdas[1]:
@@ -426,14 +440,14 @@ with tab_sistemas:
                                 u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
                                 norm = np.linalg.norm([u, v, w])
                                 if norm > 1e-5:
-                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='blue', length=0.2, arrow_length_ratio=0.4, alpha=0.9, normalize=True)
+                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='blue', length=0.15, arrow_length_ratio=0.5, alpha=0.9, normalize=True)
                             
                             if len(traj_b) > 10:
                                 pt = traj_b[len(traj_b)//2]
                                 u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
                                 norm = np.linalg.norm([u, v, w])
                                 if norm > 1e-5:
-                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='red', length=0.2, arrow_length_ratio=0.4, alpha=0.9, normalize=True)
+                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='red', length=0.15, arrow_length_ratio=0.5, alpha=0.9, normalize=True)
                         except Exception:
                             pass 
                     
@@ -494,9 +508,9 @@ with tab_sistemas:
                 tab_fase, tab_vect = st.tabs(["🌊 Retrato de Fase (Original)", "🔀 Campo Vectorial (Quiver)"])
                 mostrar_canonico = False
 
-            def generar_graficas_sistema(str_p, str_q, t_val, str_A=None):
-                p_eq = parse_expr(str_p, transformaciones=transf, local_dict=dicc_loc).subs(t_sym, t_val)
-                q_eq = parse_expr(str_q, transformaciones=transf, local_dict=dicc_loc).subs(t_sym, t_val)
+            try:
+                p_eq = parse_seguro(str_P, transformaciones=transf, local_dict=dicc_loc).subs(t_sym, t_eval)
+                q_eq = parse_seguro(str_Q, transformaciones=transf, local_dict=dicc_loc).subs(t_sym, t_eval)
                 
                 puntos_criticos = []
                 try:
@@ -530,6 +544,14 @@ with tab_sistemas:
                 ax1.set_xlabel("x"); ax1.set_ylabel("y")
                 ax1.set_title("Campo Vectorial Direccional")
                 
+                for pt in puntos_criticos:
+                    if -5 <= pt[0] <= 5 and -5 <= pt[1] <= 5:
+                        ax1.plot(pt[0], pt[1], 'ro', markersize=8, markeredgecolor='black', zorder=5)
+
+                with tab_vect:
+                    st.pyplot(fig1)
+                    st.caption("Vectores normalizados en color morado claro mostrando la dirección pura del flujo en el espacio.")
+
                 # ==========================================
                 # FIGURA 2: RETRATO DE FASE (CON VECTORES PROPIOS)
                 # ==========================================
@@ -549,12 +571,12 @@ with tab_sistemas:
 
                 for pt in puntos_criticos:
                     if -5 <= pt[0] <= 5 and -5 <= pt[1] <= 5:
-                        ax1.plot(pt[0], pt[1], 'ro', markersize=8, markeredgecolor='black', zorder=5)
                         ax2.plot(pt[0], pt[1], 'ro', markersize=8, markeredgecolor='black', zorder=5)
 
-                if str_A is not None:
+                if es_lineal:
                     try:
-                        A_mat = parse_expr(str_A, transformaciones=transf)
+                        str_A_eval = str(A_eval)
+                        A_mat = parse_seguro(str_A_eval, transformaciones=transf)
                         vecs = A_mat.eigenvects()
                         colores_vp = ['orange', 'cyan']
                         idx_c = 0
@@ -566,9 +588,9 @@ with tab_sistemas:
                                         if vx != 0:
                                             m = vy / vx
                                             x_vals = np.linspace(-5, 5, 100)
-                                            ax2.plot(x_vals, m * x_vals, color=colores_vp[idx_c % 2], linestyle='--', linewidth=2.5, label=f"Eje Propio $\lambda={val}$")
+                                            ax2.plot(x_vals, m * x_vals, color=colores_vp[idx_c % 2], linestyle='--', linewidth=2.5, label=rf"Eje Propio $\lambda={val}$")
                                         else:
-                                            ax2.axvline(0, color=colores_vp[idx_c % 2], linestyle='--', linewidth=2.5, label=f"Eje Propio $\lambda={val}$")
+                                            ax2.axvline(0, color=colores_vp[idx_c % 2], linestyle='--', linewidth=2.5, label=rf"Eje Propio $\lambda={val}$")
                                         idx_c += 1
                                     except: pass 
                     except:
@@ -578,32 +600,55 @@ with tab_sistemas:
                 ax2.axhline(0, color='black', linewidth=1); ax2.axvline(0, color='black', linewidth=1)
                 ax2.grid(True, linestyle='--', alpha=0.5)
                 ax2.set_xlabel("x_1"); ax2.set_ylabel("x_2")
+                ax2.plot([], [], color='red', linewidth=2.0, label="Isoclina x'=0")
+                ax2.plot([], [], color='blue', linewidth=2.0, label="Isoclina y'=0")
                 ax2.legend(loc='upper right', fontsize='small')
                 
                 with tab_fase:
-                    st.pyplot(fig2)
+                    c_graf, c_txt = st.columns([2, 1])
+                    with c_graf:
+                        st.pyplot(fig2)
+                    with c_txt:
+                        st.write("**Interpretación:**")
+                        st.write("Visualización del flujo continuo del sistema original. Si el sistema es lineal y posee vectores propios reales, estos se trazan como líneas punteadas, actuando como las asíntotas y directrices fundamentales del comportamiento geométrico.")
 
+                # ==========================================
+                # FIGURA 3: PLANO CANÓNICO Y1-Y2
+                # ==========================================
                 if mostrar_canonico:
                     with tab_canonico:
                         try:
-                            l1, l2 = lambdas_diag
+                            vecs = A_eval.eigenvects()
+                            lambdas_diag = []
+                            for val, mult, vectores in vecs:
+                                for _ in vectores:
+                                    lambdas_diag.append(float(val))
+                            
+                            l1, l2 = lambdas_diag[0], lambdas_diag[1]
                             fig3, ax3 = plt.subplots(figsize=(7, 6))
                             Y_c, X_c = np.mgrid[-5:5:100j, -5:5:100j]
-                            U_c = float(l1) * X_c
-                            V_c = float(l2) * Y_c
+                            U_c = l1 * X_c
+                            V_c = l2 * Y_c
                             velocidad_c = np.sqrt(U_c**2 + V_c**2)
                             
                             ax3.streamplot(X_c, Y_c, U_c, V_c, color=velocidad_c, cmap='plasma', linewidth=1.2, density=1.5)
                             ax3.set_xlim([-5, 5]); ax3.set_ylim([-5, 5])
-                            ax3.axhline(0, color='black'); ax3.axvline(0, color='black')
+                            ax3.axhline(0, color='black', linewidth=1.5); ax3.axvline(0, color='black', linewidth=1.5)
+                            ax3.plot(0, 0, 'ro', markersize=8, markeredgecolor='black', zorder=5)
                             ax3.grid(True, linestyle='--', alpha=0.5)
                             ax3.set_xlabel("y_1"); ax3.set_ylabel("y_2")
-                            ax3.set_title(f"Plano Diagonalizado: y_1'={l1}y_1, y_2'={l2}y_2")
-                            st.pyplot(fig3)
+                            ax3.set_title(rf"Plano Diagonalizado: y_1'={l1}y_1, y_2'={l2}y_2")
+                            
+                            c_graf2, c_txt2 = st.columns([2, 1])
+                            with c_graf2:
+                                st.pyplot(fig3)
+                            with c_txt2:
+                                st.write("**Interpretación:**")
+                                st.write(r"Este es el plano desacoplado $\dot{y} = \Lambda y$. Aquí los ejes representan directamente las direcciones de los vectores propios. La matriz $P$ aplica una transformación lineal que rota y estira este espacio para formar el retrato de fase original.")
                         except: pass
 
-                except Exception as e:
-                    st.error(f"Fallo en renderizado. Detalle: {e}")
+            except Exception as e:
+                st.error(f"Fallo en renderizado. Es posible que el campo contenga singularidades insolubles en la malla. Detalle: {e}")
 
         st.divider()
         st.subheader("4. Ecuación de Órbitas Diferenciales")
@@ -643,7 +688,7 @@ with tab_edo1:
         y = sp.Function('y')(x)
         
         try:
-            eq_parseada = parse_expr(eq_str, transformaciones=transf, local_dict={'x': x, 'y': y, 'diff': sp.diff, 'exp': sp.exp, 'sin': sp.sin, 'cos': sp.cos})
+            eq_parseada = parse_seguro(eq_str, transformaciones=transf, local_dict={'x': x, 'y': y, 'diff': sp.diff, 'exp': sp.exp, 'sin': sp.sin, 'cos': sp.cos})
             ecuacion_formal = sp.Eq(eq_parseada, 0)
             
             st.latex(sp.latex(ecuacion_formal))
