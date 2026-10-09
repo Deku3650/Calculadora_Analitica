@@ -602,8 +602,8 @@ with tab_sistemas:
                             st.pyplot(fig3)
                         except: pass
 
-            except exception as e:
-                st.error(f"Fallo en renderizado. Detalle: {e}")
+                except Exception as e:
+                    st.error(f"Fallo en renderizado. Detalle: {e}")
 
         st.divider()
         st.subheader("4. Ecuación de Órbitas Diferenciales")
