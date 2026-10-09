@@ -23,7 +23,7 @@ def graficar_cuadratica_st(a, b, c):
 
     fig, ax = plt.subplots(figsize=(8, 4))
     fig.patch.set_alpha(0.0)
-    ax.set_facecolor('#0f172a')  # Fondo oscuro elegante para el plano
+    ax.set_facecolor('#0f172a')
     
     ax.plot(x, y, label=f"f(x) = {a}x² + {b}x + {c}", color='#38bdf8', linewidth=2.5)
     ax.axhline(0, color='#64748b', linewidth=1, linestyle='--')
@@ -48,7 +48,7 @@ def renderizar_figura_3d_st(figura, params):
     fig.patch.set_alpha(0.0)
     ax = fig.add_subplot(111, projection='3d')
     ax.set_facecolor('#0f172a')
-    ax.set_box_aspect([1,1,1])
+    ax.set_box_aspect([1, 1, 1])
 
     color_cara = '#38bdf8'
     alfa = 0.55 
@@ -105,34 +105,42 @@ def renderizar_figura_3d_st(figura, params):
             h = math.sqrt(s**2 - (b/2)**2)
 
         Z = np.array([[-b/2, -b/2, 0], [b/2, -b/2, 0], [b/2, b/2, 0], [-b/2, b/2, 0], [0, 0, h]])
-        caras = [[Z[0],Z[1],Z[2],Z[3]], [Z[0],Z[1],Z[4]], [Z[1],Z[2],Z[4]], [Z[2],Z[3],Z[4]], [Z[3],Z[0],Z[4]]]
+        caras = [[Z[0], Z[1], Z[2], Z[3]], [Z[0], Z[1], Z[4]], [Z[1], Z[2], Z[4]], [Z[2], Z[3], Z[4]], [Z[3], Z[0], Z[4]]]
         ax.add_collection3d(Poly3DCollection(caras, alpha=alfa, facecolors=color_cara, edgecolors='#38bdf8'))
-        ax.set_xlim([-b, b]); ax.set_ylim([-b, b]); ax.set_zlim([0, h*1.2])
+        ax.set_xlim([-b, b])
+        ax.set_ylim([-b, b])
+        ax.set_zlim([0, h*1.2])
         ax.set_title("Pirámide Cuadrangular", color='#f8fafc', fontweight='bold')
 
     elif figura == 5: # Prisma rectangular
         l, w, h = params['l'], params['w'], params['h']
         Z = np.array([[-l/2, -w/2, 0], [l/2, -w/2, 0], [l/2, w/2, 0], [-l/2, w/2, 0],
                       [-l/2, -w/2, h], [l/2, -w/2, h], [l/2, w/2, h], [-l/2, w/2, h]])
-        caras = [[Z[0],Z[1],Z[2],Z[3]], [Z[4],Z[5],Z[6],Z[7]], [Z[0],Z[1],Z[5],Z[4]],
-                 [Z[2],Z[3],Z[7],Z[6]], [Z[1],Z[2],Z[6],Z[5]], [Z[4],Z[7],Z[3],Z[0]]]
+        caras = [[Z[0], Z[1], Z[2], Z[3]], [Z[4], Z[5], Z[6], Z[7]], [Z[0], Z[1], Z[5], Z[4]],
+                 [Z[2], Z[3], Z[7], Z[6]], [Z[1], Z[2], Z[6], Z[5]], [Z[4], Z[7], Z[3], Z[0]]]
         ax.add_collection3d(Poly3DCollection(caras, alpha=alfa, facecolors=color_cara, edgecolors='#38bdf8'))
         lim = max(l, w, h)
-        ax.set_xlim([-lim, lim]); ax.set_ylim([-lim, lim]); ax.set_zlim([0, lim])
+        ax.set_xlim([-lim, lim])
+        ax.set_ylim([-lim, lim])
+        ax.set_zlim([0, lim])
         ax.set_title("Prisma Rectangular", color='#f8fafc', fontweight='bold')
 
     elif figura == 6: # Prisma triangular
         b, l_tri, h = params['b'], params['l'], params['h']
         Z = np.array([[-b/2, 0, 0], [b/2, 0, 0], [0, l_tri, 0],
                       [-b/2, 0, h], [b/2, 0, h], [0, l_tri, h]])
-        caras = [[Z[0],Z[1],Z[2]], [Z[3],Z[4],Z[5]], [Z[0],Z[1],Z[4],Z[3]],
-                 [Z[1],Z[2],Z[5],Z[4]], [Z[2],Z[0],Z[3],Z[5]]]
+        caras = [[Z[0], Z[1], Z[2]], [Z[3], Z[4], Z[5]], [Z[0], Z[1], Z[4], Z[3]],
+                 [Z[1], Z[2], Z[5], Z[4]], [Z[2], Z[0], Z[3], Z[5]]]
         ax.add_collection3d(Poly3DCollection(caras, alpha=alfa, facecolors=color_cara, edgecolors='#38bdf8'))
         lim = max(b, l_tri, h)
-        ax.set_xlim([-lim, lim]); ax.set_ylim([-lim, lim]); ax.set_zlim([0, lim])
+        ax.set_xlim([-lim, lim])
+        ax.set_ylim([-lim, lim])
+        ax.set_zlim([0, lim])
         ax.set_title("Prisma Triangular", color='#f8fafc', fontweight='bold')
 
-    ax.set_xlabel('Eje X', color='#94a3b8'); ax.set_ylabel('Eje Y', color='#94a3b8'); ax.set_zlabel('Eje Z', color='#94a3b8')
+    ax.set_xlabel('Eje X', color='#94a3b8')
+    ax.set_ylabel('Eje Y', color='#94a3b8')
+    ax.set_zlabel('Eje Z', color='#94a3b8')
     ax.tick_params(colors='#64748b')
     return fig
 
@@ -153,3 +161,24 @@ tab1, tab2, tab3 = st.tabs(["Figuras 2D", "Geometría Analítica", "Figuras 3D (
 # PESTAÑA 1: FIGURAS 2D
 # ---------------------------------------------------------
 with tab1:
+    st.subheader("Cálculo de Áreas 2D")
+    figura_2d = st.selectbox("Seleccione la figura:", ["Cuadrado", "Rectángulo", "Círculo", "Triángulo"])
+    
+    if figura_2d == "Cuadrado":
+        L = st.number_input("Lado del cuadrado:", min_value=0.0, value=1.0)
+        st.success(f"**Área:** {L**2:.2f}")
+        
+    elif figura_2d == "Rectángulo":
+        col1, col2 = st.columns(2)
+        with col1:
+            b_rect = st.number_input("Base:", min_value=0.0, value=1.0)
+        with col2:
+            h_rect = st.number_input("Altura:", min_value=0.0, value=1.0)
+        st.success(f"**Área:** {b_rect*h_rect:.2f}")
+        
+    elif figura_2d == "Círculo":
+        r_circ = st.number_input("Radio:", min_value=0.0, value=1.0)
+        st.success(f"**Área:** {math.pi * (r_circ**2):.2f}")
+        
+    elif figura_2d == "Triángulo":
+        metodo_tri = st.radio("Método de cálculo:", ["Base y Altura", "Tres lados (Fórmula de Herón)", "Ángulo y dos lados"])
