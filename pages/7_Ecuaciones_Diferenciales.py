@@ -364,7 +364,7 @@ with tab_sistemas:
         if es_3d: func_W = sp.lambdify((x_sym, y_sym, z_sym), R_f, modules=['numpy'])
         
         if es_3d:
-            tab_vect3d, tab_fase3d, tab_proy = st.tabs(["🔀 Campo Vectorial 3D", "🌌 Retrato de Fase 3D (Trayectorias)", "🪞 Proyecciones en 2D (Planos Invariantes)"])
+            tab_vect3d, tab_fase3d, tab_proy = st.tabs(["🔀 Campo Vectorial 3D", "🌌 Retrato de Fase 3D (Espirales)", "🪞 Proyecciones en 2D (Planos Invariantes)"])
             
             with tab_vect3d:
                 try:
@@ -402,22 +402,18 @@ with tab_sistemas:
                         x_v, y_v, z_v = Y
                         return [func_U(x_v, y_v, z_v), func_V(x_v, y_v, z_v), func_W(x_v, y_v, z_v)]
                     
-                    # Condiciones iniciales separadas de los ejes y en el nivel microscópico
-                    # para permitir que los "resortes" de sistemas muy inestables logren dar vueltas visibles
+                    # Semillas iniciales amplias incluyendo valores microscópicos
+                    # Para garantizar que los "resortes" altamente expansivos sean visibles antes de escapar
                     ics = [
-                        # Macro condiciones (Sistemas estables)
-                        [3, 0, 0], [0, 3, 0], [0, 0, 3],
-                        [-3, 0, 0], [0, -3, 0], [0, 0, -3],
-                        [2, 2, 2], [-2, -2, -2], [2, -2, 2], [-2, 2, -2],
-                        # Micro condiciones (Sistemas fuertemente inestables)
-                        [1e-3, 0, 1e-3], [0, 1e-3, 1e-3], [1e-3, 1e-3, 0],
-                        [-1e-3, 0, 0], [0, -1e-3, 0], [0, 0, -1e-3],
-                        [1e-4, 1e-4, 1e-4], [-1e-4, -1e-4, -1e-4]
+                        [2, 0, 0], [0, 2, 0], [0, 0, 2], [-2, 0, 0], [0, -2, 0], [0, 0, -2],
+                        [1e-2, 0, 1e-2], [0, 1e-2, 1e-2], [1e-2, 1e-2, 0],
+                        [1e-4, 1e-4, 1e-4], [-1e-4, -1e-4, -1e-4],
+                        [1e-6, 0, 0], [0, 1e-6, 0], [0, 0, 1e-6] 
                     ]
                     
-                    # Aumentamos resolución para que las curvas cerradas no se vean poligonales
-                    t_span = np.linspace(0, 20, 3000) 
-                    t_span_rev = np.linspace(0, -20, 3000) 
+                    # Alta densidad de integración para curvas suaves
+                    t_span = np.linspace(0, 15, 4000) 
+                    t_span_rev = np.linspace(0, -15, 4000) 
                     
                     trayectorias_f = []
                     trayectorias_b = []
@@ -428,8 +424,8 @@ with tab_sistemas:
                             traj_b = spi.odeint(vector_field_3d, ic, t_span_rev)
                             
                             # FILTRADO DE PUNTOS AL INFINITO:
-                            # Matplotlib colapsa si grafica valores como 10^30. Cortamos la trayectoria
-                            # exactamente cuando sale del cubo visible [-5, 5]
+                            # Cortamos la trayectoria en cuanto sale del cubo visible para evitar
+                            # colapsos visuales de matplotlib y deformaciones.
                             mask_f = np.max(np.abs(traj_f), axis=1) <= 5.0
                             mask_b = np.max(np.abs(traj_b), axis=1) <= 5.0
                             
@@ -438,21 +434,23 @@ with tab_sistemas:
                             
                             if len(traj_f_filt) > 1:
                                 trayectorias_f.append(traj_f_filt)
-                                ax3d_fase.plot(traj_f_filt[:,0], traj_f_filt[:,1], traj_f_filt[:,2], color='royalblue', alpha=0.8, linewidth=1.2)
+                                ax3d_fase.plot(traj_f_filt[:,0], traj_f_filt[:,1], traj_f_filt[:,2], color='royalblue', alpha=0.8, linewidth=1.5)
                             if len(traj_b_filt) > 1:
                                 trayectorias_b.append(traj_b_filt)
-                                ax3d_fase.plot(traj_b_filt[:,0], traj_b_filt[:,1], traj_b_filt[:,2], color='crimson', alpha=0.8, linewidth=1.2)
+                                ax3d_fase.plot(traj_b_filt[:,0], traj_b_filt[:,1], traj_b_filt[:,2], color='crimson', alpha=0.8, linewidth=1.5)
                             
-                            # Flechas direccionales dinámicas a lo largo de la trayectoria validada
+                            # --- CORRECCIÓN: UNA SOLA FLECHA POR CURVA ---
                             for trayecto in [traj_f_filt, traj_b_filt]:
                                 if len(trayecto) > 20:
-                                    step_q = max(1, len(trayecto) // 4)
-                                    for pt in trayecto[step_q::step_q]:
-                                        u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
-                                        norm = np.linalg.norm([u, v, w])
-                                        if norm > 1e-5:
-                                            ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, 
-                                                             color='black', length=0.8, normalize=True, arrow_length_ratio=0.5)
+                                    # Calculamos el punto medio matemático de la curva visible
+                                    mid_idx = len(trayecto) // 2
+                                    pt = trayecto[mid_idx]
+                                    u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
+                                    norm = np.linalg.norm([u, v, w])
+                                    if norm > 1e-5:
+                                        # Graficamos UNA ÚNICA flecha
+                                        ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, 
+                                                         color='black', length=0.6, normalize=True, arrow_length_ratio=0.4, linewidth=1.2)
                         except Exception:
                             pass 
                     
@@ -489,20 +487,22 @@ with tab_sistemas:
                                 ax_yz.plot(traj_f[:,1], traj_f[:,2], color='royalblue', alpha=0.5)
                                 ax_yz.plot(traj_b[:,1], traj_b[:,2], color='crimson', alpha=0.5)
                                 
+                                # --- CORRECCIÓN: UNA SOLA FLECHA PROYECTADA POR CURVA ---
                                 for trayecto in [traj_f, traj_b]:
                                     if len(trayecto) > 20:
-                                        step_q = max(1, len(trayecto) // 4)
-                                        for pt in trayecto[step_q::step_q]:
-                                            u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
-                                            norm_xy = np.hypot(u, v)
-                                            if norm_xy > 1e-5:
-                                                ax_xy.quiver(pt[0], pt[1], u/norm_xy, v/norm_xy, color='black', scale=15, width=0.015)
-                                            norm_xz = np.hypot(u, w)
-                                            if norm_xz > 1e-5:
-                                                ax_xz.quiver(pt[0], pt[2], u/norm_xz, w/norm_xz, color='black', scale=15, width=0.015)
-                                            norm_yz = np.hypot(v, w)
-                                            if norm_yz > 1e-5:
-                                                ax_yz.quiver(pt[1], pt[2], v/norm_yz, w/norm_yz, color='black', scale=15, width=0.015)
+                                        mid_idx = len(trayecto) // 2
+                                        pt = trayecto[mid_idx]
+                                        u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
+                                        
+                                        norm_xy = np.hypot(u, v)
+                                        if norm_xy > 1e-5:
+                                            ax_xy.quiver(pt[0], pt[1], u/norm_xy, v/norm_xy, color='black', scale=20, width=0.012)
+                                        norm_xz = np.hypot(u, w)
+                                        if norm_xz > 1e-5:
+                                            ax_xz.quiver(pt[0], pt[2], u/norm_xz, w/norm_xz, color='black', scale=20, width=0.012)
+                                        norm_yz = np.hypot(v, w)
+                                        if norm_yz > 1e-5:
+                                            ax_yz.quiver(pt[1], pt[2], v/norm_yz, w/norm_yz, color='black', scale=20, width=0.012)
 
                         ax_xy.set_title("Proyección XY"); ax_xy.set_xlabel("x"); ax_xy.set_ylabel("y")
                         ax_xy.grid(True, linestyle='--', alpha=0.5); ax_xy.axhline(0, color='black'); ax_xy.axvline(0, color='black')
