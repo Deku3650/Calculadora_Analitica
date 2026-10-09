@@ -602,7 +602,7 @@ with tab_sistemas:
                             st.pyplot(fig3)
                         except: pass
 
-            except Exception as e:
+            except exception as e:
                 st.error(f"Fallo en renderizado. Detalle: {e}")
 
         st.divider()
