@@ -346,6 +346,39 @@ with tab_sistemas:
                                 else:
                                     st.info("💡 **Nota Importante:** Los valores propios son imaginarios/complejos. Esto indica un comportamiento oscilatorio (rotaciones, focos o centros). Las soluciones implican funciones trigonométricas (seno y coseno) mediante la identidad de Euler, por lo que el análisis de asíntotas no aplica de forma directa.")
 
+                                try:
+                                    x_fun = sp.Function('x')(t_sym)
+                                    y_fun = sp.Function('y')(t_sym)
+                                    funcs = [x_fun, y_fun]
+                                    if es_3d: funcs.append(sp.Function('z')(t_sym))
+                                    
+                                    eqs_lin = []
+                                    for i in range(len(funcs)):
+                                        eq_fila = 0
+                                        for j in range(len(funcs)):
+                                            eq_fila += A_eval[i,j] * funcs[j]
+                                        eqs_lin.append(sp.Eq(funcs[i].diff(t_sym), eq_fila))
+                                        
+                                    sol_real = sp.dsolve(eqs_lin)
+                                    
+                                    st.write("**Solución analítica del sistema original:**")
+                                    for eq_sol in sol_real:
+                                        expr = eq_sol.rhs
+                                        if expr.has(sp.I):
+                                            c1_r, c2_r, c3_r = sp.symbols('c_1 c_2 c_3', real=True)
+                                            expr_real = expr.subs({c1_sym: c1_r, c2_sym: c2_r, c3_sym: c3_r})
+                                            expr_real = expr_real.replace(
+                                                sp.exp, 
+                                                lambda arg: sp.exp(sp.re(arg)) * (sp.cos(sp.im(arg)) + sp.I * sp.sin(sp.im(arg))) if arg.has(sp.I) else sp.exp(arg)
+                                            )
+                                            expr_real = sp.simplify(sp.re(expr_real.expand()))
+                                            expr = expr_real.subs({c1_r: c1_sym, c2_r: c2_sym, c3_r: c3_sym})
+                                            eq_sol = sp.Eq(eq_sol.lhs, expr)
+                                        st.latex(sp.latex(eq_sol))
+                                        
+                                except Exception:
+                                    pass
+
                             except Exception as e:
                                 st.error(f"Error en la diagonalización: {e}")
                 
@@ -408,6 +441,20 @@ with tab_sistemas:
                             
                             ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='blue', alpha=0.6, linewidth=1.2)
                             ax3d_fase.plot(traj_b[:,0], traj_b[:,1], traj_b[:,2], color='red', alpha=0.6, linewidth=1.2)
+                            
+                            if len(traj_f) > 10:
+                                pt = traj_f[len(traj_f)//2]
+                                u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
+                                norm = np.linalg.norm([u, v, w])
+                                if norm > 1e-5:
+                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='blue', length=0.4, arrow_length_ratio=0.3, alpha=0.8)
+                            
+                            if len(traj_b) > 10:
+                                pt = traj_b[len(traj_b)//2]
+                                u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
+                                norm = np.linalg.norm([u, v, w])
+                                if norm > 1e-5:
+                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='red', length=0.4, arrow_length_ratio=0.3, alpha=0.8)
                         except Exception:
                             pass 
                     
@@ -514,7 +561,7 @@ with tab_sistemas:
                 V_s = np.broadcast_to(func_V(X_s, Y_s), X_s.shape).astype(np.float64)
                 velocidad = np.sqrt(U_s**2 + V_s**2)
                 
-                ax2.streamplot(X_s, Y_s, U_s, V_s, color=velocidad, cmap='viridis', linewidth=1.2, arrowsize=1.2, density=1.5)
+                ax2.streamplot(X_s, Y_s, U_s, V_s, color=velocidad, cmap='viridis', linewidth=1.2, density=1.5)
                 
                 try:
                     if np.ptp(U_s) > 0: ax2.contour(X_s, Y_s, U_s, levels=[0], colors=['red'], alpha=0.6, linewidths=2.0)
@@ -540,8 +587,7 @@ with tab_sistemas:
                                         if vx != 0:
                                             m = vy / vx
                                             x_vals = np.linspace(-5, 5, 100)
-                                            y_vals = m * x_vals
-                                            ax2.plot(x_vals, y_vals, color=colores_vp[idx_c % 2], linestyle='--', linewidth=2.5, label=f"Eje Propio $\lambda={val}$")
+                                            ax2.plot(x_vals, m * x_vals, color=colores_vp[idx_c % 2], linestyle='--', linewidth=2.5, label=f"Eje Propio $\lambda={val}$")
                                         else:
                                             ax2.axvline(0, color=colores_vp[idx_c % 2], linestyle='--', linewidth=2.5, label=f"Eje Propio $\lambda={val}$")
                                         idx_c += 1
@@ -553,71 +599,32 @@ with tab_sistemas:
                 ax2.axhline(0, color='black', linewidth=1); ax2.axvline(0, color='black', linewidth=1)
                 ax2.grid(True, linestyle='--', alpha=0.5)
                 ax2.set_xlabel("x_1"); ax2.set_ylabel("x_2")
-                ax2.set_title("Retrato de Fase")
-                
-                ax2.plot([], [], color='red', linewidth=2.0, label="Isoclina x'=0")
-                ax2.plot([], [], color='blue', linewidth=2.0, label="Isoclina y'=0")
                 ax2.legend(loc='upper right', fontsize='small')
+                
+                with tab_fase:
+                    st.pyplot(fig2)
 
-                # ==========================================
-                # FIGURA 3: PLANO CANÓNICO Y1-Y2
-                # ==========================================
-                fig3 = None
-                if str_A is not None:
-                    try:
-                        A_mat = parse_seguro(str_A, transformaciones=transf)
-                        vecs = A_mat.eigenvects()
-                        if all(v[0].is_real for v in vecs) and sum(v[1] for v in vecs) == 2:
-                            lambdas_diag = []
-                            for val, mult, vectores in vecs:
-                                for _ in vectores:
-                                    lambdas_diag.append(float(val))
-                                    
+                if mostrar_canonico:
+                    with tab_canonico:
+                        try:
+                            l1, l2 = lambdas_diag
                             fig3, ax3 = plt.subplots(figsize=(7, 6))
                             Y_c, X_c = np.mgrid[-5:5:100j, -5:5:100j]
-                            U_c = lambdas_diag[0] * X_c
-                            V_c = lambdas_diag[1] * Y_c
+                            U_c = float(l1) * X_c
+                            V_c = float(l2) * Y_c
                             velocidad_c = np.sqrt(U_c**2 + V_c**2)
                             
                             ax3.streamplot(X_c, Y_c, U_c, V_c, color=velocidad_c, cmap='plasma', linewidth=1.2, density=1.5)
                             ax3.set_xlim([-5, 5]); ax3.set_ylim([-5, 5])
-                            ax3.axhline(0, color='black', linewidth=1.5); ax3.axvline(0, color='black', linewidth=1.5)
-                            ax3.plot(0, 0, 'ro', markersize=8, markeredgecolor='black', zorder=5)
+                            ax3.axhline(0, color='black'); ax3.axvline(0, color='black')
                             ax3.grid(True, linestyle='--', alpha=0.5)
                             ax3.set_xlabel("y_1"); ax3.set_ylabel("y_2")
-                            ax3.set_title(f"Plano Diagonalizado: y_1'={lambdas_diag[0]}y_1, y_2'={lambdas_diag[1]}y_2")
-                    except:
-                        pass
-
-                return fig1, fig2, fig3
-
-            try:
-                str_A_eval = str(A_eval) if es_lineal else None
-                fig_quiver, fig_stream, fig_canonico = generar_graficas_sistema(str(P_expr), str(Q_expr), t_eval, str_A_eval)
-                
-                with tab_fase:
-                    c_graf, c_txt = st.columns([2, 1])
-                    with c_graf:
-                        st.pyplot(fig_stream)
-                    with c_txt:
-                        st.write("**Interpretación:**")
-                        st.write("Visualización del flujo continuo del sistema original. Si el sistema es lineal y posee vectores propios reales, estos se trazan como líneas punteadas, actuando como las asíntotas y directrices fundamentales del comportamiento geométrico.")
-                
-                with tab_vect:
-                    st.pyplot(fig_quiver)
-                    st.caption("Vectores normalizados en color morado claro mostrando la dirección pura del flujo en el espacio.")
-                    
-                if mostrar_canonico and fig_canonico is not None:
-                    with tab_canonico:
-                        c_graf2, c_txt2 = st.columns([2, 1])
-                        with c_graf2:
-                            st.pyplot(fig_canonico)
-                        with c_txt2:
-                            st.write("**Interpretación:**")
-                            st.write(r"Este es el plano desacoplado $\dot{y} = \Lambda y$. Aquí los ejes representan directamente las direcciones de los vectores propios. La matriz $P$ aplica una transformación lineal que rota y estira este espacio para formar el retrato de fase original.")
+                            ax3.set_title(f"Plano Diagonalizado: y_1'={l1}y_1, y_2'={l2}y_2")
+                            st.pyplot(fig3)
+                        except: pass
 
             except Exception as e:
-                st.error(f"Fallo en renderizado. Es posible que el campo contenga singularidades insolubles en la malla. Detalle: {e}")
+                st.error(f"Fallo en renderizado. Detalle: {e}")
 
         st.divider()
         st.subheader("4. Ecuación de Órbitas Diferenciales")
@@ -631,7 +638,7 @@ with tab_sistemas:
                 st.info("Solución implicita general:")
                 st.latex(sp.latex(sol_orbita))
             except Exception:
-                st.warning("La ecuación de la órbita no admite una solución cerrada explícita por métodos estándar en SymPy.")
+                st.warning("La ecuación de la órbita no admite una solución cerrada explícita.")
 
 # ==============================================================================
 # PESTAÑA 2: EDOs DE PRIMER ORDEN (RESOLUTOR)
