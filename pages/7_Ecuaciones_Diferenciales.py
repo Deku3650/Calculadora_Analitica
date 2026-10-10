@@ -468,21 +468,22 @@ with tab_sistemas:
                             ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='blue', alpha=0.6, linewidth=1.2)
                             ax3d_fase.plot(traj_b[:,0], traj_b[:,1], traj_b[:,2], color='red', alpha=0.6, linewidth=1.2)
                             
-                            if len(traj_f) > 10:
-                                mid_idx = len(traj_f)//2
-                                pt_mid = traj_f[mid_idx]
-                                u, v, w = func_U(*pt_mid), func_V(*pt_mid), func_W(*pt_mid)
+                            # Flecha de dirección colocada dinámicamente cerca del inicio para evitar aglomeración
+                            if len(traj_f) > 20:
+                                mid_idx = max(0, len(traj_f) // 10)
+                                pt = traj_f[mid_idx]
+                                u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
                                 norm = np.linalg.norm([u, v, w])
                                 if norm > 1e-5:
-                                    ax3d_fase.quiver(pt_mid[0], pt_mid[1], pt_mid[2], u/norm, v/norm, w/norm, color='blue', length=0.4, normalize=True)
+                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='blue', length=0.4, normalize=True, arrow_length_ratio=0.4)
                             
-                            if len(traj_b) > 10:
-                                mid_idx = len(traj_b)//2
-                                pt_mid = traj_b[mid_idx]
-                                u, v, w = func_U(*pt_mid), func_V(*pt_mid), func_W(*pt_mid)
+                            if len(traj_b) > 20:
+                                mid_idx = max(0, len(traj_b) // 10)
+                                pt = traj_b[mid_idx]
+                                u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
                                 norm = np.linalg.norm([u, v, w])
                                 if norm > 1e-5:
-                                    ax3d_fase.quiver(pt_mid[0], pt_mid[1], pt_mid[2], u/norm, v/norm, w/norm, color='red', length=0.4, normalize=True)
+                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='red', length=0.4, normalize=True, arrow_length_ratio=0.4)
                         except Exception:
                             pass 
                     
