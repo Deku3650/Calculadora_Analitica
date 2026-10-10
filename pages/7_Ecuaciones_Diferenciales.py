@@ -660,21 +660,42 @@ with tab_sistemas:
 with tab_edo1:
     with st.container(border=True):
         st.markdown('<div class="card-header-title">Resolución de Ecuaciones Diferenciales Ordinarias (1er Orden)</div>', unsafe_allow_html=True)
-        st.write("Ingrese una EDO de primer orden de la forma $y' = f(x, y)$ o $M(x,y)dx + N(x,y)dy = 0$.")
+        st.write("Ingrese una EDO de primer orden igualada a cero (use `diff(y, x)`):")
         
-        str_edo = st.text_input("Ecuación dy/dx =", value="y/x + x*exp(y/x)")
+        eq_str = st.text_input("Ecuación:", value="diff(y, x) + (2/x)*y - x**3")
         
-        if st.button("Resolver EDO Analíticamente", use_container_width=True):
+        c_pvi1, c_pvi2 = st.columns(2)
+        with c_pvi1: 
+            usar_pvi = st.checkbox("Resolver con Condición Inicial (PVI)")
+        
+        x0_str, y0_str = "1", "0"
+        if usar_pvi:
+            with c_pvi2:
+                st.write("Condición Inicial: $y(x_0) = y_0$")
+                c_p1, c_p2 = st.columns(2)
+                with c_p1: x0_str = st.text_input("x_0:", value="1")
+                with c_p2: y0_str = st.text_input("y_0:", value="0")
+                
+        if st.button("Resolver EDO", use_container_width=True):
+            x = sp.Symbol('x')
+            y = sp.Function('y')(x)
+            
             try:
-                x_s = sp.Symbol('x')
-                y_s = sp.Function('y')(x_s)
-                expr_edo = parse_seguro(str_edo, transformations=transf, local_dict={'x': x_s, 'y': y_s, 'exp': sp.exp, 'sin': sp.sin, 'cos': sp.cos})
+                eq_parseada = parse_seguro(eq_str, transformaciones=transf, local_dict={'x': x, 'y': y, 'diff': sp.diff, 'exp': sp.exp, 'sin': sp.sin, 'cos': sp.cos})
+                ecuacion_formal = sp.Eq(eq_parseada, 0)
                 
-                eq_diff = sp.Eq(y_s.diff(x_s), expr_edo)
-                st.latex(rf"\frac{{dy}}{{dx}} = {sp.latex(expr_edo)}")
+                st.markdown('<div class="card-subheader-title">Formulación Formal</div>', unsafe_allow_html=True)
+                st.latex(sp.latex(ecuacion_formal))
                 
-                sol_edo = sp.dsolve(eq_diff)
-                st.success("¡Solución general encontrada con éxito!")
-                st.latex(rf"{sp.latex(sol_edo)}")
+                if usar_pvi:
+                    x0_val = leer_expresion_st(x0_str)
+                    y0_val = leer_expresion_st(y0_str)
+                    sol = sp.dsolve(ecuacion_formal, y, ics={y.subs(x, x0_val): y0_val})
+                    st.success("**Solución Particular (PVI):**")
+                else:
+                    sol = sp.dsolve(ecuacion_formal, y)
+                    st.success("**Solución General:**")
+                st.latex(sp.latex(sol))
+                
             except Exception as e:
-                st.error(f"No se pudo resolver analíticamente la EDO. Detalle: {e}")
+                st.error(f"Error al procesar la ecuación: {e}")
