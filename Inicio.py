@@ -9,7 +9,7 @@ import streamlit as st
 st.set_page_config(page_title="MATHESIS", layout="centered")
 
 # ============================================
-# CSS ADAPTATIVO (IDENTIDAD AZUL + MENÚ VISIBLE)
+# CSS ADAPTATIVO (IDENTIDAD AZUL + SIDEBAR UNIFICADO)
 # ============================================
 st.markdown("""
     <style>
@@ -34,6 +34,7 @@ st.markdown("""
     
     /* Adaptación dinámica de contenedores (Cards de módulos) */
     [data-testid="stVerticalBlockBorderWrapper"] {
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%) !important;
         border-radius: 16px !important;
         transition: all 0.25s ease-in-out !important;
         border: 1px solid rgba(2, 132, 199, 0.25) !important;
@@ -108,23 +109,27 @@ st.markdown("""
     }
 
     /* ==========================================
-       ESTILOS PARA LAS PESTAÑAS DEL MENÚ LATERAL
+       ESTILOS UNIFICADOS PARA EL SIDEBAR (MISMO ANCHO Y DISEÑO)
        ========================================== */
-    [data-testid="stSidebar"] {
+    [data-testid="stSidebar"], section[data-testid="stSidebar"] {
+        min-width: 300px !important;
+        max-width: 320px !important;
         border-right: 1px solid rgba(2, 132, 199, 0.2) !important;
     }
 
-    /* Botones/pestañas inactivas */
-    [data-testid="stSidebarNav"] ul li div a {
+    /* Botones/pestañas del menú lateral */
+    [data-testid="stSidebarNav"] ul li div a, [data-testid="stSidebarNav"] a {
         border-radius: 12px !important;
         padding: 10px 14px !important;
         margin: 4px 8px !important;
-        border: 1px solid rgba(2, 132, 199, 0.15) !important;
+        border: 1px solid rgba(2, 132, 199, 0.18) !important;
+        background-color: rgba(2, 132, 199, 0.03) !important;
         transition: all 0.25s ease-in-out !important;
+        white-space: nowrap !important;
     }
 
     /* Efecto al pasar el cursor (Hover) */
-    [data-testid="stSidebarNav"] ul li div a:hover {
+    [data-testid="stSidebarNav"] ul li div a:hover, [data-testid="stSidebarNav"] a:hover {
         border-color: #0284c7 !important;
         background: rgba(2, 132, 199, 0.12) !important;
         box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2) !important;
@@ -132,21 +137,21 @@ st.markdown("""
     }
 
     /* Pestaña ACTIVA (Página actual) */
-    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] {
+    [data-testid="stSidebarNav"] ul li div a[aria-current="page"], [data-testid="stSidebarNav"] a[aria-current="page"] {
         background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(79, 70, 229, 0.25) 100%) !important;
         border: 1px solid #38bdf8 !important;
         box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25) !important;
     }
 
     /* Texto de la pestaña activa */
-    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span {
+    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span, [data-testid="stSidebarNav"] a[aria-current="page"] span {
         color: #38bdf8 !important;
         font-weight: 800 !important;
         letter-spacing: 0.4px !important;
     }
 
     /* Texto general de pestañas */
-    [data-testid="stSidebarNav"] ul li div a span {
+    [data-testid="stSidebarNav"] ul li div a span, [data-testid="stSidebarNav"] a span {
         font-size: 14px !important;
         font-weight: 600 !important;
     }
