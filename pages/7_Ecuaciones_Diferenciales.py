@@ -3,14 +3,10 @@ import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.integrate as spi
-from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application, convert_xor
+from sympy.parsing.sympy_parser import standard_transformations, implicit_multiplication_application, convert_xor
 
 try:
-    from utils import leer_expresion_st, imprimir_matriz_simbolica
-    try:
-        from utils import parse_seguro
-    except ImportError:
-        parse_seguro = parse_expr
+    from utils import leer_expresion_st, imprimir_matriz_simbolica, parse_seguro
 except ImportError:
     st.error("Error crítico: No se pudo cargar el analizador matemático desde utils.py. Asegúrese de ejecutar la app desde la raíz.")
     st.stop()
@@ -38,9 +34,8 @@ tab_sistemas, tab_edo1 = st.tabs([
 ])
 
 # Símbolos base globales
-t_sym = sp.Symbol('t', real=True)
-x_sym, y_sym, z_sym = sp.symbols('x y z', real=True)
-c1_sym, c2_sym, c3_sym = sp.symbols('C_1 C_2 C_3', real=True)
+t_sym, x_sym, y_sym, z_sym = sp.symbols('t x y z')
+c1_sym, c2_sym, c3_sym = sp.symbols('c_1 c_2 c_3')
 transf = standard_transformations + (implicit_multiplication_application, convert_xor)
 dicc_loc = {'x': x_sym, 'y': y_sym, 'z': z_sym, 't': t_sym, 'sin': sp.sin, 'cos': sp.cos, 'exp': sp.exp}
 
@@ -271,7 +266,8 @@ with tab_sistemas:
                 # ANÁLISIS PASO A PASO (DIAGONALIZACIÓN Y LÍMITES)
                 # ==========================================================
                 val_prop_reales = all(v[0].is_real for v in vectores_propios)
-                es_diagonalizable = sum(v[1] for v in vectores_propios) == (3 if es_3d else 2)
+                # Para la forma canónica real en 2x2 siempre hay matriz de cambio, para 3x3 pedimos diagonalizabilidad
+                es_diagonalizable = sum(v[1] for v in vectores_propios) == (3 if es_3d else 2) or (not es_3d and not val_prop_reales)
                 
                 if es_diagonalizable:
                     with st.expander("Ver Análisis Analítico Paso a Paso", expanded=True):
@@ -280,113 +276,138 @@ with tab_sistemas:
                         pol_carac = sp.det(A_eval - lam_sym * sp.eye(3 if es_3d else 2))
                         st.latex(rf"P_A(\lambda) = \det(A - \lambda I) = {sp.latex(pol_carac)} = 0")
                         
-                        P_mat = []
-                        lambdas = []
-                        for val, mult, vecs in vectores_propios:
-                            for vec in vecs:
-                                P_mat.append(vec)
-                                lambdas.append(val)
-                                
-                        if len(P_mat) == (3 if es_3d else 2):
-                            P_sym = sp.Matrix.hstack(*P_mat)
-                            try:
-                                P_inv = P_sym.inv()
-                                Lambda_sym = sp.diag(*lambdas)
-                                
-                                st.markdown("### Cambio de Coordenadas (Diagonalización)")
-                                col_p1, col_p2, col_p3 = st.columns(3)
-                                with col_p1:
-                                    st.write("Matriz $P$ (Vectores Propios):")
-                                    st.latex(rf"P = {sp.latex(P_sym)}")
-                                with col_p2:
-                                    st.write("Matriz Inversa $P^{-1}$:")
-                                    st.latex(rf"P^{{-1}} = {sp.latex(P_inv)}")
-                                with col_p3:
-                                    st.write(r"Matriz Diagonal $\Lambda = P^{-1}AP$:")
-                                    st.latex(rf"\Lambda = {sp.latex(Lambda_sym)}")
-                                
-                                st.markdown("### Soluciones del Sistema")
-                                if es_3d:
-                                    y1_sol = c1_sym * sp.exp(lambdas[0] * t_sym)
-                                    y2_sol = c2_sym * sp.exp(lambdas[1] * t_sym)
-                                    y3_sol = c3_sym * sp.exp(lambdas[2] * t_sym)
-                                    Y_sol = sp.Matrix([y1_sol, y2_sol, y3_sol])
-                                else:
-                                    y1_sol = c1_sym * sp.exp(lambdas[0] * t_sym)
-                                    y2_sol = c2_sym * sp.exp(lambdas[1] * t_sym)
-                                    Y_sol = sp.Matrix([y1_sol, y2_sol])
-                                
-                                st.write(r"**1. Solución en el eje canónico desacoplado $\dot{y} = \Lambda y$:**")
-                                st.latex(rf"y(t) = {sp.latex(Y_sol)}")
-                                
-                                # --- CAMBIO 1: Construcción limpia (sen y cos) para soluciones complejas ---
-                                if not val_prop_reales:
-                                    try:
-                                        real_sols = []
-                                        used_complex = []
-                                        for val, mult, vecs in vectores_propios:
-                                            if val.is_real:
-                                                for vec in vecs:
-                                                    real_sols.append(sp.exp(val * t_sym) * vec)
-                                            else:
-                                                is_used = False
-                                                for uc in used_complex:
-                                                    if sp.simplify(val - sp.conjugate(uc)) == 0:
-                                                        is_used = True
-                                                        break
-                                                if not is_used:
-                                                    used_complex.append(val)
-                                                    alpha = sp.re(val)
-                                                    beta = sp.im(val)
-                                                    for vec in vecs:
-                                                        vec_re, vec_im = vec.as_real_imag()
-                                                        sol1 = sp.exp(alpha * t_sym) * (vec_re * sp.cos(beta * t_sym) - vec_im * sp.sin(beta * t_sym))
-                                                        sol2 = sp.exp(alpha * t_sym) * (vec_re * sp.sin(beta * t_sym) + vec_im * sp.cos(beta * t_sym))
-                                                        real_sols.extend([sol1, sol2])
-                                                        
-                                        if len(real_sols) == (3 if es_3d else 2):
-                                            C_syms = [c1_sym, c2_sym, c3_sym] if es_3d else [c1_sym, c2_sym]
-                                            X_sol = sum([C_syms[i] * real_sols[i] for i in range(len(real_sols))], sp.zeros(3 if es_3d else 2, 1))
-                                            X_sol = sp.simplify(X_sol)
-                                    except Exception:
-                                        X_sol = P_sym * Y_sol
-                                else:
+                        if not es_3d and not val_prop_reales:
+                            # --- CAMBIO 1: Construir P = [Re(v) | Im(v)] y Lambda real para complejos en 2D ---
+                            for val, mult, vecs in vectores_propios:
+                                if sp.im(val) > 0:
+                                    lam_c = val
+                                    v_c = vecs[0]
+                                    break
+                            
+                            a = sp.re(lam_c)
+                            b = sp.im(lam_c)
+                            v_re = sp.re(v_c)
+                            v_im = sp.im(v_c)
+                            
+                            P_sym = sp.Matrix.hstack(v_re, v_im)
+                            P_inv = P_sym.inv()
+                            Lambda_sym = sp.Matrix([[a, -b], [b, a]])
+                            
+                            st.markdown("### Cambio de Coordenadas (Forma Canónica Real)")
+                            col_p1, col_p2, col_p3 = st.columns(3)
+                            with col_p1:
+                                st.write(r"Matriz $P = [\text{Re}(v) \mid \text{Im}(v)]$:")
+                                st.latex(rf"P = {sp.latex(P_sym)}")
+                            with col_p2:
+                                st.write(r"Matriz Inversa $P^{-1}$:")
+                                st.latex(rf"P^{{-1}} = {sp.latex(P_inv)}")
+                            with col_p3:
+                                st.write(r"Matriz $\Lambda = P^{-1}AP$:")
+                                st.latex(rf"\Lambda = {sp.latex(Lambda_sym)}")
+                            
+                            st.markdown("### Soluciones del Sistema")
+                            # Generamos la solución real mediante dsolve
+                            x_f, y_f = sp.Function('x')(t_sym), sp.Function('y')(t_sym)
+                            eq1 = sp.Eq(x_f.diff(t_sym), A_eval[0,0]*x_f + A_eval[0,1]*y_f)
+                            eq2 = sp.Eq(y_f.diff(t_sym), A_eval[1,0]*x_f + A_eval[1,1]*y_f)
+                            sol_dsolve = sp.dsolve([eq1, eq2])
+                            
+                            C1, C2 = sp.symbols('C1 C2')
+                            X_sol = sp.Matrix([eq.rhs.subs({C1: c1_sym, C2: c2_sym}) for eq in sol_dsolve])
+                            
+                            st.write("**Solución analítica del sistema original $x(t)$:**")
+                            st.latex(rf"x(t) = {sp.latex(X_sol)}")
+                            # ----------------------------------------------------------------------------------
+                        else:
+                            P_mat = []
+                            lambdas = []
+                            for val, mult, vecs in vectores_propios:
+                                for vec in vecs:
+                                    P_mat.append(vec)
+                                    lambdas.append(val)
+                                    
+                            if len(P_mat) == (3 if es_3d else 2):
+                                P_sym = sp.Matrix.hstack(*P_mat)
+                                try:
+                                    P_inv = P_sym.inv()
+                                    Lambda_sym = sp.diag(*lambdas)
+                                    
+                                    st.markdown("### Cambio de Coordenadas (Diagonalización)")
+                                    col_p1, col_p2, col_p3 = st.columns(3)
+                                    with col_p1:
+                                        st.write("Matriz $P$ (Vectores Propios):")
+                                        st.latex(rf"P = {sp.latex(P_sym)}")
+                                    with col_p2:
+                                        st.write("Matriz Inversa $P^{-1}$:")
+                                        st.latex(rf"P^{{-1}} = {sp.latex(P_inv)}")
+                                    with col_p3:
+                                        st.write("Matriz Diagonal $\Lambda = P^{-1}AP$:")
+                                        st.latex(rf"\Lambda = {sp.latex(Lambda_sym)}")
+                                    
+                                    st.markdown("### Soluciones del Sistema")
+                                    if es_3d:
+                                        y1_sol = c1_sym * sp.exp(lambdas[0] * t_sym)
+                                        y2_sol = c2_sym * sp.exp(lambdas[1] * t_sym)
+                                        y3_sol = c3_sym * sp.exp(lambdas[2] * t_sym)
+                                        Y_sol = sp.Matrix([y1_sol, y2_sol, y3_sol])
+                                    else:
+                                        y1_sol = c1_sym * sp.exp(lambdas[0] * t_sym)
+                                        y2_sol = c2_sym * sp.exp(lambdas[1] * t_sym)
+                                        Y_sol = sp.Matrix([y1_sol, y2_sol])
+                                    
+                                    st.write(r"**1. Solución en el eje canónico desacoplado $\dot{y} = \Lambda y$:**")
+                                    st.latex(rf"y(t) = {sp.latex(Y_sol)}")
+                                    
                                     X_sol = P_sym * Y_sol
-                                # -------------------------------------------------------------------------
-                                
-                                st.write("**2. Solución en el sistema original $x(t) = P y(t)$:**")
-                                st.latex(rf"x(t) = {sp.latex(sp.simplify(X_sol))}")
-
-                                if val_prop_reales:
-                                    if not es_3d and lambdas[0] != lambdas[1]:
-                                        st.markdown("### Comportamiento Asintótico (Límites)")
-                                        x_t_expr = X_sol[0]
-                                        y_t_expr = X_sol[1]
-                                        razon_expr = y_t_expr / x_t_expr
-                                        
-                                        st.write(r"Pendiente de las trayectorias $m(t) = \frac{y(t)}{x(t)}$:")
-                                        st.latex(rf"m(t) = \frac{{{sp.latex(y_t_expr)}}}{{{sp.latex(x_t_expr)}}}")
-                                        
+                                    st.write("**2. Solución en el sistema original $x(t) = P y(t)$:**")
+                                    
+                                    # --- CAMBIO 1: Construcción de soluciones complejas en senos y cosenos (3D o casos mezclados) ---
+                                    if X_sol.has(sp.I):
                                         try:
-                                            lim_inf_pos = sp.limit(razon_expr, t_sym, sp.oo)
-                                            lim_inf_neg = sp.limit(razon_expr, t_sym, -sp.oo)
-                                            
-                                            c_lim1, c_lim2 = st.columns(2)
-                                            with c_lim1:
-                                                st.write(r"Dirección cuando $t \to \infty$:")
-                                                st.latex(rf"\lim_{{t \to \infty}} m(t) = {sp.latex(lim_inf_pos)}")
-                                            with c_lim2:
-                                                st.write(r"Dirección cuando $t \to -\infty$:")
-                                                st.latex(rf"\lim_{{t \to -\infty}} m(t) = {sp.latex(lim_inf_neg)}")
-                                                
-                                            st.caption("Los límites asintóticos confirman que las trayectorias nacen o mueren siendo tangentes/paralelas a los vectores propios.")
-                                        except:
-                                            st.warning("Los límites asintóticos dependen fuertemente de las condiciones iniciales.")
-                                else:
-                                    st.info("💡 **Nota Importante:** Los valores propios son imaginarios/complejos. Esto indica un comportamiento oscilatorio (rotaciones, focos o centros). Las soluciones implican funciones trigonométricas (seno y coseno) mediante la identidad de Euler, por lo que el análisis de asíntotas no aplica de forma directa.")
+                                            x_f, y_f = sp.Function('x')(t_sym), sp.Function('y')(t_sym)
+                                            funcs = [x_f, y_f]
+                                            if es_3d: funcs.append(sp.Function('z')(t_sym))
+                                            eqs = [sp.Eq(funcs[i].diff(t_sym), sum(A_eval[i,j]*funcs[j] for j in range(len(funcs)))) for i in range(len(funcs))]
+                                            sol_dsolve = sp.dsolve(eqs)
+                                            C1, C2, C3 = sp.symbols('C1 C2 C3')
+                                            X_sol = sp.Matrix([eq.rhs.subs({C1: c1_sym, C2: c2_sym, C3: c3_sym}) for eq in sol_dsolve])
+                                            X_sol = sp.simplify(X_sol)
+                                        except Exception:
+                                            pass
+                                    # --------------------------------------------------------------------------------------------------
+                                    
+                                    st.latex(rf"x(t) = {sp.latex(sp.simplify(X_sol))}")
 
-                            except Exception as e:
-                                st.error(f"Error en la diagonalización: {e}")
+                                    if val_prop_reales:
+                                        if not es_3d and lambdas[0] != lambdas[1]:
+                                            st.markdown("### Comportamiento Asintótico (Límites)")
+                                            x_t_expr = X_sol[0]
+                                            y_t_expr = X_sol[1]
+                                            razon_expr = y_t_expr / x_t_expr
+                                            
+                                            st.write(r"Pendiente de las trayectorias $m(t) = \frac{y(t)}{x(t)}$:")
+                                            st.latex(rf"m(t) = \frac{{{sp.latex(y_t_expr)}}}{{{sp.latex(x_t_expr)}}}")
+                                            
+                                            try:
+                                                lim_inf_pos = sp.limit(razon_expr, t_sym, sp.oo)
+                                                lim_inf_neg = sp.limit(razon_expr, t_sym, -sp.oo)
+                                                
+                                                c_lim1, c_lim2 = st.columns(2)
+                                                with c_lim1:
+                                                    st.write(r"Dirección cuando $t \to \infty$:")
+                                                    st.latex(rf"\lim_{{t \to \infty}} m(t) = {sp.latex(lim_inf_pos)}")
+                                                with c_lim2:
+                                                    st.write(r"Dirección cuando $t \to -\infty$:")
+                                                    st.latex(rf"\lim_{{t \to -\infty}} m(t) = {sp.latex(lim_inf_neg)}")
+                                                    
+                                                st.caption("Los límites asintóticos confirman que las trayectorias nacen o mueren siendo tangentes/paralelas a los vectores propios.")
+                                            except:
+                                                st.warning("Los límites asintóticos dependen fuertemente de las condiciones iniciales.")
+                                    else:
+                                        st.info("💡 **Nota Importante:** Los valores propios son imaginarios/complejos. Esto indica un comportamiento oscilatorio (rotaciones, focos o centros). Las soluciones implican funciones trigonométricas (seno y coseno) mediante la identidad de Euler, por lo que el análisis de asíntotas no aplica de forma directa.")
+
+                                except Exception as e:
+                                    st.error(f"Error en la diagonalización: {e}")
                 
             except Exception as e:
                 st.error(f"El Jacobiano contiene singularidades numéricas en este punto. Detalle: {e}")
@@ -435,39 +456,47 @@ with tab_sistemas:
                     ics = [
                         [1, 1, 1], [-1, -1, -1], [1, -1, 1], [-1, 1, -1],
                         [2, 0, 0], [0, 2, 0], [0, 0, 2],
-                        [-2, 0, 0], [0, -2, 0], [0, 0, -2],
-                        [0.1, 0.1, 0.1], [-0.1, -0.1, -0.1], [0.1, -0.1, 0.1]
+                        [-2, 0, 0], [0, -2, 0], [0, 0, -2]
                     ]
-                    t_span = np.linspace(0, 10, 800) 
-                    t_span_rev = np.linspace(0, -10, 800) 
+                    t_span = np.linspace(0, 15, 800) 
+                    t_span_rev = np.linspace(0, -15, 800) 
+                    
+                    trayectorias_f = []
+                    trayectorias_b = []
                     
                     for ic in ics:
                         try:
                             traj_f = spi.odeint(vector_field_3d, ic, t_span)
                             traj_b = spi.odeint(vector_field_3d, ic, t_span_rev)
                             
-                            ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='blue', alpha=0.6, linewidth=1.2)
-                            ax3d_fase.plot(traj_b[:,0], traj_b[:,1], traj_b[:,2], color='red', alpha=0.6, linewidth=1.2)
+                            # Filtro de visibilidad para no colapsar la gráfica
+                            traj_f = traj_f[np.max(np.abs(traj_f), axis=1) <= 5.0]
+                            traj_b = traj_b[np.max(np.abs(traj_b), axis=1) <= 5.0]
                             
-                            # --- CAMBIO 2: Flechas de dirección pequeñas y herederas del color de su curva ---
-                            if len(traj_f) > 20:
-                                mid_idx = len(traj_f) // 2
-                                pt = traj_f[mid_idx]
+                            if len(traj_f) > 5:
+                                trayectorias_f.append(traj_f)
+                                ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='blue', alpha=0.6, linewidth=1.2)
+                                # --- CAMBIO 2: Flecha direccional del color de la curva ---
+                                pt = traj_f[len(traj_f)//2]
                                 u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
                                 norm = np.linalg.norm([u, v, w])
                                 if norm > 1e-5:
-                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='blue', length=0.3, normalize=True)
+                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='blue', length=0.4, arrow_length_ratio=0.5, normalize=True)
                             
-                            if len(traj_b) > 20:
-                                mid_idx = len(traj_b) // 2
-                                pt = traj_b[mid_idx]
+                            if len(traj_b) > 5:
+                                trayectorias_b.append(traj_b)
+                                ax3d_fase.plot(traj_b[:,0], traj_b[:,1], traj_b[:,2], color='red', alpha=0.6, linewidth=1.2)
+                                # --- CAMBIO 2: Flecha direccional del color de la curva ---
+                                pt = traj_b[len(traj_b)//2]
                                 u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
                                 norm = np.linalg.norm([u, v, w])
                                 if norm > 1e-5:
-                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='red', length=0.3, normalize=True)
-                            # -----------------------------------------------------------------------------------
+                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='red', length=0.4, arrow_length_ratio=0.5, normalize=True)
                         except Exception:
                             pass 
+                    
+                    st.session_state.trayectorias_f = trayectorias_f
+                    st.session_state.trayectorias_b = trayectorias_b
                     
                     ax3d_fase.set_xlabel("x")
                     ax3d_fase.set_ylabel("y")
@@ -479,76 +508,66 @@ with tab_sistemas:
                     st.error(f"Error al generar trayectorias 3D: {e}")
                     
             with tab_proy:
-                st.write("Visualización del flujo interceptando los planos principales.")
+                st.write("Proyecciones cartesianas de las trayectorias espaciales simuladas sobre los planos principales.")
                 try:
-                    # --- CAMBIO 3: Proyecciones 2D solo cuando los planos son invariantes ---
-                    inv_xy = sp.simplify(R_f.subs(z_sym, 0)) == 0
-                    inv_xz = sp.simplify(Q_f.subs(y_sym, 0)) == 0
-                    inv_yz = sp.simplify(P_f.subs(x_sym, 0)) == 0
+                    # --- CAMBIO 3: Mostrar proyecciones de las curvas simuladas para 3x3 siempre ---
+                    fig_proy, (ax_xy, ax_xz, ax_yz) = plt.subplots(1, 3, figsize=(15, 5))
                     
-                    if not (inv_xy or inv_xz or inv_yz):
-                        st.info("💡 **Nota:** Este sistema no posee planos cartesianos invariantes. Las proyecciones 2D no representan el flujo real, por lo que han sido omitidas.")
-                    else:
-                        num_plots = sum([inv_xy, inv_xz, inv_yz])
-                        fig_proy, axs = plt.subplots(1, num_plots, figsize=(5 * num_plots, 5))
-                        if num_plots == 1: axs = [axs]
-                        
-                        idx_ax = 0
-                        Y_m, X_m = np.mgrid[-4:4:50j, -4:4:50j]
-                        
-                        if inv_xy:
-                            ax = axs[idx_ax]
-                            U_xy = np.broadcast_to(func_U(X_m, Y_m, 0), X_m.shape).astype(np.float64)
-                            V_xy = np.broadcast_to(func_V(X_m, Y_m, 0), X_m.shape).astype(np.float64)
-                            vel_xy = np.sqrt(U_xy**2 + V_xy**2)
-                            ax.streamplot(X_m, Y_m, U_xy, V_xy, color=vel_xy, cmap='viridis', density=1.2)
-                            ax.set_title("Plano XY (z=0)")
-                            ax.set_xlabel("x"); ax.set_ylabel("y")
-                            ax.grid(True, linestyle='--', alpha=0.5)
-                            ax.axhline(0, color='black'); ax.axvline(0, color='black')
-                            idx_ax += 1
+                    if 'trayectorias_f' in st.session_state:
+                        for traj_f, traj_b in zip(st.session_state.trayectorias_f, st.session_state.trayectorias_b):
+                            ax_xy.plot(traj_f[:,0], traj_f[:,1], color='blue', alpha=0.5)
+                            ax_xy.plot(traj_b[:,0], traj_b[:,1], color='red', alpha=0.5)
+                            ax_xz.plot(traj_f[:,0], traj_f[:,2], color='blue', alpha=0.5)
+                            ax_xz.plot(traj_b[:,0], traj_b[:,2], color='red', alpha=0.5)
+                            ax_yz.plot(traj_f[:,1], traj_f[:,2], color='blue', alpha=0.5)
+                            ax_yz.plot(traj_b[:,1], traj_b[:,2], color='red', alpha=0.5)
                             
-                        if inv_xz:
-                            ax = axs[idx_ax]
-                            U_xz = np.broadcast_to(func_U(X_m, 0, Y_m), X_m.shape).astype(np.float64)
-                            W_xz = np.broadcast_to(func_W(X_m, 0, Y_m), X_m.shape).astype(np.float64)
-                            vel_xz = np.sqrt(U_xz**2 + W_xz**2)
-                            ax.streamplot(X_m, Y_m, U_xz, W_xz, color=vel_xz, cmap='viridis', density=1.2)
-                            ax.set_title("Plano XZ (y=0)")
-                            ax.set_xlabel("x"); ax.set_ylabel("z")
-                            ax.grid(True, linestyle='--', alpha=0.5)
-                            ax.axhline(0, color='black'); ax.axvline(0, color='black')
-                            idx_ax += 1
-                            
-                        if inv_yz:
-                            ax = axs[idx_ax]
-                            V_yz = np.broadcast_to(func_V(0, X_m, Y_m), X_m.shape).astype(np.float64)
-                            W_yz = np.broadcast_to(func_W(0, X_m, Y_m), X_m.shape).astype(np.float64)
-                            vel_yz = np.sqrt(V_yz**2 + W_yz**2)
-                            ax.streamplot(X_m, Y_m, V_yz, W_yz, color=vel_yz, cmap='viridis', density=1.2)
-                            ax.set_title("Plano YZ (x=0)")
-                            ax.set_xlabel("y"); ax.set_ylabel("z")
-                            ax.grid(True, linestyle='--', alpha=0.5)
-                            ax.axhline(0, color='black'); ax.axvline(0, color='black')
-                            
-                        plt.tight_layout()
-                        st.pyplot(fig_proy)
-                    # ------------------------------------------------------------------------
+                            # Flechas para las proyecciones 2D
+                            for traj, c in [(traj_f, 'blue'), (traj_b, 'red')]:
+                                if len(traj) > 10:
+                                    pt = traj[len(traj)//2]
+                                    u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
+                                    norm_xy = np.hypot(u, v)
+                                    if norm_xy > 1e-5:
+                                        ax_xy.quiver(pt[0], pt[1], u/norm_xy, v/norm_xy, color=c, scale=20, width=0.012)
+                                    norm_xz = np.hypot(u, w)
+                                    if norm_xz > 1e-5:
+                                        ax_xz.quiver(pt[0], pt[2], u/norm_xz, w/norm_xz, color=c, scale=20, width=0.012)
+                                    norm_yz = np.hypot(v, w)
+                                    if norm_yz > 1e-5:
+                                        ax_yz.quiver(pt[1], pt[2], v/norm_yz, w/norm_yz, color=c, scale=20, width=0.012)
+
+                    ax_xy.set_title("Proyección XY"); ax_xy.set_xlabel("x"); ax_xy.set_ylabel("y")
+                    ax_xy.grid(True, linestyle='--', alpha=0.5); ax_xy.axhline(0, color='black'); ax_xy.axvline(0, color='black')
+                    ax_xy.set_xlim([-4, 4]); ax_xy.set_ylim([-4, 4])
+                    
+                    ax_xz.set_title("Proyección XZ"); ax_xz.set_xlabel("x"); ax_xz.set_ylabel("z")
+                    ax_xz.grid(True, linestyle='--', alpha=0.5); ax_xz.axhline(0, color='black'); ax_xz.axvline(0, color='black')
+                    ax_xz.set_xlim([-4, 4]); ax_xz.set_ylim([-4, 4])
+                    
+                    ax_yz.set_title("Proyección YZ"); ax_yz.set_xlabel("y"); ax_yz.set_ylabel("z")
+                    ax_yz.grid(True, linestyle='--', alpha=0.5); ax_yz.axhline(0, color='black'); ax_yz.axvline(0, color='black')
+                    ax_yz.set_xlim([-4, 4]); ax_yz.set_ylim([-4, 4])
+                    
+                    plt.tight_layout()
+                    st.pyplot(fig_proy)
+                    # ----------------------------------------------------------------------------------
                 except Exception as e:
                     st.error(f"Error al generar proyecciones: {e}")
         else:
-            if es_lineal and Lambda_sym is not None and val_prop_reales:
-                tab_fase, tab_vect, tab_canonico = st.tabs(["🌊 Retrato de Fase (Original)", "🔀 Campo Vectorial (Quiver)", "📐 Plano Canónico (y1, y2)"])
+            # Pestañas para 2D (Mostrar Plano Canónico siempre en lineal, sea real o complejo)
+            if es_lineal and Lambda_sym is not None:
+                tab_fase, tab_vect, tab_canonico = st.tabs(["🌊 Retrato de Fase (Original)", "🔀 Campo Vectorial (Quiver)", "📐 Plano Canónico"])
                 mostrar_canonico = True
             else:
                 tab_fase, tab_vect = st.tabs(["🌊 Retrato de Fase (Original)", "🔀 Campo Vectorial (Quiver)"])
                 mostrar_canonico = False
 
             try:
-                # --- CAMBIO 4: Solución al NameError str_P en gráficas 2x2 ---
+                # --- CAMBIO 4: Solución al error str_P evaluando directamente P_f ---
                 p_eq = P_f
                 q_eq = Q_f
-                # --------------------------------------------------------------
+                # --------------------------------------------------------------------
                 
                 puntos_criticos = []
                 try:
@@ -651,22 +670,37 @@ with tab_sistemas:
                         st.write("Visualización del flujo continuo del sistema original. Si el sistema es lineal y posee vectores propios reales, estos se trazan como líneas punteadas, actuando como las asíntotas y directrices fundamentales del comportamiento geométrico.")
 
                 # ==========================================
-                # FIGURA 3: PLANO CANÓNICO Y1-Y2
+                # FIGURA 3: PLANO CANÓNICO Y1-Y2 (CON FORMA REAL PARA COMPLEJOS)
                 # ==========================================
                 if mostrar_canonico:
                     with tab_canonico:
                         try:
                             vecs = A_eval.eigenvects()
-                            lambdas_diag = []
-                            for val, mult, vectores in vecs:
-                                for _ in range(mult):
-                                    lambdas_diag.append(float(sp.re(val)))
-                            
-                            l1, l2 = lambdas_diag[0], lambdas_diag[1]
                             fig3, ax3 = plt.subplots(figsize=(7, 6))
                             Y_c, X_c = np.mgrid[-5:5:100j, -5:5:100j]
-                            U_c = l1 * X_c
-                            V_c = l2 * Y_c
+                            
+                            # --- CAMBIO 1: Construcción del Plano Canónico Real para valores complejos ---
+                            if all(v[0].is_real for v in vecs):
+                                lambdas_diag = []
+                                for val, mult, vectores in vecs:
+                                    for _ in range(mult):
+                                        lambdas_diag.append(float(sp.re(val)))
+                                l1, l2 = lambdas_diag[0], lambdas_diag[1]
+                                U_c = l1 * X_c
+                                V_c = l2 * Y_c
+                                ax3.set_title(rf"Plano Diagonalizado: $y_1'={l1}y_1, y_2'={l2}y_2$")
+                            else:
+                                for val, mult, vcs in vecs:
+                                    if sp.im(val) > 0:
+                                        lam_c = val
+                                        break
+                                a = float(sp.re(lam_c))
+                                b = float(sp.im(lam_c))
+                                U_c = a * X_c - b * Y_c
+                                V_c = b * X_c + a * Y_c
+                                ax3.set_title(rf"Plano Canónico Real: $y_1'={a}y_1 - {b}y_2, y_2'={b}y_1 + {a}y_2$")
+                            # -----------------------------------------------------------------------------
+                                
                             velocidad_c = np.sqrt(U_c**2 + V_c**2)
                             
                             ax3.streamplot(X_c, Y_c, U_c, V_c, color=velocidad_c, cmap='plasma', linewidth=1.2, density=1.5)
@@ -675,14 +709,13 @@ with tab_sistemas:
                             ax3.plot(0, 0, 'ro', markersize=8, markeredgecolor='black', zorder=5)
                             ax3.grid(True, linestyle='--', alpha=0.5)
                             ax3.set_xlabel("y_1"); ax3.set_ylabel("y_2")
-                            ax3.set_title(rf"Plano Diagonalizado: y_1'={l1}y_1, y_2'={l2}y_2")
                             
                             c_graf2, c_txt2 = st.columns([2, 1])
                             with c_graf2:
                                 st.pyplot(fig3)
                             with c_txt2:
                                 st.write("**Interpretación:**")
-                                st.write(r"Este es el plano desacoplado $\dot{y} = \Lambda y$. Aquí los ejes representan directamente las direcciones de los vectores propios. La matriz $P$ aplica una transformación lineal que rota y estira este espacio para formar el retrato de fase original.")
+                                st.write(r"Este es el plano desacoplado. En casos con valores propios complejos, se muestra la forma canónica real que revela la rotación pura.")
                         except: pass
 
             except Exception as e:
