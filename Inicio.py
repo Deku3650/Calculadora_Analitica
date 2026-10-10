@@ -9,19 +9,34 @@ import streamlit as st
 st.set_page_config(page_title="MATHESIS", layout="centered")
 
 # ============================================
-# CSS ADAPTATIVO PARA EL MODO CLARO Y OSCURO
+# CSS ADAPTATIVO (IDENTIDAD AZUL + MENÚ VISIBLE)
 # ============================================
 st.markdown("""
     <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    .block-container {padding-top: 1.5rem;}
+    /* 1. ASEGURAR QUE EL MENÚ PRINCIPAL (3 PUNTOS) SEA VISIBLE */
+    #MainMenu {
+        visibility: visible !important;
+    }
+
+    footer {
+        visibility: hidden;
+    }
+
+    .block-container {
+        padding-top: 1.5rem;
+    }
+    
+    /* Variables de color primario global */
+    :root, html, body, [data-testid="stAppViewContainer"] {
+        --primary-color: #0284c7 !important;
+        --stConfig-primaryColor: #0284c7 !important;
+    }
     
     /* Adaptación dinámica de contenedores (Cards de módulos) */
     [data-testid="stVerticalBlockBorderWrapper"] {
         border-radius: 16px !important;
         transition: all 0.25s ease-in-out !important;
-        border: 1px solid rgba(128, 128, 128, 0.25) !important;
+        border: 1px solid rgba(2, 132, 199, 0.25) !important;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
     }
     
@@ -45,7 +60,7 @@ st.markdown("""
     }
     
     [data-testid="stPageLink-NavLink"]:hover p {
-        color: #6366f1 !important;
+        color: #38bdf8 !important;
         text-decoration: underline !important;
     }
     
@@ -96,7 +111,7 @@ st.markdown("""
        ESTILOS PARA LAS PESTAÑAS DEL MENÚ LATERAL
        ========================================== */
     [data-testid="stSidebar"] {
-        border-right: 1px solid rgba(128, 128, 128, 0.2) !important;
+        border-right: 1px solid rgba(2, 132, 199, 0.2) !important;
     }
 
     /* Botones/pestañas inactivas */
@@ -104,7 +119,7 @@ st.markdown("""
         border-radius: 12px !important;
         padding: 10px 14px !important;
         margin: 4px 8px !important;
-        border: 1px solid rgba(128, 128, 128, 0.15) !important;
+        border: 1px solid rgba(2, 132, 199, 0.15) !important;
         transition: all 0.25s ease-in-out !important;
     }
 
@@ -137,6 +152,7 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
 # ==========================================
 # ENCABEZADO 
 # ==========================================
@@ -145,7 +161,7 @@ st.markdown("""
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         padding: 32px 24px;
         border-radius: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(56, 189, 248, 0.2);
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
         margin-bottom: 25px;
         text-align: center;
@@ -239,8 +255,6 @@ with col2:
         st.page_link("pages/7_Ecuaciones_Diferenciales.py", label="🌪️ Ecuaciones Diferenciales")
         st.caption("Sistemas lineales y no lineales, retratos de fase, isoclinas y linealización Jacobiana en ℝ².")
 
-st.write("---")
-
 # ==========================================
 # ACERCA DE
 # ==========================================
@@ -251,9 +265,9 @@ st.markdown("""
     <style>
     /* Estilos formales y sobrios */
     .formal-card {
-        background-color: rgba(128, 128, 128, 0.05);
-        border: 1px solid rgba(128, 128, 128, 0.2);
-        border-left: 4px solid #1e3a8a; /* Azul Institucional */
+        background-color: rgba(2, 132, 199, 0.05);
+        border: 1px solid rgba(2, 132, 199, 0.25);
+        border-left: 4px solid #0284c7; /* Azul Institucional */
         padding: 20px 24px;
         border-radius: 8px;
         margin-bottom: 24px;
@@ -267,8 +281,8 @@ st.markdown("""
     }
     
     .author-card {
-        background-color: rgba(128, 128, 128, 0.03);
-        border: 1px solid rgba(128, 128, 128, 0.18);
+        background-color: rgba(2, 132, 199, 0.03);
+        border: 1px solid rgba(2, 132, 199, 0.2);
         border-radius: 8px;
         padding: 18px 20px;
         height: 100%;
@@ -335,7 +349,7 @@ with col_dev2:
 st.write("")
 
 st.markdown("""
-    <div style="text-align: center; font-size: 12px; opacity: 0.75; padding-top: 20px; border-top: 1px solid rgba(128, 128, 128, 0.2);">
+    <div style="text-align: center; font-size: 12px; opacity: 0.75; padding-top: 20px; border-top: 1px solid rgba(2, 132, 199, 0.2);">
         MATHESIS © 2026 • Universidad Nacional Autónoma de México • Facultad de Ciencias
     </div>
 """, unsafe_allow_html=True)
