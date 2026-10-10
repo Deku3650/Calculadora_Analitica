@@ -9,30 +9,22 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 st.set_page_config(page_title="Geometría - MATHESIS", page_icon="📐", layout="wide")
 
 # ==============================================================================
-# INYECCIÓN DIRECTA DE CSS (FORMATO AZUL + MENÚ VISIBLE)
+# INYECCIÓN DIRECTA DE CSS (ESTILOS UNIFICADOS Y LIMPIOS)
 # ==============================================================================
 st.markdown("""
     <style>
-    /* 1. MOSTRAR EL MENÚ PRINCIPAL DE LOS TRES PUNTOS */
-    #MainMenu {
-        visibility: visible !important;
-    }
+    /* 1. VISIBILIDAD DE MENÚ SUPERIOR */
+    #MainMenu { visibility: visible !important; }
+    footer { visibility: hidden; }
+    .block-container { padding-top: 1.5rem; }
 
-    footer {
-        visibility: hidden;
-    }
-
-    .block-container {
-        padding-top: 1.5rem;
-    }
-
-    /* 2. REESCRIBIR VARIABLES GLOBALES DE ROJO A AZUL */
+    /* 2. VARIABLES GLOBALES DE TEMA EN AZUL */
     :root, html, body, [data-testid="stAppViewContainer"] {
         --primary-color: #0284c7 !important;
         --stConfig-primaryColor: #0284c7 !important;
     }
 
-    /* 3. BANNER / CONTENEDOR DEL TÍTULO PRINCIPAL */
+    /* 3. BANNER PRINCIPAL */
     .title-container {
         padding: 1.2rem 1.5rem;
         border-radius: 16px;
@@ -52,52 +44,113 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
 
-    /* 4. ESTILOS Y COLORES DE PESTAÑAS (ST.TABS) */
-    [data-baseweb="tab-highlight"],
-    [data-baseweb="tab-border"] {
-        background-color: #38bdf8 !important;
+    /* 4. CONTENEDORES NATIVOS AZULES (ELIMINA RECUADROS FANTASMA) */
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%) !important;
+        border: 1px solid rgba(56, 189, 248, 0.35) !important;
+        border-radius: 16px !important;
+        box-shadow: 0 4px 15px rgba(2, 132, 199, 0.08) !important;
+        margin-bottom: 1rem !important;
+    }
+
+    /* 5. TÍTULOS Y SUBTÍTULOS RESALTADOS DENTRO DE LAS TARJETAS */
+    .card-header-title {
+        background: linear-gradient(135deg, #0284c7 0%, #6366f1 100%);
+        color: #ffffff !important;
+        font-size: 17px;
+        font-weight: 800;
+        padding: 8px 16px;
+        border-radius: 10px;
+        display: inline-block;
+        margin-bottom: 14px;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+    }
+
+    .card-subheader-title {
+        color: #38bdf8 !important;
+        font-size: 15px;
+        font-weight: 700;
+        border-bottom: 2px solid rgba(56, 189, 248, 0.3);
+        padding-bottom: 6px;
+        margin-top: 10px;
+        margin-bottom: 12px;
+    }
+
+    /* 6. DISEÑO MODERNO DE PESTAÑAS (ST.TABS) */
+    [data-baseweb="tab-list"] {
+        gap: 10px !important;
+        background-color: rgba(2, 132, 199, 0.05) !important;
+        padding: 8px 10px !important;
+        border-radius: 16px !important;
+        border: 1px solid rgba(56, 189, 248, 0.2) !important;
+        margin-bottom: 20px !important;
     }
 
     button[data-baseweb="tab"] {
-        border-radius: 10px 10px 0px 0px !important;
-        padding: 10px 20px !important;
+        border-radius: 12px !important;
+        padding: 10px 22px !important;
         font-weight: 700 !important;
         font-size: 15px !important;
         color: #94a3b8 !important;
         background-color: transparent !important;
-        border: none !important;
+        border: 1px solid transparent !important;
         transition: all 0.25s ease-in-out !important;
     }
 
-    button[data-baseweb="tab"][aria-selected="true"] {
+    button[data-baseweb="tab"]:hover {
         color: #38bdf8 !important;
-        border-bottom-color: #38bdf8 !important;
-        background: rgba(2, 132, 199, 0.15) !important;
+        background: rgba(2, 132, 199, 0.12) !important;
+        border: 1px solid rgba(56, 189, 248, 0.25) !important;
     }
 
-    button[data-baseweb="tab"] p, 
-    button[data-baseweb="tab"] span {
-        font-size: 15px !important;
-        font-weight: 700 !important;
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #ffffff !important;
+        background: linear-gradient(135deg, #0284c7 0%, #4f46e5 100%) !important;
+        box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35) !important;
+        border: 1px solid #38bdf8 !important;
     }
 
     button[data-baseweb="tab"][aria-selected="true"] p,
     button[data-baseweb="tab"][aria-selected="true"] span {
-        color: #38bdf8 !important;
+        color: #ffffff !important;
         font-weight: 800 !important;
     }
 
-    /* 5. BARRA LATERAL (SIDEBAR) */
-    [data-testid="stSidebar"] {
+    [data-baseweb="tab-highlight"], [data-baseweb="tab-border"] {
+        display: none !important;
+    }
+
+    /* 7. ESTILOS DE BARRA LATERAL (SIDEBAR UNIFICADO) */
+    [data-testid="stSidebar"], section[data-testid="stSidebar"] {
+        min-width: 300px !important;
+        max-width: 320px !important;
         border-right: 1px solid rgba(2, 132, 199, 0.2) !important;
     }
 
-    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] {
-        background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(79, 70, 229, 0.25) 100%) !important;
-        border: 1px solid #38bdf8 !important;
+    [data-testid="stSidebarNav"] ul li div a, [data-testid="stSidebarNav"] a {
+        border-radius: 12px !important;
+        padding: 10px 14px !important;
+        margin: 4px 8px !important;
+        border: 1px solid rgba(2, 132, 199, 0.18) !important;
+        background-color: rgba(2, 132, 199, 0.03) !important;
+        transition: all 0.25s ease-in-out !important;
+        white-space: nowrap !important;
     }
 
-    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span {
+    [data-testid="stSidebarNav"] ul li div a:hover, [data-testid="stSidebarNav"] a:hover {
+        border-color: #0284c7 !important;
+        background: rgba(2, 132, 199, 0.12) !important;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2) !important;
+        transform: translateX(4px);
+    }
+
+    [data-testid="stSidebarNav"] ul li div a[aria-current="page"], [data-testid="stSidebarNav"] a[aria-current="page"] {
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(79, 70, 229, 0.25) 100%) !important;
+        border: 1px solid #38bdf8 !important;
+        box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25) !important;
+    }
+
+    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span, [data-testid="stSidebarNav"] a[aria-current="page"] span {
         color: #38bdf8 !important;
         font-weight: 800 !important;
     }
@@ -251,206 +304,209 @@ tab1, tab2, tab3 = st.tabs(["Figuras 2D", "Geometría Analítica", "Figuras 3D (
 # PESTAÑA 1: FIGURAS 2D
 # ---------------------------------------------------------
 with tab1:
-    st.subheader("Cálculo de Áreas 2D")
-    figura_2d = st.selectbox("Seleccione la figura:", ["Cuadrado", "Rectángulo", "Círculo", "Triángulo"])
-    
-    if figura_2d == "Cuadrado":
-        L = st.number_input("Lado del cuadrado:", min_value=0.0, value=1.0)
-        st.success(f"**Área:** {L**2:.2f}")
+    with st.container(border=True):
+        st.markdown('<div class="card-header-title">📏 Cálculo de Áreas 2D</div>', unsafe_allow_html=True)
+        figura_2d = st.selectbox("Seleccione la figura:", ["Cuadrado", "Rectángulo", "Círculo", "Triángulo"])
         
-    elif figura_2d == "Rectángulo":
-        col1, col2 = st.columns(2)
-        with col1:
-            b_rect = st.number_input("Base:", min_value=0.0, value=1.0)
-        with col2:
-            h_rect = st.number_input("Altura:", min_value=0.0, value=1.0)
-        st.success(f"**Área:** {b_rect*h_rect:.2f}")
-        
-    elif figura_2d == "Círculo":
-        r_circ = st.number_input("Radio:", min_value=0.0, value=1.0)
-        st.success(f"**Área:** {math.pi * (r_circ**2):.2f}")
-        
-    elif figura_2d == "Triángulo":
-        metodo_tri = st.radio("Método de cálculo:", ["Base y Altura", "Tres lados (Fórmula de Herón)", "Ángulo y dos lados"])
-        
-        if metodo_tri == "Base y Altura":
+        if figura_2d == "Cuadrado":
+            L = st.number_input("Lado del cuadrado:", min_value=0.0, value=1.0)
+            st.success(f"**Área:** {L**2:.2f}")
+            
+        elif figura_2d == "Rectángulo":
             col1, col2 = st.columns(2)
-            with col1: 
-                b_tri = st.number_input("Base (b):", min_value=0.0, value=1.0)
-            with col2: 
-                h_tri = st.number_input("Altura (h):", min_value=0.0, value=1.0)
-            st.success(f"**Área:** {(b_tri*h_tri)/2:.2f}")
+            with col1:
+                b_rect = st.number_input("Base:", min_value=0.0, value=1.0)
+            with col2:
+                h_rect = st.number_input("Altura:", min_value=0.0, value=1.0)
+            st.success(f"**Área:** {b_rect*h_rect:.2f}")
             
-        elif metodo_tri == "Tres lados (Fórmula de Herón)":
-            c1, c2, c3 = st.columns(3)
-            with c1: 
-                l1 = st.number_input("Lado 1:", min_value=0.001, value=1.0)
-            with c2: 
-                l2 = st.number_input("Lado 2:", min_value=0.001, value=1.0)
-            with c3: 
-                l3 = st.number_input("Lado 3:", min_value=0.001, value=1.0)
+        elif figura_2d == "Círculo":
+            r_circ = st.number_input("Radio:", min_value=0.0, value=1.0)
+            st.success(f"**Área:** {math.pi * (r_circ**2):.2f}")
             
-            if (l1 + l2 > l3) and (l1 + l3 > l2) and (l2 + l3 > l1):
-                s_heron = (l1 + l2 + l3) / 2
-                area_heron = math.sqrt(s_heron * (s_heron - l1) * (s_heron - l2) * (s_heron - l3))
-                st.success(f"**Área:** {area_heron:.2f}")
-            else:
-                st.error("Error: Esos lados violan la Desigualdad Triangular.")
+        elif figura_2d == "Triángulo":
+            metodo_tri = st.radio("Método de cálculo:", ["Base y Altura", "Tres lados (Fórmula de Herón)", "Ángulo y dos lados"])
+            
+            if metodo_tri == "Base y Altura":
+                col1, col2 = st.columns(2)
+                with col1: 
+                    b_tri = st.number_input("Base (b):", min_value=0.0, value=1.0)
+                with col2: 
+                    h_tri = st.number_input("Altura (h):", min_value=0.0, value=1.0)
+                st.success(f"**Área:** {(b_tri*h_tri)/2:.2f}")
                 
-        elif metodo_tri == "Ángulo y dos lados":
-            c1, c2, c3 = st.columns(3)
-            with c1: 
-                l1_ang = st.number_input("Lado 1:", min_value=0.0, value=1.0, key="ang_l1")
-            with c2: 
-                l2_ang = st.number_input("Lado 2:", min_value=0.0, value=1.0, key="ang_l2")
-            with c3: 
-                ang = st.number_input("Ángulo (grados):", min_value=0.0, max_value=179.9, value=90.0)
-            
-            area_ang = (l1_ang * l2_ang * math.sin(math.radians(ang))) / 2
-            st.success(f"**Área:** {area_ang:.2f}")
+            elif metodo_tri == "Tres lados (Fórmula de Herón)":
+                c1, c2, c3 = st.columns(3)
+                with c1: 
+                    l1 = st.number_input("Lado 1:", min_value=0.001, value=1.0)
+                with c2: 
+                    l2 = st.number_input("Lado 2:", min_value=0.001, value=1.0)
+                with c3: 
+                    l3 = st.number_input("Lado 3:", min_value=0.001, value=1.0)
+                
+                if (l1 + l2 > l3) and (l1 + l3 > l2) and (l2 + l3 > l1):
+                    s_heron = (l1 + l2 + l3) / 2
+                    area_heron = math.sqrt(s_heron * (s_heron - l1) * (s_heron - l2) * (s_heron - l3))
+                    st.success(f"**Área:** {area_heron:.2f}")
+                else:
+                    st.error("Error: Esos lados violan la Desigualdad Triangular.")
+                    
+            elif metodo_tri == "Ángulo y dos lados":
+                c1, c2, c3 = st.columns(3)
+                with c1: 
+                    l1_ang = st.number_input("Lado 1:", min_value=0.0, value=1.0, key="ang_l1")
+                with c2: 
+                    l2_ang = st.number_input("Lado 2:", min_value=0.0, value=1.0, key="ang_l2")
+                with c3: 
+                    ang = st.number_input("Ángulo (grados):", min_value=0.0, max_value=179.9, value=90.0)
+                
+                area_ang = (l1_ang * l2_ang * math.sin(math.radians(ang))) / 2
+                st.success(f"**Área:** {area_ang:.2f}")
 
 # ---------------------------------------------------------
 # PESTAÑA 2: GEOMETRÍA ANALÍTICA
 # ---------------------------------------------------------
 with tab2:
-    st.subheader("Herramientas Analíticas")
-    herramienta = st.selectbox("Seleccione la herramienta:", ["Ecuación Cuadrática", "Distancia entre 2 puntos"])
-    
-    if herramienta == "Ecuación Cuadrática":
-        st.write("Ecuación de la forma: $$Ax^2 + Bx + C = 0$$")
-        c1, c2, c3 = st.columns(3)
-        with c1: 
-            a_coef = st.number_input("A:", value=1.0)
-        with c2: 
-            b_coef = st.number_input("B:", value=0.0)
-        with c3: 
-            c_coef = st.number_input("C:", value=0.0)
+    with st.container(border=True):
+        st.markdown('<div class="card-header-title">📊 Herramientas Analíticas</div>', unsafe_allow_html=True)
+        herramienta = st.selectbox("Seleccione la herramienta:", ["Ecuación Cuadrática", "Distancia entre 2 puntos"])
         
-        if st.button("Calcular Raíces"):
-            if a_coef == 0 and b_coef == 0:
-                st.warning("No es una ecuación válida.")
-            elif a_coef == 0:
-                st.info(f"Es una ecuación lineal. Raíz: {-c_coef/b_coef:.3f}")
-            else:
-                d = (b_coef**2) - (4*a_coef*c_coef)
-                if d >= 0:
-                    x1 = (-b_coef + math.sqrt(d)) / (2*a_coef)
-                    x2 = (-b_coef - math.sqrt(d)) / (2*a_coef)
-                    st.success(f"**Raíces Reales:** $X_1 = {x1:.3f}$, $X_2 = {x2:.3f}$")
-                else:
-                    st.warning("Raíces Complejas conjugadas:")
-                    ac = -b_coef / (2*a_coef)
-                    bc = math.sqrt(-d) / (2*a_coef)
-                    st.write(f"$X_1 = {ac:.3f} + {bc:.3f}i$")
-                    st.write(f"$X_2 = {ac:.3f} - {bc:.3f}i$")
-                
-                st.pyplot(graficar_cuadratica_st(a_coef, b_coef, c_coef))
-                
-    elif herramienta == "Distancia entre 2 puntos":
-        col1, col2 = st.columns(2)
-        with col1:
-            st.write("**Punto A**")
-            x1 = st.number_input("X1", value=0.0)
-            y1 = st.number_input("Y1", value=0.0)
-        with col2:
-            st.write("**Punto B**")
-            x2 = st.number_input("X2", value=1.0)
-            y2 = st.number_input("Y2", value=1.0)
+        if herramienta == "Ecuación Cuadrática":
+            st.write("Ecuación de la forma: $$Ax^2 + Bx + C = 0$$")
+            c1, c2, c3 = st.columns(3)
+            with c1: 
+                a_coef = st.number_input("A:", value=1.0)
+            with c2: 
+                b_coef = st.number_input("B:", value=0.0)
+            with c3: 
+                c_coef = st.number_input("C:", value=0.0)
             
-        dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-        st.success(f"La distancia euclidiana es: **{dist:.3f}**")
+            if st.button("🧮 Calcular Raíces", use_container_width=True):
+                if a_coef == 0 and b_coef == 0:
+                    st.warning("No es una ecuación válida.")
+                elif a_coef == 0:
+                    st.info(f"Es una ecuación lineal. Raíz: {-c_coef/b_coef:.3f}")
+                else:
+                    d = (b_coef**2) - (4*a_coef*c_coef)
+                    if d >= 0:
+                        x1 = (-b_coef + math.sqrt(d)) / (2*a_coef)
+                        x2 = (-b_coef - math.sqrt(d)) / (2*a_coef)
+                        st.success(f"**Raíces Reales:** $X_1 = {x1:.3f}$, $X_2 = {x2:.3f}$")
+                    else:
+                        st.warning("Raíces Complejas conjugadas:")
+                        ac = -b_coef / (2*a_coef)
+                        bc = math.sqrt(-d) / (2*a_coef)
+                        st.write(f"$X_1 = {ac:.3f} + {bc:.3f}i$")
+                        st.write(f"$X_2 = {ac:.3f} - {bc:.3f}i$")
+                    
+                    st.pyplot(graficar_cuadratica_st(a_coef, b_coef, c_coef))
+                    
+        elif herramienta == "Distancia entre 2 puntos":
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("**Punto A**")
+                x1 = st.number_input("X1", value=0.0)
+                y1 = st.number_input("Y1", value=0.0)
+            with col2:
+                st.write("**Punto B**")
+                x2 = st.number_input("X2", value=1.0)
+                y2 = st.number_input("Y2", value=1.0)
+                
+            dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+            st.success(f"La distancia euclidiana es: **{dist:.3f}**")
 
 # ---------------------------------------------------------
 # PESTAÑA 3: FIGURAS 3D (Consolida Área y Volumen)
 # ---------------------------------------------------------
 with tab3:
-    st.subheader("Cálculo Espacial 3D")
-    figura_3d = st.selectbox("Figura:", ["Cilindro", "Esfera", "Cono", "Pirámide base cuadrada", "Prisma rectangular", "Prisma triangular"])
-    operacion = st.radio("¿Qué desea calcular?", ["Volumen", "Área Superficial"], horizontal=True)
-    
-    params = {}
-    result = 0
-    
-    if figura_3d == "Cilindro":
-        c1, c2 = st.columns(2)
-        with c1: 
-            params['r'] = st.number_input("Radio (r):", min_value=0.0, value=1.0, key="cil_r")
-        with c2: 
-            params['h'] = st.number_input("Altura (h):", min_value=0.0, value=2.0, key="cil_h")
+    with st.container(border=True):
+        st.markdown('<div class="card-header-title">🧊 Cálculo Espacial 3D</div>', unsafe_allow_html=True)
+        figura_3d = st.selectbox("Figura:", ["Cilindro", "Esfera", "Cono", "Pirámide base cuadrada", "Prisma rectangular", "Prisma triangular"])
+        operacion = st.radio("¿Qué desea calcular?", ["Volumen", "Área Superficial"], horizontal=True)
         
-        if operacion == "Volumen": 
-            result = math.pi * (params['r']**2) * params['h']
-        else: 
-            result = (2 * math.pi * params['r']**2) + (2 * math.pi * params['r'] * params['h'])
-            
-    elif figura_3d == "Esfera":
-        params['r'] = st.number_input("Radio (r):", min_value=0.0, value=1.0, key="esf_r")
-        if operacion == "Volumen": 
-            result = (4 * math.pi * params['r']**3) / 3
-        else: 
-            result = 4 * math.pi * params['r']**2
-            
-    elif figura_3d == "Cono":
-        c1, c2 = st.columns(2)
-        with c1: 
-            params['r'] = st.number_input("Radio (r):", min_value=0.0, value=1.0, key="cono_r")
-        if operacion == "Volumen":
-            with c2: 
-                params['h'] = st.number_input("Altura (h):", min_value=0.0, value=2.0, key="cono_h")
-            result = (math.pi * (params['r']**2) * params['h']) / 3
-        else:
-            with c2: 
-                params['s'] = st.number_input("Generatriz (s):", min_value=0.0, value=2.0, key="cono_s")
-            result = (math.pi * params['r'] * params['s']) + (math.pi * params['r']**2)
-            
-    elif figura_3d == "Pirámide base cuadrada":
-        c1, c2 = st.columns(2)
-        with c1: 
-            params['b'] = st.number_input("Lado base (b):", min_value=0.0, value=1.0, key="pir_b")
-        if operacion == "Volumen":
-            with c2: 
-                params['h'] = st.number_input("Altura pirámide (h):", min_value=0.0, value=2.0, key="pir_h")
-            result = ((params['b']**2) * params['h']) / 3
-        else:
-            with c2: 
-                params['s'] = st.number_input("Altura lateral (s):", min_value=0.0, value=2.0, key="pir_s")
-            result = (2 * params['b'] * params['s']) + (params['b']**2)
-            
-    elif figura_3d == "Prisma rectangular":
-        c1, c2, c3 = st.columns(3)
-        with c1: 
-            params['l'] = st.number_input("Largo (l):", min_value=0.0, value=1.0, key="prect_l")
-        with c2: 
-            params['w'] = st.number_input("Ancho (w):", min_value=0.0, value=1.0, key="prect_w")
-        with c3: 
-            params['h'] = st.number_input("Altura (h):", min_value=0.0, value=2.0, key="prect_h")
-            
-        if operacion == "Volumen": 
-            result = params['l'] * params['w'] * params['h']
-        else: 
-            result = 2 * ((params['w'] * params['h']) + (params['l'] * params['w']) + (params['l'] * params['h']))
-            
-    elif figura_3d == "Prisma triangular":
-        c1, c2, c3, c4 = st.columns(4)
-        with c1: 
-            params['b'] = st.number_input("Base Triángulo (b):", min_value=0.0, value=1.0, key="ptri_b")
-        with c2: 
-            params['l'] = st.number_input("Altura Triángulo (l):", min_value=0.0, value=1.0, key="ptri_l")
-        with c3: 
-            params['h'] = st.number_input("Altura Prisma (h):", min_value=0.0, value=2.0, key="ptri_h")
+        params = {}
+        result = 0
         
-        if operacion == "Volumen":
-            result = (params['b'] * params['l'] * params['h']) / 2
-        else:
-            with c4: 
-                params['a'] = st.number_input("Lado 'a':", min_value=0.0, value=1.0, key="ptri_a")
-                params['c'] = st.number_input("Lado 'c':", min_value=0.0, value=1.0, key="ptri_c")
-            result = (params['a'] * params['h']) + (params['b'] * params['h']) + (params['c'] * params['h']) + (params['b'] * params['l'])
+        if figura_3d == "Cilindro":
+            c1, c2 = st.columns(2)
+            with c1: 
+                params['r'] = st.number_input("Radio (r):", min_value=0.0, value=1.0, key="cil_r")
+            with c2: 
+                params['h'] = st.number_input("Altura (h):", min_value=0.0, value=2.0, key="cil_h")
+            
+            if operacion == "Volumen": 
+                result = math.pi * (params['r']**2) * params['h']
+            else: 
+                result = (2 * math.pi * params['r']**2) + (2 * math.pi * params['r'] * params['h'])
+                
+        elif figura_3d == "Esfera":
+            params['r'] = st.number_input("Radio (r):", min_value=0.0, value=1.0, key="esf_r")
+            if operacion == "Volumen": 
+                result = (4 * math.pi * params['r']**3) / 3
+            else: 
+                result = 4 * math.pi * params['r']**2
+                
+        elif figura_3d == "Cono":
+            c1, c2 = st.columns(2)
+            with c1: 
+                params['r'] = st.number_input("Radio (r):", min_value=0.0, value=1.0, key="cono_r")
+            if operacion == "Volumen":
+                with c2: 
+                    params['h'] = st.number_input("Altura (h):", min_value=0.0, value=2.0, key="cono_h")
+                result = (math.pi * (params['r']**2) * params['h']) / 3
+            else:
+                with c2: 
+                    params['s'] = st.number_input("Generatriz (s):", min_value=0.0, value=2.0, key="cono_s")
+                result = (math.pi * params['r'] * params['s']) + (math.pi * params['r']**2)
+                
+        elif figura_3d == "Pirámide base cuadrada":
+            c1, c2 = st.columns(2)
+            with c1: 
+                params['b'] = st.number_input("Lado base (b):", min_value=0.0, value=1.0, key="pir_b")
+            if operacion == "Volumen":
+                with c2: 
+                    params['h'] = st.number_input("Altura pirámide (h):", min_value=0.0, value=2.0, key="pir_h")
+                result = ((params['b']**2) * params['h']) / 3
+            else:
+                with c2: 
+                    params['s'] = st.number_input("Altura lateral (s):", min_value=0.0, value=2.0, key="pir_s")
+                result = (2 * params['b'] * params['s']) + (params['b']**2)
+                
+        elif figura_3d == "Prisma rectangular":
+            c1, c2, c3 = st.columns(3)
+            with c1: 
+                params['l'] = st.number_input("Largo (l):", min_value=0.0, value=1.0, key="prect_l")
+            with c2: 
+                params['w'] = st.number_input("Ancho (w):", min_value=0.0, value=1.0, key="prect_w")
+            with c3: 
+                params['h'] = st.number_input("Altura (h):", min_value=0.0, value=2.0, key="prect_h")
+                
+            if operacion == "Volumen": 
+                result = params['l'] * params['w'] * params['h']
+            else: 
+                result = 2 * ((params['w'] * params['h']) + (params['l'] * params['w']) + (params['l'] * params['h']))
+                
+            elif figura_3d == "Prisma triangular":
+            c1, c2, c3, c4 = st.columns(4)
+            with c1: 
+                params['b'] = st.number_input("Base Triángulo (b):", min_value=0.0, value=1.0, key="ptri_b")
+            with c2: 
+                params['l'] = st.number_input("Altura Triángulo (l):", min_value=0.0, value=1.0, key="ptri_l")
+            with c3: 
+                params['h'] = st.number_input("Altura Prisma (h):", min_value=0.0, value=2.0, key="ptri_h")
+            
+            if operacion == "Volumen":
+                result = (params['b'] * params['l'] * params['h']) / 2
+            else:
+                with c4: 
+                    params['a'] = st.number_input("Lado 'a':", min_value=0.0, value=1.0, key="ptri_a")
+                    params['c'] = st.number_input("Lado 'c':", min_value=0.0, value=1.0, key="ptri_c")
+                result = (params['a'] * params['h']) + (params['b'] * params['h']) + (params['c'] * params['h']) + (params['b'] * params['l'])
 
-    st.success(f"**El {operacion.lower()} es:** {result:.2f}")
-    
-    if st.checkbox("Visualizar figura en 3D"):
-        fig_idx = ["Cilindro", "Esfera", "Cono", "Pirámide base cuadrada", "Prisma rectangular", "Prisma triangular"].index(figura_3d) + 1
-        fig = renderizar_figura_3d_st(fig_idx, params)
-        if fig is not None:
-            st.pyplot(fig)
+        st.success(f"**El {operacion.lower()} es:** {result:.2f}")
+        
+        if st.checkbox("Visualizar figura en 3D"):
+            fig_idx = ["Cilindro", "Esfera", "Cono", "Pirámide base cuadrada", "Prisma rectangular", "Prisma triangular"].index(figura_3d) + 1
+            fig = renderizar_figura_3d_st(fig_idx, params)
+            if fig is not None:
+                st.pyplot(fig)
