@@ -486,7 +486,7 @@ with tab3:
             else: 
                 result = 2 * ((params['w'] * params['h']) + (params['l'] * params['w']) + (params['l'] * params['h']))
                 
-            elif figura_3d == "Prisma triangular":
+        elif figura_3d == "Prisma triangular":
             c1, c2, c3, c4 = st.columns(4)
             with c1: 
                 params['b'] = st.number_input("Base Triángulo (b):", min_value=0.0, value=1.0, key="ptri_b")
