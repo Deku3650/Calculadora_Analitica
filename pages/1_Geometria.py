@@ -9,32 +9,37 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 st.set_page_config(page_title="Geometría - MATHESIS", page_icon="📐", layout="wide")
 
 # ==============================================================================
-# CSS ESTILIZADO COMPLETO (FUERZA AZUL Y ELIMINA EL ROJO)
+# INYECCIÓN DIRECTA DE CSS (FORMATO AZUL + MENÚ VISIBLE)
 # ==============================================================================
 st.markdown("""
     <style>
-    /* --------------------------------------
-       0. REESCRIBIR VARIABLES GLOBALES DE ROJO A AZUL
-       -------------------------------------- */
-    :root {
+    /* 1. MOSTRAR EL MENÚ PRINCIPAL DE LOS TRES PUNTOS */
+    #MainMenu {
+        visibility: visible !important;
+    }
+
+    footer {
+        visibility: hidden;
+    }
+
+    .block-container {
+        padding-top: 1.5rem;
+    }
+
+    /* 2. REESCRIBIR VARIABLES GLOBALES DE ROJO A AZUL */
+    :root, html, body, [data-testid="stAppViewContainer"] {
         --primary-color: #0284c7 !important;
         --stConfig-primaryColor: #0284c7 !important;
     }
 
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    .block-container {padding-top: 1.5rem;}
-    
-    /* --------------------------------------
-       1. ESTILO DEL TÍTULO PRINCIPAL
-       -------------------------------------- */
+    /* 3. BANNER / CONTENEDOR DEL TÍTULO PRINCIPAL */
     .title-container {
         padding: 1.2rem 1.5rem;
         border-radius: 16px;
-        background: linear-gradient(135deg, rgba(2, 132, 199, 0.15) 0%, rgba(79, 70, 229, 0.15) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.3);
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.18) 0%, rgba(79, 70, 229, 0.18) 100%);
+        border: 1px solid rgba(56, 189, 248, 0.35);
         margin-bottom: 1.5rem;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 4px 15px rgba(2, 132, 199, 0.12);
     }
     
     .title-text {
@@ -47,89 +52,54 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
 
-    /* --------------------------------------
-       2. ELIMINAR LÍNEA Y BORDES ROJOS DE STREAMLIT (ST.TABS)
-       -------------------------------------- */
-    /* Indicador inferior animado de la pestaña activa */
-    div[data-baseweb="tab-highlight"],
-    div[data-baseweb="tab-border"],
-    [data-testid="stTabHeader"] div[aria-selected="true"] {
+    /* 4. ESTILOS Y COLORES DE PESTAÑAS (ST.TABS) */
+    [data-baseweb="tab-highlight"],
+    [data-baseweb="tab-border"] {
         background-color: #38bdf8 !important;
-        border-color: #38bdf8 !important;
     }
 
-    /* Botones de las pestañas */
     button[data-baseweb="tab"] {
         border-radius: 10px 10px 0px 0px !important;
-        padding: 10px 22px !important;
+        padding: 10px 20px !important;
         font-weight: 700 !important;
         font-size: 15px !important;
-        transition: all 0.25s ease-in-out !important;
-        border: none !important;
         color: #94a3b8 !important;
-    }
-    
-    /* Pestaña activa / seleccionada */
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #38bdf8 !important;
-        background: linear-gradient(135deg, rgba(2, 132, 199, 0.2) 0%, rgba(79, 70, 229, 0.2) 100%) !important;
-        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15) !important;
+        background-color: transparent !important;
+        border: none !important;
+        transition: all 0.25s ease-in-out !important;
     }
 
-    /* Modificar texto interno de la pestaña activa */
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #38bdf8 !important;
+        border-bottom-color: #38bdf8 !important;
+        background: rgba(2, 132, 199, 0.15) !important;
+    }
+
+    button[data-baseweb="tab"] p, 
+    button[data-baseweb="tab"] span {
+        font-size: 15px !important;
+        font-weight: 700 !important;
+    }
+
     button[data-baseweb="tab"][aria-selected="true"] p,
     button[data-baseweb="tab"][aria-selected="true"] span {
         color: #38bdf8 !important;
         font-weight: 800 !important;
     }
 
-    /* Hover en pestañas */
-    button[data-baseweb="tab"]:hover {
-        color: #0284c7 !important;
-        background: rgba(2, 132, 199, 0.08) !important;
-    }
-
-    /* --------------------------------------
-       3. MENÚ LATERAL (SIDEBAR EN AZUL)
-       -------------------------------------- */
+    /* 5. BARRA LATERAL (SIDEBAR) */
     [data-testid="stSidebar"] {
         border-right: 1px solid rgba(2, 132, 199, 0.2) !important;
-    }
-
-    [data-testid="stSidebarNav"] ul li div a {
-        border-radius: 12px !important;
-        padding: 10px 14px !important;
-        margin: 4px 8px !important;
-        border: 1px solid rgba(2, 132, 199, 0.15) !important;
-        transition: all 0.25s ease-in-out !important;
-    }
-
-    [data-testid="stSidebarNav"] ul li div a:hover {
-        border-color: #0284c7 !important;
-        background: rgba(2, 132, 199, 0.12) !important;
-        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2) !important;
-        transform: translateX(4px);
     }
 
     [data-testid="stSidebarNav"] ul li div a[aria-current="page"] {
         background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(79, 70, 229, 0.25) 100%) !important;
         border: 1px solid #38bdf8 !important;
-        box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25) !important;
     }
 
     [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span {
         color: #38bdf8 !important;
         font-weight: 800 !important;
-    }
-
-    /* --------------------------------------
-       4. CONTENEDORES DE TARJETAS
-       -------------------------------------- */
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        border-radius: 16px !important;
-        transition: all 0.25s ease-in-out !important;
-        border: 1px solid rgba(2, 132, 199, 0.25) !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -142,44 +112,58 @@ def graficar_cuadratica_st(a, b, c):
     y = a*x**2 + b*x + c
 
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(x, y, label=f"{a}x² + {b}x + {c}", color='#0284c7', linewidth=2)
-    ax.axhline(0, color='gray', linewidth=1, linestyle='--')
-    ax.axvline(0, color='gray', linewidth=1, linestyle='--')
-    ax.set_title("Representación Gráfica de la Ecuación", fontsize=12, fontweight='bold')
-    ax.grid(True, linestyle=':', alpha=0.6)
-    ax.legend()
+    fig.patch.set_alpha(0.0)
+    ax.set_facecolor('#0f172a')
+    
+    ax.plot(x, y, label=f"f(x) = {a}x² + {b}x + {c}", color='#38bdf8', linewidth=2.5)
+    ax.axhline(0, color='#64748b', linewidth=1, linestyle='--')
+    ax.axvline(0, color='#64748b', linewidth=1, linestyle='--')
+    
+    ax.set_title("Representación Gráfica de la Ecuación", fontsize=12, fontweight='bold', color='#f8fafc')
+    ax.tick_params(colors='#94a3b8')
+    ax.grid(True, linestyle=':', alpha=0.3, color='#334155')
+    
+    legend = ax.legend(facecolor='#1e293b', edgecolor='#0284c7')
+    plt.setp(legend.get_texts(), color='#f8fafc')
+    
+    for spine in ax.spines.values():
+        spine.set_color('#0284c7')
+        spine.set_alpha(0.4)
+        
     return fig
 
 @st.cache_resource
 def renderizar_figura_3d_st(figura, params):
     fig = plt.figure(figsize=(6, 6))
+    fig.patch.set_alpha(0.0)
     ax = fig.add_subplot(111, projection='3d')
-    ax.set_box_aspect([1,1,1])
+    ax.set_facecolor('#0f172a')
+    ax.set_box_aspect([1, 1, 1])
 
     color_cara = '#38bdf8'
-    alfa = 0.5 
+    alfa = 0.55 
 
-    if figura == 1: # Cilindro
+    if figura == 1:
         r, h = params['r'], params['h']
         z = np.linspace(0, h, 30)
         theta = np.linspace(0, 2*np.pi, 30)
         theta_grid, z_grid = np.meshgrid(theta, z)
         x_grid = r * np.cos(theta_grid)
         y_grid = r * np.sin(theta_grid)
-        ax.plot_surface(x_grid, y_grid, z_grid, alpha=alfa, color=color_cara, edgecolor='none')
-        ax.set_title(f"Cilindro (r={r}, h={h})")
+        ax.plot_surface(x_grid, y_grid, z_grid, alpha=alfa, color=color_cara, edgecolor='#0284c7')
+        ax.set_title(f"Cilindro (r={r}, h={h})", color='#f8fafc', fontweight='bold')
 
-    elif figura == 2: # Esfera
+    elif figura == 2:
         r = params['r']
         u = np.linspace(0, 2 * np.pi, 30)
         v = np.linspace(0, np.pi, 30)
         x = r * np.outer(np.cos(u), np.sin(v))
         y = r * np.outer(np.sin(u), np.sin(v))
         z = r * np.outer(np.ones(np.size(u)), np.cos(v))
-        ax.plot_surface(x, y, z, color=color_cara, alpha=alfa, edgecolor='none')
-        ax.set_title(f"Esfera (r={r})")
+        ax.plot_surface(x, y, z, color=color_cara, alpha=alfa, edgecolor='#0284c7')
+        ax.set_title(f"Esfera (r={r})", color='#f8fafc', fontweight='bold')
 
-    elif figura == 3: # Cono
+    elif figura == 3:
         r = params['r']
         if 'h' in params:
             h = params['h']
@@ -196,10 +180,10 @@ def renderizar_figura_3d_st(figura, params):
         r_grid = r * (1 - z_grid/h) 
         x_grid = r_grid * np.cos(theta_grid)
         y_grid = r_grid * np.sin(theta_grid)
-        ax.plot_surface(x_grid, y_grid, z_grid, alpha=alfa, color=color_cara, edgecolor='none')
-        ax.set_title(f"Cono (r={r}, h={h:.2f})")
+        ax.plot_surface(x_grid, y_grid, z_grid, alpha=alfa, color=color_cara, edgecolor='#0284c7')
+        ax.set_title(f"Cono (r={r}, h={h:.2f})", color='#f8fafc', fontweight='bold')
 
-    elif figura == 4: # Pirámide base cuadrada
+    elif figura == 4:
         b = params['b']
         if 'h' in params:
             h = params['h']
@@ -211,41 +195,50 @@ def renderizar_figura_3d_st(figura, params):
             h = math.sqrt(s**2 - (b/2)**2)
 
         Z = np.array([[-b/2, -b/2, 0], [b/2, -b/2, 0], [b/2, b/2, 0], [-b/2, b/2, 0], [0, 0, h]])
-        caras = [[Z[0],Z[1],Z[2],Z[3]], [Z[0],Z[1],Z[4]], [Z[1],Z[2],Z[4]], [Z[2],Z[3],Z[4]], [Z[3],Z[0],Z[4]]]
-        ax.add_collection3d(Poly3DCollection(caras, alpha=alfa, facecolors=color_cara, edgecolors='k'))
-        ax.set_xlim([-b, b]); ax.set_ylim([-b, b]); ax.set_zlim([0, h*1.2])
-        ax.set_title("Pirámide Cuadrangular")
+        caras = [[Z[0], Z[1], Z[2], Z[3]], [Z[0], Z[1], Z[4]], [Z[1], Z[2], Z[4]], [Z[2], Z[3], Z[4]], [Z[3], Z[0], Z[4]]]
+        ax.add_collection3d(Poly3DCollection(caras, alpha=alfa, facecolors=color_cara, edgecolors='#38bdf8'))
+        ax.set_xlim([-b, b])
+        ax.set_ylim([-b, b])
+        ax.set_zlim([0, h*1.2])
+        ax.set_title("Pirámide Cuadrangular", color='#f8fafc', fontweight='bold')
 
-    elif figura == 5: # Prisma rectangular
+    elif figura == 5:
         l, w, h = params['l'], params['w'], params['h']
         Z = np.array([[-l/2, -w/2, 0], [l/2, -w/2, 0], [l/2, w/2, 0], [-l/2, w/2, 0],
                       [-l/2, -w/2, h], [l/2, -w/2, h], [l/2, w/2, h], [-l/2, w/2, h]])
-        caras = [[Z[0],Z[1],Z[2],Z[3]], [Z[4],Z[5],Z[6],Z[7]], [Z[0],Z[1],Z[5],Z[4]],
-                 [Z[2],Z[3],Z[7],Z[6]], [Z[1],Z[2],Z[6],Z[5]], [Z[4],Z[7],Z[3],Z[0]]]
-        ax.add_collection3d(Poly3DCollection(caras, alpha=alfa, facecolors=color_cara, edgecolors='k'))
+        caras = [[Z[0], Z[1], Z[2], Z[3]], [Z[4], Z[5], Z[6], Z[7]], [Z[0], Z[1], Z[5], Z[4]],
+                 [Z[2], Z[3], Z[7], Z[6]], [Z[1], Z[2], Z[6], Z[5]], [Z[4], Z[7], Z[3], Z[0]]]
+        ax.add_collection3d(Poly3DCollection(caras, alpha=alfa, facecolors=color_cara, edgecolors='#38bdf8'))
         lim = max(l, w, h)
-        ax.set_xlim([-lim, lim]); ax.set_ylim([-lim, lim]); ax.set_zlim([0, lim])
-        ax.set_title("Prisma Rectangular")
+        ax.set_xlim([-lim, lim])
+        ax.set_ylim([-lim, lim])
+        ax.set_zlim([0, lim])
+        ax.set_title("Prisma Rectangular", color='#f8fafc', fontweight='bold')
 
-    elif figura == 6: # Prisma triangular
+    elif figura == 6:
         b, l_tri, h = params['b'], params['l'], params['h']
         Z = np.array([[-b/2, 0, 0], [b/2, 0, 0], [0, l_tri, 0],
                       [-b/2, 0, h], [b/2, 0, h], [0, l_tri, h]])
-        caras = [[Z[0],Z[1],Z[2]], [Z[3],Z[4],Z[5]], [Z[0],Z[1],Z[4],Z[3]],
-                 [Z[1],Z[2],Z[5],Z[4]], [Z[2],Z[0],Z[3],Z[5]]]
-        ax.add_collection3d(Poly3DCollection(caras, alpha=alfa, facecolors=color_cara, edgecolors='k'))
+        caras = [[Z[0], Z[1], Z[2]], [Z[3], Z[4], Z[5]], [Z[0], Z[1], Z[4], Z[3]],
+                 [Z[1], Z[2], Z[5], Z[4]], [Z[2], Z[0], Z[3], Z[5]]]
+        ax.add_collection3d(Poly3DCollection(caras, alpha=alfa, facecolors=color_cara, edgecolors='#38bdf8'))
         lim = max(b, l_tri, h)
-        ax.set_xlim([-lim, lim]); ax.set_ylim([-lim, lim]); ax.set_zlim([0, lim])
-        ax.set_title("Prisma Triangular")
+        ax.set_xlim([-lim, lim])
+        ax.set_ylim([-lim, lim])
+        ax.set_zlim([0, lim])
+        ax.set_title("Prisma Triangular", color='#f8fafc', fontweight='bold')
 
-    ax.set_xlabel('Eje X'); ax.set_ylabel('Eje Y'); ax.set_zlabel('Eje Z')
+    ax.set_xlabel('Eje X', color='#94a3b8')
+    ax.set_ylabel('Eje Y', color='#94a3b8')
+    ax.set_zlabel('Eje Z', color='#94a3b8')
+    ax.tick_params(colors='#64748b')
     return fig
 
 # ==============================================================================
 # INTERFAZ PRINCIPAL
 # ==============================================================================
 
-# Encabezado con estilo personalizado
+# ENCABEZADO CON BANNER PERSONALIZADO
 st.markdown("""
     <div class="title-container">
         <h1 class="title-text">📐 Módulo de Geometría</h1>
@@ -282,28 +275,36 @@ with tab1:
         
         if metodo_tri == "Base y Altura":
             col1, col2 = st.columns(2)
-            with col1: b_tri = st.number_input("Base (b):", min_value=0.0, value=1.0)
-            with col2: h_tri = st.number_input("Altura (h):", min_value=0.0, value=1.0)
+            with col1: 
+                b_tri = st.number_input("Base (b):", min_value=0.0, value=1.0)
+            with col2: 
+                h_tri = st.number_input("Altura (h):", min_value=0.0, value=1.0)
             st.success(f"**Área:** {(b_tri*h_tri)/2:.2f}")
             
         elif metodo_tri == "Tres lados (Fórmula de Herón)":
             c1, c2, c3 = st.columns(3)
-            with c1: l1 = st.number_input("Lado 1:", min_value=0.001, value=1.0)
-            with c2: l2 = st.number_input("Lado 2:", min_value=0.001, value=1.0)
-            with c3: l3 = st.number_input("Lado 3:", min_value=0.001, value=1.0)
+            with c1: 
+                l1 = st.number_input("Lado 1:", min_value=0.001, value=1.0)
+            with c2: 
+                l2 = st.number_input("Lado 2:", min_value=0.001, value=1.0)
+            with c3: 
+                l3 = st.number_input("Lado 3:", min_value=0.001, value=1.0)
             
             if (l1 + l2 > l3) and (l1 + l3 > l2) and (l2 + l3 > l1):
-                s_heron = (l1+l2+l3)/2
-                area_heron = math.sqrt(s_heron*(s_heron-l1)*(s_heron-l2)*(s_heron-l3))
+                s_heron = (l1 + l2 + l3) / 2
+                area_heron = math.sqrt(s_heron * (s_heron - l1) * (s_heron - l2) * (s_heron - l3))
                 st.success(f"**Área:** {area_heron:.2f}")
             else:
                 st.error("Error: Esos lados violan la Desigualdad Triangular.")
                 
         elif metodo_tri == "Ángulo y dos lados":
             c1, c2, c3 = st.columns(3)
-            with c1: l1_ang = st.number_input("Lado 1:", min_value=0.0, value=1.0, key="ang_l1")
-            with c2: l2_ang = st.number_input("Lado 2:", min_value=0.0, value=1.0, key="ang_l2")
-            with c3: ang = st.number_input("Ángulo (grados):", min_value=0.0, max_value=179.9, value=90.0)
+            with c1: 
+                l1_ang = st.number_input("Lado 1:", min_value=0.0, value=1.0, key="ang_l1")
+            with c2: 
+                l2_ang = st.number_input("Lado 2:", min_value=0.0, value=1.0, key="ang_l2")
+            with c3: 
+                ang = st.number_input("Ángulo (grados):", min_value=0.0, max_value=179.9, value=90.0)
             
             area_ang = (l1_ang * l2_ang * math.sin(math.radians(ang))) / 2
             st.success(f"**Área:** {area_ang:.2f}")
@@ -318,9 +319,12 @@ with tab2:
     if herramienta == "Ecuación Cuadrática":
         st.write("Ecuación de la forma: $$Ax^2 + Bx + C = 0$$")
         c1, c2, c3 = st.columns(3)
-        with c1: a_coef = st.number_input("A:", value=1.0)
-        with c2: b_coef = st.number_input("B:", value=0.0)
-        with c3: c_coef = st.number_input("C:", value=0.0)
+        with c1: 
+            a_coef = st.number_input("A:", value=1.0)
+        with c2: 
+            b_coef = st.number_input("B:", value=0.0)
+        with c3: 
+            c_coef = st.number_input("C:", value=0.0)
         
         if st.button("Calcular Raíces"):
             if a_coef == 0 and b_coef == 0:
@@ -353,7 +357,7 @@ with tab2:
             x2 = st.number_input("X2", value=1.0)
             y2 = st.number_input("Y2", value=1.0)
             
-        dist = math.sqrt((x2-x1)**2 + (y2-y1)**2)
+        dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
         st.success(f"La distancia euclidiana es: **{dist:.3f}**")
 
 # ---------------------------------------------------------
@@ -369,50 +373,71 @@ with tab3:
     
     if figura_3d == "Cilindro":
         c1, c2 = st.columns(2)
-        with c1: params['r'] = st.number_input("Radio (r):", min_value=0.0, value=1.0, key="cil_r")
-        with c2: params['h'] = st.number_input("Altura (h):", min_value=0.0, value=2.0, key="cil_h")
+        with c1: 
+            params['r'] = st.number_input("Radio (r):", min_value=0.0, value=1.0, key="cil_r")
+        with c2: 
+            params['h'] = st.number_input("Altura (h):", min_value=0.0, value=2.0, key="cil_h")
         
-        if operacion == "Volumen": result = math.pi * (params['r']**2) * params['h']
-        else: result = (2 * math.pi * params['r']**2) + (2 * math.pi * params['r'] * params['h'])
+        if operacion == "Volumen": 
+            result = math.pi * (params['r']**2) * params['h']
+        else: 
+            result = (2 * math.pi * params['r']**2) + (2 * math.pi * params['r'] * params['h'])
             
     elif figura_3d == "Esfera":
         params['r'] = st.number_input("Radio (r):", min_value=0.0, value=1.0, key="esf_r")
-        if operacion == "Volumen": result = (4 * math.pi * params['r']**3) / 3
-        else: result = 4 * math.pi * params['r']**2
+        if operacion == "Volumen": 
+            result = (4 * math.pi * params['r']**3) / 3
+        else: 
+            result = 4 * math.pi * params['r']**2
             
     elif figura_3d == "Cono":
         c1, c2 = st.columns(2)
-        with c1: params['r'] = st.number_input("Radio (r):", min_value=0.0, value=1.0, key="cono_r")
+        with c1: 
+            params['r'] = st.number_input("Radio (r):", min_value=0.0, value=1.0, key="cono_r")
         if operacion == "Volumen":
-            with c2: params['h'] = st.number_input("Altura (h):", min_value=0.0, value=2.0, key="cono_h")
+            with c2: 
+                params['h'] = st.number_input("Altura (h):", min_value=0.0, value=2.0, key="cono_h")
             result = (math.pi * (params['r']**2) * params['h']) / 3
         else:
-            with c2: params['s'] = st.number_input("Generatriz (s):", min_value=0.0, value=2.0, key="cono_s")
+            with c2: 
+                params['s'] = st.number_input("Generatriz (s):", min_value=0.0, value=2.0, key="cono_s")
             result = (math.pi * params['r'] * params['s']) + (math.pi * params['r']**2)
             
     elif figura_3d == "Pirámide base cuadrada":
         c1, c2 = st.columns(2)
-        with c1: params['b'] = st.number_input("Lado base (b):", min_value=0.0, value=1.0, key="pir_b")
+        with c1: 
+            params['b'] = st.number_input("Lado base (b):", min_value=0.0, value=1.0, key="pir_b")
         if operacion == "Volumen":
-            with c2: params['h'] = st.number_input("Altura pirámide (h):", min_value=0.0, value=2.0, key="pir_h")
+            with c2: 
+                params['h'] = st.number_input("Altura pirámide (h):", min_value=0.0, value=2.0, key="pir_h")
             result = ((params['b']**2) * params['h']) / 3
         else:
-            with c2: params['s'] = st.number_input("Altura lateral (s):", min_value=0.0, value=2.0, key="pir_s")
+            with c2: 
+                params['s'] = st.number_input("Altura lateral (s):", min_value=0.0, value=2.0, key="pir_s")
             result = (2 * params['b'] * params['s']) + (params['b']**2)
             
     elif figura_3d == "Prisma rectangular":
         c1, c2, c3 = st.columns(3)
-        with c1: params['l'] = st.number_input("Largo (l):", min_value=0.0, value=1.0, key="prect_l")
-        with c2: params['w'] = st.number_input("Ancho (w):", min_value=0.0, value=1.0, key="prect_w")
-        with c3: params['h'] = st.number_input("Altura (h):", min_value=0.0, value=2.0, key="prect_h")
-        if operacion == "Volumen": result = params['l'] * params['w'] * params['h']
-        else: result = 2 * ((params['w'] * params['h']) + (params['l'] * params['w']) + (params['l'] * params['h']))
+        with c1: 
+            params['l'] = st.number_input("Largo (l):", min_value=0.0, value=1.0, key="prect_l")
+        with c2: 
+            params['w'] = st.number_input("Ancho (w):", min_value=0.0, value=1.0, key="prect_w")
+        with c3: 
+            params['h'] = st.number_input("Altura (h):", min_value=0.0, value=2.0, key="prect_h")
+            
+        if operacion == "Volumen": 
+            result = params['l'] * params['w'] * params['h']
+        else: 
+            result = 2 * ((params['w'] * params['h']) + (params['l'] * params['w']) + (params['l'] * params['h']))
             
     elif figura_3d == "Prisma triangular":
         c1, c2, c3, c4 = st.columns(4)
-        with c1: params['b'] = st.number_input("Base Triángulo (b):", min_value=0.0, value=1.0, key="ptri_b")
-        with c2: params['l'] = st.number_input("Altura Triángulo (l):", min_value=0.0, value=1.0, key="ptri_l")
-        with c3: params['h'] = st.number_input("Altura Prisma (h):", min_value=0.0, value=2.0, key="ptri_h")
+        with c1: 
+            params['b'] = st.number_input("Base Triángulo (b):", min_value=0.0, value=1.0, key="ptri_b")
+        with c2: 
+            params['l'] = st.number_input("Altura Triángulo (l):", min_value=0.0, value=1.0, key="ptri_l")
+        with c3: 
+            params['h'] = st.number_input("Altura Prisma (h):", min_value=0.0, value=2.0, key="ptri_h")
         
         if operacion == "Volumen":
             result = (params['b'] * params['l'] * params['h']) / 2
