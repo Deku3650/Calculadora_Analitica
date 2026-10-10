@@ -52,7 +52,29 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
 
-    /* 4. CONTENEDORES NATIVOS AZULES (ELIMINA RECUADROS FANTASMA) */
+    /* 4. ESTILIZADO GLOBAL PARA SUBTÍTULOS (H2, H3, ST.HEADER, ST.SUBHEADER) */
+    .stMarkdown h2, [data-testid="stHeader"] h2 {
+        color: #38bdf8 !important;
+        font-size: 1.35rem !important;
+        font-weight: 800 !important;
+        border-bottom: 2px solid rgba(56, 189, 248, 0.3) !important;
+        padding-bottom: 6px !important;
+        margin-top: 1.2rem !important;
+        margin-bottom: 1rem !important;
+        letter-spacing: -0.3px !important;
+    }
+
+    .stMarkdown h3, [data-testid="stSubheader"] h3 {
+        color: #38bdf8 !important;
+        font-size: 1.15rem !important;
+        font-weight: 700 !important;
+        border-left: 4px solid #0284c7 !important;
+        padding-left: 10px !important;
+        margin-top: 1rem !important;
+        margin-bottom: 0.8rem !important;
+    }
+
+    /* 5. CONTENEDORES NATIVOS AZULES (ELIMINA RECUADROS FANTASMA) */
     [data-testid="stVerticalBlockBorderWrapper"] {
         background: linear-gradient(135deg, rgba(2, 132, 199, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%) !important;
         border: 1px solid rgba(56, 189, 248, 0.35) !important;
@@ -61,7 +83,7 @@ st.markdown("""
         margin-bottom: 1rem !important;
     }
 
-    /* 5. TÍTULOS Y SUBTÍTULOS RESALTADOS DENTRO DE LAS TARJETAS */
+    /* 6. TÍTULOS Y SUBTÍTULOS RESALTADOS DENTRO DE LAS TARJETAS */
     .card-header-title {
         background: linear-gradient(135deg, #0284c7 0%, #6366f1 100%);
         color: #ffffff !important;
@@ -84,7 +106,7 @@ st.markdown("""
         margin-bottom: 12px;
     }
 
-    /* 6. DISEÑO MODERNO DE PESTAÑAS (ST.TABS) */
+    /* 7. DISEÑO MODERNO DE PESTAÑAS (ST.TABS) */
     [data-baseweb="tab-list"] {
         gap: 10px !important;
         background-color: rgba(2, 132, 199, 0.05) !important;
@@ -128,7 +150,7 @@ st.markdown("""
         display: none !important;
     }
 
-    /* 7. ESTILOS DE BARRA LATERAL (SIDEBAR UNIFICADO) */
+    /* 8. ESTILOS DE BARRA LATERAL (SIDEBAR UNIFICADO) */
     [data-testid="stSidebar"], section[data-testid="stSidebar"] {
         min-width: 300px !important;
         max-width: 320px !important;
@@ -178,7 +200,7 @@ st.markdown("""
 # PANEL LATERAL (INVENTARIO DE T.L.)
 # ==============================================================================
 with st.sidebar:
-    st.header("📦 Gestión de T.L.")
+    st.markdown('<div class="card-subheader-title">📦 Gestión de T.L.</div>', unsafe_allow_html=True)
     if st.session_state.mis_transformaciones:
         st.write("Transformaciones activas:")
         for nombre in st.session_state.mis_transformaciones.keys():
@@ -316,10 +338,10 @@ with tab_composicion:
                 inv_d = st.session_state.temp_inv_res
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.write(r"**Matriz Asociada ($[T^{-1}]$):**")
+                    st.markdown('<div class="card-subheader-title">Matriz Asociada ($[T^{-1}]$)</div>', unsafe_allow_html=True)
                     imprimir_matriz_simbolica(inv_d["matriz"])
                 with c2:
-                    st.write(r"**Regla de Correspondencia ($T^{-1}(\mathbf{w})$):**")
+                    st.markdown('<div class="card-subheader-title">Regla de Correspondencia ($T^{-1}(\\mathbf{w})$)</div>', unsafe_allow_html=True)
                     st.latex(sp.latex(inv_d["regla"]))
                 
                 col_btn1, col_btn2 = st.columns([2, 1])
@@ -373,10 +395,10 @@ with tab_composicion:
                 comp_d = st.session_state.temp_comp_res
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.write(r"**Matriz Asociada Resultante ($[S \circ T]$):**")
+                    st.markdown('<div class="card-subheader-title">Matriz Asociada Resultante ($[S \\circ T]$)</div>', unsafe_allow_html=True)
                     imprimir_matriz_simbolica(comp_d["matriz"])
                 with c2:
-                    st.write(r"**Regla de Correspondencia ($(S \circ T)(\mathbf{v})$):**")
+                    st.markdown('<div class="card-subheader-title">Regla de Correspondencia ($(S \\circ T)(\\mathbf{v})$)</div>', unsafe_allow_html=True)
                     st.latex(sp.latex(comp_d["regla"]))
                 
                 col_btn1, col_btn2 = st.columns([2, 1])
@@ -467,7 +489,7 @@ with tab_bases:
                         st.write("**Comprobación de la fórmula matricial:**")
                         st.latex(rf"{sp.latex(P_inv)} \cdot {sp.latex(A_can)} \cdot {sp.latex(Q)} = {sp.latex(M_nueva)}")
                         
-                        st.write(r"**Nueva Matriz Asociada $[T]_{\beta'}^{\gamma'}$:**")
+                        st.markdown('<div class="card-subheader-title">Nueva Matriz Asociada $[T]_{\\beta\'}^{\\gamma\'}$</div>', unsafe_allow_html=True)
                         imprimir_matriz_simbolica(M_nueva)
                         
                         st.divider()
