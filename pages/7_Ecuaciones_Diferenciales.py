@@ -3,10 +3,14 @@ import sympy as sp
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.integrate as spi
-from sympy.parsing.sympy_parser import standard_transformations, implicit_multiplication_application, convert_xor
+from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application, convert_xor
 
 try:
-    from utils import leer_expresion_st, imprimir_matriz_simbolica, parse_seguro
+    from utils import leer_expresion_st, imprimir_matriz_simbolica
+    try:
+        from utils import parse_seguro
+    except ImportError:
+        parse_seguro = parse_expr
 except ImportError:
     st.error("Error crítico: No se pudo cargar el analizador matemático desde utils.py. Asegúrese de ejecutar la app desde la raíz.")
     st.stop()
@@ -34,8 +38,9 @@ tab_sistemas, tab_edo1 = st.tabs([
 ])
 
 # Símbolos base globales
-t_sym, x_sym, y_sym, z_sym = sp.symbols('t x y z')
-c1_sym, c2_sym, c3_sym = sp.symbols('c_1 c_2 c_3')
+t_sym = sp.Symbol('t', real=True)
+x_sym, y_sym, z_sym = sp.symbols('x y z', real=True)
+c1_sym, c2_sym, c3_sym = sp.symbols('C_1 C_2 C_3', real=True)
 transf = standard_transformations + (implicit_multiplication_application, convert_xor)
 dicc_loc = {'x': x_sym, 'y': y_sym, 'z': z_sym, 't': t_sym, 'sin': sp.sin, 'cos': sp.cos, 'exp': sp.exp}
 
@@ -266,7 +271,6 @@ with tab_sistemas:
                 # ANÁLISIS PASO A PASO (DIAGONALIZACIÓN Y LÍMITES)
                 # ==========================================================
                 val_prop_reales = all(v[0].is_real for v in vectores_propios)
-                # Para la forma canónica real en 2x2 siempre hay matriz de cambio, para 3x3 pedimos diagonalizabilidad
                 es_diagonalizable = sum(v[1] for v in vectores_propios) == (3 if es_3d else 2) or (not es_3d and not val_prop_reales)
                 
                 if es_diagonalizable:
@@ -277,7 +281,6 @@ with tab_sistemas:
                         st.latex(rf"P_A(\lambda) = \det(A - \lambda I) = {sp.latex(pol_carac)} = 0")
                         
                         if not es_3d and not val_prop_reales:
-                            # --- CAMBIO 1: Construir P = [Re(v) | Im(v)] y Lambda real para complejos en 2D ---
                             for val, mult, vecs in vectores_propios:
                                 if sp.im(val) > 0:
                                     lam_c = val
@@ -306,7 +309,6 @@ with tab_sistemas:
                                 st.latex(rf"\Lambda = {sp.latex(Lambda_sym)}")
                             
                             st.markdown("### Soluciones del Sistema")
-                            # Generamos la solución real mediante dsolve
                             x_f, y_f = sp.Function('x')(t_sym), sp.Function('y')(t_sym)
                             eq1 = sp.Eq(x_f.diff(t_sym), A_eval[0,0]*x_f + A_eval[0,1]*y_f)
                             eq2 = sp.Eq(y_f.diff(t_sym), A_eval[1,0]*x_f + A_eval[1,1]*y_f)
@@ -317,7 +319,6 @@ with tab_sistemas:
                             
                             st.write("**Solución analítica del sistema original $x(t)$:**")
                             st.latex(rf"x(t) = {sp.latex(X_sol)}")
-                            # ----------------------------------------------------------------------------------
                         else:
                             P_mat = []
                             lambdas = []
@@ -361,7 +362,6 @@ with tab_sistemas:
                                     X_sol = P_sym * Y_sol
                                     st.write("**2. Solución en el sistema original $x(t) = P y(t)$:**")
                                     
-                                    # --- CAMBIO 1: Construcción de soluciones complejas en senos y cosenos (3D o casos mezclados) ---
                                     if X_sol.has(sp.I):
                                         try:
                                             x_f, y_f = sp.Function('x')(t_sym), sp.Function('y')(t_sym)
@@ -374,7 +374,6 @@ with tab_sistemas:
                                             X_sol = sp.simplify(X_sol)
                                         except Exception:
                                             pass
-                                    # --------------------------------------------------------------------------------------------------
                                     
                                     st.latex(rf"x(t) = {sp.latex(sp.simplify(X_sol))}")
 
@@ -458,45 +457,34 @@ with tab_sistemas:
                         [2, 0, 0], [0, 2, 0], [0, 0, 2],
                         [-2, 0, 0], [0, -2, 0], [0, 0, -2]
                     ]
-                    t_span = np.linspace(0, 15, 800) 
-                    t_span_rev = np.linspace(0, -15, 800) 
-                    
-                    trayectorias_f = []
-                    trayectorias_b = []
+                    t_span = np.linspace(0, 5, 200) 
+                    t_span_rev = np.linspace(0, -5, 200) 
                     
                     for ic in ics:
                         try:
                             traj_f = spi.odeint(vector_field_3d, ic, t_span)
                             traj_b = spi.odeint(vector_field_3d, ic, t_span_rev)
                             
-                            # Filtro de visibilidad para no colapsar la gráfica
-                            traj_f = traj_f[np.max(np.abs(traj_f), axis=1) <= 5.0]
-                            traj_b = traj_b[np.max(np.abs(traj_b), axis=1) <= 5.0]
+                            ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='blue', alpha=0.6, linewidth=1.2)
+                            ax3d_fase.plot(traj_b[:,0], traj_b[:,1], traj_b[:,2], color='red', alpha=0.6, linewidth=1.2)
                             
-                            if len(traj_f) > 5:
-                                trayectorias_f.append(traj_f)
-                                ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='blue', alpha=0.6, linewidth=1.2)
-                                # --- CAMBIO 2: Flecha direccional del color de la curva ---
-                                pt = traj_f[len(traj_f)//2]
-                                u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
+                            if len(traj_f) > 10:
+                                mid_idx = len(traj_f)//2
+                                pt_mid = traj_f[mid_idx]
+                                u, v, w = func_U(*pt_mid), func_V(*pt_mid), func_W(*pt_mid)
                                 norm = np.linalg.norm([u, v, w])
                                 if norm > 1e-5:
-                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='blue', length=0.4, arrow_length_ratio=0.5, normalize=True)
+                                    ax3d_fase.quiver(pt_mid[0], pt_mid[1], pt_mid[2], u/norm, v/norm, w/norm, color='blue', length=0.4, normalize=True)
                             
-                            if len(traj_b) > 5:
-                                trayectorias_b.append(traj_b)
-                                ax3d_fase.plot(traj_b[:,0], traj_b[:,1], traj_b[:,2], color='red', alpha=0.6, linewidth=1.2)
-                                # --- CAMBIO 2: Flecha direccional del color de la curva ---
-                                pt = traj_b[len(traj_b)//2]
-                                u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
+                            if len(traj_b) > 10:
+                                mid_idx = len(traj_b)//2
+                                pt_mid = traj_b[mid_idx]
+                                u, v, w = func_U(*pt_mid), func_V(*pt_mid), func_W(*pt_mid)
                                 norm = np.linalg.norm([u, v, w])
                                 if norm > 1e-5:
-                                    ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='red', length=0.4, arrow_length_ratio=0.5, normalize=True)
+                                    ax3d_fase.quiver(pt_mid[0], pt_mid[1], pt_mid[2], u/norm, v/norm, w/norm, color='red', length=0.4, normalize=True)
                         except Exception:
                             pass 
-                    
-                    st.session_state.trayectorias_f = trayectorias_f
-                    st.session_state.trayectorias_b = trayectorias_b
                     
                     ax3d_fase.set_xlabel("x")
                     ax3d_fase.set_ylabel("y")
@@ -508,66 +496,56 @@ with tab_sistemas:
                     st.error(f"Error al generar trayectorias 3D: {e}")
                     
             with tab_proy:
-                st.write("Proyecciones cartesianas de las trayectorias espaciales simuladas sobre los planos principales.")
+                st.write("Visualización del flujo interceptando los planos principales en el origen.")
                 try:
-                    # --- CAMBIO 3: Mostrar proyecciones de las curvas simuladas para 3x3 siempre ---
                     fig_proy, (ax_xy, ax_xz, ax_yz) = plt.subplots(1, 3, figsize=(15, 5))
+                    Y_m, X_m = np.mgrid[-4:4:50j, -4:4:50j]
                     
-                    if 'trayectorias_f' in st.session_state:
-                        for traj_f, traj_b in zip(st.session_state.trayectorias_f, st.session_state.trayectorias_b):
-                            ax_xy.plot(traj_f[:,0], traj_f[:,1], color='blue', alpha=0.5)
-                            ax_xy.plot(traj_b[:,0], traj_b[:,1], color='red', alpha=0.5)
-                            ax_xz.plot(traj_f[:,0], traj_f[:,2], color='blue', alpha=0.5)
-                            ax_xz.plot(traj_b[:,0], traj_b[:,2], color='red', alpha=0.5)
-                            ax_yz.plot(traj_f[:,1], traj_f[:,2], color='blue', alpha=0.5)
-                            ax_yz.plot(traj_b[:,1], traj_b[:,2], color='red', alpha=0.5)
-                            
-                            # Flechas para las proyecciones 2D
-                            for traj, c in [(traj_f, 'blue'), (traj_b, 'red')]:
-                                if len(traj) > 10:
-                                    pt = traj[len(traj)//2]
-                                    u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
-                                    norm_xy = np.hypot(u, v)
-                                    if norm_xy > 1e-5:
-                                        ax_xy.quiver(pt[0], pt[1], u/norm_xy, v/norm_xy, color=c, scale=20, width=0.012)
-                                    norm_xz = np.hypot(u, w)
-                                    if norm_xz > 1e-5:
-                                        ax_xz.quiver(pt[0], pt[2], u/norm_xz, w/norm_xz, color=c, scale=20, width=0.012)
-                                    norm_yz = np.hypot(v, w)
-                                    if norm_yz > 1e-5:
-                                        ax_yz.quiver(pt[1], pt[2], v/norm_yz, w/norm_yz, color=c, scale=20, width=0.012)
-
-                    ax_xy.set_title("Proyección XY"); ax_xy.set_xlabel("x"); ax_xy.set_ylabel("y")
-                    ax_xy.grid(True, linestyle='--', alpha=0.5); ax_xy.axhline(0, color='black'); ax_xy.axvline(0, color='black')
-                    ax_xy.set_xlim([-4, 4]); ax_xy.set_ylim([-4, 4])
+                    # Plano XY (z=0)
+                    U_xy = np.broadcast_to(func_U(X_m, Y_m, 0), X_m.shape).astype(np.float64)
+                    V_xy = np.broadcast_to(func_V(X_m, Y_m, 0), X_m.shape).astype(np.float64)
+                    vel_xy = np.sqrt(U_xy**2 + V_xy**2)
+                    ax_xy.streamplot(X_m, Y_m, U_xy, V_xy, color=vel_xy, cmap='viridis', density=1.2)
+                    ax_xy.set_title("Plano XY (z=0)")
+                    ax_xy.set_xlabel("x"); ax_xy.set_ylabel("y")
+                    ax_xy.grid(True, linestyle='--', alpha=0.5)
+                    ax_xy.axhline(0, color='black'); ax_xy.axvline(0, color='black')
                     
-                    ax_xz.set_title("Proyección XZ"); ax_xz.set_xlabel("x"); ax_xz.set_ylabel("z")
-                    ax_xz.grid(True, linestyle='--', alpha=0.5); ax_xz.axhline(0, color='black'); ax_xz.axvline(0, color='black')
-                    ax_xz.set_xlim([-4, 4]); ax_xz.set_ylim([-4, 4])
+                    # Plano XZ (y=0) -> x es horizontal, z es vertical
+                    U_xz = np.broadcast_to(func_U(X_m, 0, Y_m), X_m.shape).astype(np.float64)
+                    W_xz = np.broadcast_to(func_W(X_m, 0, Y_m), X_m.shape).astype(np.float64)
+                    vel_xz = np.sqrt(U_xz**2 + W_xz**2)
+                    ax_xz.streamplot(X_m, Y_m, U_xz, W_xz, color=vel_xz, cmap='viridis', density=1.2)
+                    ax_xz.set_title("Plano XZ (y=0)")
+                    ax_xz.set_xlabel("x"); ax_xz.set_ylabel("z")
+                    ax_xz.grid(True, linestyle='--', alpha=0.5)
+                    ax_xz.axhline(0, color='black'); ax_xz.axvline(0, color='black')
                     
-                    ax_yz.set_title("Proyección YZ"); ax_yz.set_xlabel("y"); ax_yz.set_ylabel("z")
-                    ax_yz.grid(True, linestyle='--', alpha=0.5); ax_yz.axhline(0, color='black'); ax_yz.axvline(0, color='black')
-                    ax_yz.set_xlim([-4, 4]); ax_yz.set_ylim([-4, 4])
+                    # Plano YZ (x=0) -> y es horizontal, z es vertical
+                    V_yz = np.broadcast_to(func_V(0, X_m, Y_m), X_m.shape).astype(np.float64)
+                    W_yz = np.broadcast_to(func_W(0, X_m, Y_m), X_m.shape).astype(np.float64)
+                    vel_yz = np.sqrt(V_yz**2 + W_yz**2)
+                    ax_yz.streamplot(X_m, Y_m, V_yz, W_yz, color=vel_yz, cmap='viridis', density=1.2)
+                    ax_yz.set_title("Plano YZ (x=0)")
+                    ax_yz.set_xlabel("y"); ax_yz.set_ylabel("z")
+                    ax_yz.grid(True, linestyle='--', alpha=0.5)
+                    ax_yz.axhline(0, color='black'); ax_yz.axvline(0, color='black')
                     
                     plt.tight_layout()
                     st.pyplot(fig_proy)
-                    # ----------------------------------------------------------------------------------
                 except Exception as e:
                     st.error(f"Error al generar proyecciones: {e}")
         else:
-            # Pestañas para 2D (Mostrar Plano Canónico siempre en lineal, sea real o complejo)
-            if es_lineal and Lambda_sym is not None:
-                tab_fase, tab_vect, tab_canonico = st.tabs(["🌊 Retrato de Fase (Original)", "🔀 Campo Vectorial (Quiver)", "📐 Plano Canónico"])
+            if es_lineal and Lambda_sym is not None and val_prop_reales:
+                tab_fase, tab_vect, tab_canonico = st.tabs(["🌊 Retrato de Fase (Original)", "🔀 Campo Vectorial (Quiver)", "📐 Plano Canónico (y1, y2)"])
                 mostrar_canonico = True
             else:
                 tab_fase, tab_vect = st.tabs(["🌊 Retrato de Fase (Original)", "🔀 Campo Vectorial (Quiver)"])
                 mostrar_canonico = False
 
             try:
-                # --- CAMBIO 4: Solución al error str_P evaluando directamente P_f ---
                 p_eq = P_f
                 q_eq = Q_f
-                # --------------------------------------------------------------------
                 
                 puntos_criticos = []
                 try:
@@ -670,7 +648,7 @@ with tab_sistemas:
                         st.write("Visualización del flujo continuo del sistema original. Si el sistema es lineal y posee vectores propios reales, estos se trazan como líneas punteadas, actuando como las asíntotas y directrices fundamentales del comportamiento geométrico.")
 
                 # ==========================================
-                # FIGURA 3: PLANO CANÓNICO Y1-Y2 (CON FORMA REAL PARA COMPLEJOS)
+                # FIGURA 3: PLANO CANÓNICO Y1-Y2
                 # ==========================================
                 if mostrar_canonico:
                     with tab_canonico:
@@ -679,7 +657,6 @@ with tab_sistemas:
                             fig3, ax3 = plt.subplots(figsize=(7, 6))
                             Y_c, X_c = np.mgrid[-5:5:100j, -5:5:100j]
                             
-                            # --- CAMBIO 1: Construcción del Plano Canónico Real para valores complejos ---
                             if all(v[0].is_real for v in vecs):
                                 lambdas_diag = []
                                 for val, mult, vectores in vecs:
@@ -688,7 +665,7 @@ with tab_sistemas:
                                 l1, l2 = lambdas_diag[0], lambdas_diag[1]
                                 U_c = l1 * X_c
                                 V_c = l2 * Y_c
-                                ax3.set_title(rf"Plano Diagonalizado: $y_1'={l1}y_1, y_2'={l2}y_2$")
+                                ax3.set_title(rf"Plano Diagonalizado: y_1'={l1}y_1, y_2'={l2}y_2")
                             else:
                                 for val, mult, vcs in vecs:
                                     if sp.im(val) > 0:
@@ -698,8 +675,7 @@ with tab_sistemas:
                                 b = float(sp.im(lam_c))
                                 U_c = a * X_c - b * Y_c
                                 V_c = b * X_c + a * Y_c
-                                ax3.set_title(rf"Plano Canónico Real: $y_1'={a}y_1 - {b}y_2, y_2'={b}y_1 + {a}y_2$")
-                            # -----------------------------------------------------------------------------
+                                ax3.set_title(rf"Plano Canónico Real: y_1'={a}y_1 - {b}y_2, y_2'={b}y_1 + {a}y_2")
                                 
                             velocidad_c = np.sqrt(U_c**2 + V_c**2)
                             
