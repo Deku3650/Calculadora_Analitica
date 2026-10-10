@@ -17,7 +17,7 @@ if 'mis_matrices' not in st.session_state:
     st.session_state.mis_matrices = {}
 
 # ==============================================================================
-# INYECCIÓN DIRECTA DE CSS (ESTILIZACIÓN INTEGRAL DE SUBTÍTULOS Y MÓDULO)
+# INYECCIÓN DIRECTA DE CSS (ESTILOS UNIFICADOS Y LIMPIOS)
 # ==============================================================================
 st.markdown("""
     <style>
@@ -52,29 +52,7 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
 
-    /* 4. ESTILIZADO AUTOMÁTICO DE SUBTÍTULOS NATIVOS Y DINÁMICOS */
-    .stMarkdown h1, .stMarkdown h2, [data-testid="stHeader"] h2 {
-        color: #38bdf8 !important;
-        font-size: 1.35rem !important;
-        font-weight: 800 !important;
-        border-bottom: 2px solid rgba(56, 189, 248, 0.25) !important;
-        padding-bottom: 6px !important;
-        margin-top: 1rem !important;
-        margin-bottom: 1rem !important;
-        letter-spacing: -0.3px !important;
-    }
-
-    .stMarkdown h3, .stMarkdown h4, [data-testid="stSubheader"] h3 {
-        color: #38bdf8 !important;
-        font-size: 1.12rem !important;
-        font-weight: 700 !important;
-        border-left: 4px solid #0284c7 !important;
-        padding-left: 10px !important;
-        margin-top: 0.8rem !important;
-        margin-bottom: 0.8rem !important;
-    }
-
-    /* 5. CONTENEDORES NATIVOS AZULES (ELIMINA RECUADROS FANTASMA) */
+    /* 4. CONTENEDORES NATIVOS AZULES (ELIMINA RECUADROS FANTASMA) */
     [data-testid="stVerticalBlockBorderWrapper"] {
         background: linear-gradient(135deg, rgba(2, 132, 199, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%) !important;
         border: 1px solid rgba(56, 189, 248, 0.35) !important;
@@ -83,7 +61,7 @@ st.markdown("""
         margin-bottom: 1rem !important;
     }
 
-    /* 6. TÍTULOS Y SUBTÍTULOS RESALTADOS EN TARJETAS */
+    /* 5. TÍTULOS Y SUBTÍTULOS RESALTADOS DENTRO DE LAS TARJETAS */
     .card-header-title {
         background: linear-gradient(135deg, #0284c7 0%, #6366f1 100%);
         color: #ffffff !important;
@@ -92,7 +70,7 @@ st.markdown("""
         padding: 8px 16px;
         border-radius: 10px;
         display: inline-block;
-        margin-bottom: 16px;
+        margin-bottom: 14px;
         box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
     }
 
@@ -106,19 +84,7 @@ st.markdown("""
         margin-bottom: 12px;
     }
 
-    .section-badge-title {
-        color: #e0f2fe !important;
-        background: rgba(2, 132, 199, 0.2);
-        font-size: 14px;
-        font-weight: 700;
-        padding: 6px 12px;
-        border-radius: 8px;
-        border: 1px solid rgba(56, 189, 248, 0.3);
-        display: inline-block;
-        margin-bottom: 10px;
-    }
-
-    /* 7. DISEÑO MODERNO DE PESTAÑAS (ST.TABS) */
+    /* 6. DISEÑO MODERNO DE PESTAÑAS (ST.TABS) */
     [data-baseweb="tab-list"] {
         gap: 10px !important;
         background-color: rgba(2, 132, 199, 0.05) !important;
@@ -162,7 +128,7 @@ st.markdown("""
         display: none !important;
     }
 
-    /* 8. ESTILOS DE BARRA LATERAL (SIDEBAR UNIFICADO) */
+    /* 7. ESTILOS DE BARRA LATERAL (SIDEBAR UNIFICADO) */
     [data-testid="stSidebar"], section[data-testid="stSidebar"] {
         min-width: 300px !important;
         max-width: 320px !important;
@@ -212,7 +178,7 @@ st.markdown("""
 # PANEL LATERAL (INVENTARIO DE T.L.)
 # ==============================================================================
 with st.sidebar:
-    st.markdown('<div class="card-subheader-title">📦 Gestión de T.L.</div>', unsafe_allow_html=True)
+    st.header("📦 Gestión de T.L.")
     if st.session_state.mis_transformaciones:
         st.write("Transformaciones activas:")
         for nombre in st.session_state.mis_transformaciones.keys():
@@ -243,7 +209,7 @@ tab_crear, tab_analisis, tab_evaluacion, tab_composicion, tab_bases = st.tabs([
 # --------------------------------------------------------------------------
 with tab_crear:
     with st.container(border=True):
-        st.markdown('<div class="card-header-title">⚙️ Construir Nueva Transformación Lineal</div>', unsafe_allow_html=True)
+        st.markdown('<div class="card-header-title">➕ Construir Nueva Transformación Lineal</div>', unsafe_allow_html=True)
         Crear_Transformacion_UI()
 
 # --------------------------------------------------------------------------
@@ -256,7 +222,6 @@ with tab_analisis:
             tl_sel = st.selectbox("Seleccione Transformación:", list(st.session_state.mis_transformaciones.keys()), key="ana_tl")
             paquete = st.session_state.mis_transformaciones[tl_sel]
             
-            st.markdown('<div class="card-subheader-title">Propiedades Generales de T.L.</div>', unsafe_allow_html=True)
             mostrar_detalle_tl(tl_sel, paquete)
             
             st.divider()
@@ -292,11 +257,11 @@ with tab_analisis:
 with tab_evaluacion:
     if st.session_state.mis_transformaciones:
         with st.container(border=True):
-            st.markdown('<div class="card-header-title">🎯 Evaluación de Vectores</div>', unsafe_allow_html=True)
+            st.markdown('<div class="card-header-title">🧮 Evaluación de Vectores</div>', unsafe_allow_html=True)
             tl_eval = st.selectbox("Seleccione Transformación:", list(st.session_state.mis_transformaciones.keys()), key="eval_tl")
             paquete = st.session_state.mis_transformaciones[tl_eval]
             
-            st.markdown(f'<div class="card-subheader-title">Ingrese los componentes del vector (Dimensión {paquete["dim_V"]}):</div>', unsafe_allow_html=True)
+            st.write(f"Ingrese los componentes del vector de dimensión ${paquete['dim_V']}$:")
             
             with st.form("form_eval"):
                 comp = [st.text_input(f"Componente v_{i+1}:", value="0", key=f"eval_comp_{i}") for i in range(paquete['dim_V'])]
@@ -306,7 +271,7 @@ with tab_evaluacion:
                     try:
                         V = sp.Matrix([leer_expresion_st(c) for c in comp])
                         res = sp.simplify(paquete["matriz_asociada"] * V)
-                        st.markdown('<div class="section-badge-title">Resultado de la evaluación T(v)</div>', unsafe_allow_html=True)
+                        st.success("Resultado de la evaluación:")
                         imprimir_matriz_simbolica(res)
                     except Exception as e:
                         st.error(f"Error al evaluar el vector: {e}")
@@ -351,10 +316,10 @@ with tab_composicion:
                 inv_d = st.session_state.temp_inv_res
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.markdown('<div class="card-subheader-title">Matriz Asociada ($[T^{-1}]$)</div>', unsafe_allow_html=True)
+                    st.write(r"**Matriz Asociada ($[T^{-1}]$):**")
                     imprimir_matriz_simbolica(inv_d["matriz"])
                 with c2:
-                    st.markdown('<div class="card-subheader-title">Regla de Correspondencia ($T^{-1}(\\mathbf{w})$)</div>', unsafe_allow_html=True)
+                    st.write(r"**Regla de Correspondencia ($T^{-1}(\mathbf{w})$):**")
                     st.latex(sp.latex(inv_d["regla"]))
                 
                 col_btn1, col_btn2 = st.columns([2, 1])
@@ -408,10 +373,10 @@ with tab_composicion:
                 comp_d = st.session_state.temp_comp_res
                 c1, c2 = st.columns(2)
                 with c1:
-                    st.markdown('<div class="card-subheader-title">Matriz Asociada Resultante ($[S \\circ T]$)</div>', unsafe_allow_html=True)
+                    st.write(r"**Matriz Asociada Resultante ($[S \circ T]$):**")
                     imprimir_matriz_simbolica(comp_d["matriz"])
                 with c2:
-                    st.markdown('<div class="card-subheader-title">Regla de Correspondencia ($(S \\circ T)(\\mathbf{v})$)</div>', unsafe_allow_html=True)
+                    st.write(r"**Regla de Correspondencia ($(S \circ T)(\mathbf{v})$):**")
                     st.latex(sp.latex(comp_d["regla"]))
                 
                 col_btn1, col_btn2 = st.columns([2, 1])
@@ -440,7 +405,7 @@ with tab_bases:
             tl_base = st.selectbox("Seleccione T.L. activa para operar:", list(st.session_state.mis_transformaciones.keys()), key="base_tl")
             paquete = st.session_state.mis_transformaciones[tl_base]
             
-            st.markdown('<div class="card-subheader-title">Bases Actuales Configuradas</div>', unsafe_allow_html=True)
+            st.markdown('<div class="card-subheader-title">Bases Actuales</div>', unsafe_allow_html=True)
             col_b1, col_b2 = st.columns(2)
             with col_b1:
                 st.write(r"**Base del Dominio ($\beta$):**")
@@ -502,7 +467,7 @@ with tab_bases:
                         st.write("**Comprobación de la fórmula matricial:**")
                         st.latex(rf"{sp.latex(P_inv)} \cdot {sp.latex(A_can)} \cdot {sp.latex(Q)} = {sp.latex(M_nueva)}")
                         
-                        st.markdown('<div class="card-subheader-title">Nueva Matriz Asociada $[T]_{\\beta\'}^{\\gamma\'}$</div>', unsafe_allow_html=True)
+                        st.write(r"**Nueva Matriz Asociada $[T]_{\beta'}^{\gamma'}$:**")
                         imprimir_matriz_simbolica(M_nueva)
                         
                         st.divider()
