@@ -54,42 +54,88 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
 
-    /* 4. ESTILOS Y COLORES DE PESTAÑAS (ST.TABS) */
-    [data-baseweb="tab-highlight"],
-    [data-baseweb="tab-border"] {
-        background-color: #38bdf8 !important;
+    /* 4. REDISEÑO MODERNO Y ELEGANTE DE LAS PESTAÑAS (ST.TABS) */
+    [data-baseweb="tab-list"] {
+        gap: 10px !important;
+        background-color: rgba(2, 132, 199, 0.05) !important;
+        padding: 8px 10px !important;
+        border-radius: 16px !important;
+        border: 1px solid rgba(56, 189, 248, 0.2) !important;
+        margin-bottom: 20px !important;
     }
 
     button[data-baseweb="tab"] {
-        border-radius: 10px 10px 0px 0px !important;
-        padding: 10px 20px !important;
+        border-radius: 12px !important;
+        padding: 10px 22px !important;
         font-weight: 700 !important;
         font-size: 15px !important;
         color: #94a3b8 !important;
         background-color: transparent !important;
-        border: none !important;
+        border: 1px solid transparent !important;
         transition: all 0.25s ease-in-out !important;
     }
 
-    button[data-baseweb="tab"][aria-selected="true"] {
+    /* Hover en pestañas */
+    button[data-baseweb="tab"]:hover {
         color: #38bdf8 !important;
-        border-bottom-color: #38bdf8 !important;
-        background: rgba(2, 132, 199, 0.15) !important;
+        background: rgba(2, 132, 199, 0.12) !important;
+        border: 1px solid rgba(56, 189, 248, 0.25) !important;
     }
 
-    button[data-baseweb="tab"] p, 
-    button[data-baseweb="tab"] span {
-        font-size: 15px !important;
-        font-weight: 700 !important;
+    /* Pestaña Seleccionada */
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #ffffff !important;
+        background: linear-gradient(135deg, #0284c7 0%, #4f46e5 100%) !important;
+        box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35) !important;
+        border: 1px solid #38bdf8 !important;
     }
 
     button[data-baseweb="tab"][aria-selected="true"] p,
     button[data-baseweb="tab"][aria-selected="true"] span {
-        color: #38bdf8 !important;
+        color: #ffffff !important;
         font-weight: 800 !important;
     }
 
-    /* 5. BARRA LATERAL (SIDEBAR) Y CONTENEDORES DE TARJETAS */
+    /* Eliminar la barra inferior por defecto de Streamlit */
+    [data-baseweb="tab-highlight"],
+    [data-baseweb="tab-border"] {
+        display: none !important;
+    }
+
+    /* 5. TARJETAS AZULES (BLUE-CARD) Y SUBTÍTULOS */
+    .blue-card {
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%);
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 15px rgba(2, 132, 199, 0.08);
+    }
+
+    .card-header-title {
+        background: linear-gradient(135deg, #0284c7 0%, #6366f1 100%);
+        color: #ffffff !important;
+        font-size: 18px;
+        font-weight: 800;
+        padding: 8px 16px;
+        border-radius: 10px;
+        display: inline-block;
+        margin-bottom: 18px;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+        letter-spacing: 0.5px;
+    }
+
+    .card-subheader-title {
+        color: #38bdf8 !important;
+        font-size: 16px;
+        font-weight: 700;
+        border-bottom: 2px solid rgba(56, 189, 248, 0.3);
+        padding-bottom: 6px;
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+
+    /* Sidebar */
     [data-testid="stSidebar"] {
         border-right: 1px solid rgba(2, 132, 199, 0.2) !important;
     }
@@ -102,12 +148,6 @@ st.markdown("""
     [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span {
         color: #38bdf8 !important;
         font-weight: 800 !important;
-    }
-
-    [data-testid="stVerticalBlockBorderWrapper"] {
-        border-radius: 16px !important;
-        border: 1px solid rgba(2, 132, 199, 0.25) !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -647,11 +687,19 @@ with tab_avanzadas:
 # PESTAÑA 4: Análisis Espectral
 # --------------------------------------------------------------------------
 with tab_espectral:
-    with st.container(border=True):
-        st.subheader("Valores y Vectores Propios (Eigen-Análisis)")
-        mat_esp_nombre = st.selectbox("Seleccione Matriz:", list(st.session_state.mis_matrices.keys()), key="esp_mat")
+    if not st.session_state.mis_matrices:
+        st.info("👈 Comience creando o importando una matriz en la pestaña 'Gestión y Creación'.")
+    else:
+        st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+        st.markdown('<div class="card-header-title">🌈 Valores y Vectores Propios (Eigen-Análisis)</div>', unsafe_allow_html=True)
+        st.caption("Cálculo del polinomio característico, espacio propio y prueba de diagonalización.")
         
-        if st.button("Ejecutar Análisis Espectral", use_container_width=True):
+        mat_esp_nombre = st.selectbox("Seleccione Matriz a analizar:", list(st.session_state.mis_matrices.keys()), key="esp_mat")
+        
+        btn_espectral = st.button("🚀 Ejecutar Análisis Espectral", key="btn_exec_espectral", use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        if btn_espectral:
             A = st.session_state.mis_matrices[mat_esp_nombre]
             
             if not A.is_square:
@@ -661,16 +709,20 @@ with tab_espectral:
                     lamda = sp.Symbol('lambda')
                     polinomio = calcular_con_limite(A.charpoly, args=(lamda,), timeout=5)
                     
-                    st.markdown("#### 1. Polinomio Característico")
+                    # --- BLOQUE 1: POLINOMIO CARACTERÍSTICO ---
+                    st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+                    st.markdown('<div class="card-subheader-title">1. Polinomio Característico</div>', unsafe_allow_html=True)
                     st.latex(f"p(\\lambda) = \\det(A - \\lambda I) = {sp.latex(polinomio.as_expr())}")
+                    st.markdown('</div>', unsafe_allow_html=True)
                     
                     A_num = evaluar_numerico(A)
                     if A_num is not None and A.shape[0] >= 4:
                         st.info("💡 Matriz numérica grande detectada: Evaluando con motor NumPy para prevenir colapsos.")
                         w, v = np.linalg.eig(A_num)
                         
-                        st.divider()
-                        st.markdown("#### 2. Espectro y Bases (Aproximación Numérica)")
+                        # --- BLOQUE 2: ESPECTRO Y BASES ---
+                        st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+                        st.markdown('<div class="card-subheader-title">2. Espectro y Bases (Aproximación Numérica)</div>', unsafe_allow_html=True)
                         columnas_P = []
 
                         for i in range(len(w)):
@@ -681,9 +733,11 @@ with tab_espectral:
                             vec_propio = sp.Matrix(np.round(v[:, i], 4))
                             columnas_P.append(vec_propio)
                             st.latex(rf"v_{{{i+1}}} = {sp.latex(vec_propio)}")
+                        st.markdown('</div>', unsafe_allow_html=True)
                         
-                        st.divider()
-                        st.markdown("#### 3. Diagonalización")
+                        # --- BLOQUE 3: DIAGONALIZACIÓN ---
+                        st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+                        st.markdown('<div class="card-subheader-title">3. Diagonalización</div>', unsafe_allow_html=True)
                         
                         rango_P = np.linalg.matrix_rank(v, tol=1e-5)
                         
@@ -701,16 +755,17 @@ with tab_espectral:
                             
                             col_p, col_d, col_pinv = st.columns(3)
                             with col_p:
-                                st.write("Matriz de Paso ($P$)")
+                                st.write("**Matriz de Paso ($P$)**")
                                 imprimir_matriz_simbolica(P)
                             with col_d:
-                                st.write("Matriz Diagonal ($D$)")
+                                st.write("**Matriz Diagonal ($D$)**")
                                 imprimir_matriz_simbolica(D)
                             with col_pinv:
-                                st.write("Inversa ($P^{-1}$)")
+                                st.write("**Inversa ($P^{-1}$)**")
                                 imprimir_matriz_simbolica(P_inv)
                         else:
                             st.error(f"La matriz **NO** es diagonalizable numéricamente. La matriz de vectores propios es defectuosa (Rango numérico de P es {rango_P} de {A.shape[0]}).")
+                        st.markdown('</div>', unsafe_allow_html=True)
                             
                     else:
                         vectores_propios = calcular_con_limite(A.eigenvects, timeout=8)
@@ -720,8 +775,9 @@ with tab_espectral:
                         except Exception:
                             pass
                         
-                        st.divider()
-                        st.markdown("#### 2. Espectro y Bases")
+                        # --- BLOQUE 2: ESPECTRO Y BASES SIMBÓLICAS ---
+                        st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+                        st.markdown('<div class="card-subheader-title">2. Espectro y Bases</div>', unsafe_allow_html=True)
                         
                         columnas_P, valores_D = [], []
                         
@@ -747,9 +803,11 @@ with tab_espectral:
                                 columnas_P.append(v_entero)
                                 valores_D.append(val)
                                 st.latex(f"v_{{{i+1}}} = {sp.latex(v_entero)}")
+                        st.markdown('</div>', unsafe_allow_html=True)
                                 
-                        st.divider()
-                        st.markdown("#### 3. Diagonalización")
+                        # --- BLOQUE 3: DIAGONALIZACIÓN ---
+                        st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+                        st.markdown('<div class="card-subheader-title">3. Diagonalización</div>', unsafe_allow_html=True)
                         if len(columnas_P) == A.shape[0]:
                             st.success("La matriz **SÍ** es diagonalizable.")
                             P = sp.Matrix.hstack(*columnas_P)
@@ -758,16 +816,17 @@ with tab_espectral:
                             
                             col_p, col_d, col_pinv = st.columns(3)
                             with col_p:
-                                st.write("Matriz de Paso ($P$)")
+                                st.write("**Matriz de Paso ($P$)**")
                                 imprimir_matriz_simbolica(P)
                             with col_d:
-                                st.write("Matriz Diagonal ($D$)")
+                                st.write("**Matriz Diagonal ($D$)**")
                                 imprimir_matriz_simbolica(D)
                             with col_pinv:
-                                st.write("Inversa ($P^{-1}$)")
+                                st.write("**Inversa ($P^{-1}$)**")
                                 imprimir_matriz_simbolica(P_inv)
                         else:
                             st.error("La matriz **NO** es diagonalizable (no hay suficientes vectores propios independientes).")
+                        st.markdown('</div>', unsafe_allow_html=True)
                             
                 except TimeoutError as e:
                     st.error(str(e))
