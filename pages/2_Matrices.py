@@ -168,136 +168,182 @@ tab_gestion, tab_basicas, tab_propiedades, tab_avanzadas, tab_espectral = st.tab
 # PESTAÑA 0: Constructor, Creación Manual y Puentes
 # --------------------------------------------------------------------------
 with tab_gestion:
+    st.markdown("""
+        <style>
+        /* Estilos para las tarjetas/cajones azules */
+        .blue-card {
+            background: linear-gradient(135deg, rgba(2, 132, 199, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(2, 132, 199, 0.08);
+        }
+
+        /* Resaltado de títulos dentro de los cajones */
+        .card-header-title {
+            background: linear-gradient(135deg, #0284c7 0%, #6366f1 100%);
+            color: #ffffff !important;
+            font-size: 18px;
+            font-weight: 800;
+            padding: 8px 16px;
+            border-radius: 10px;
+            display: inline-block;
+            margin-bottom: 18px;
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+            letter-spacing: 0.5px;
+        }
+
+        .card-subheader-title {
+            color: #38bdf8 !important;
+            font-size: 16px;
+            font-weight: 700;
+            border-bottom: 2px solid rgba(56, 189, 248, 0.3);
+            padding-bottom: 6px;
+            margin-top: 15px;
+            margin-bottom: 15px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.subheader("Constructor y Puentes de Datos")
     col_g1, col_g2 = st.columns(2)
     
     with col_g1:
-        with st.container(border=True):
-            st.markdown("### ➕ Nueva Matriz Manual")
+        # Cajón 1: Nueva Matriz Manual
+        st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+        st.markdown('<div class="card-header-title">➕ Nueva Matriz Manual</div>', unsafe_allow_html=True)
+        
+        # Entrada de Nombre y Dimensiones
+        nombre_nueva = st.text_input("Asignar nombre de la matriz (Ej: A, M1):", key="input_nom_manual").upper().strip()
+        
+        col_m, col_n = st.columns(2)
+        with col_m:
+            filas = st.number_input("Número de filas:", min_value=1, max_value=10, value=1, step=1, key="num_filas_mat")
+        with col_n:
+            columnas = st.number_input("Número de columnas:", min_value=1, max_value=10, value=2, step=1, key="num_cols_mat")
             
-            # Entrada de Nombre y Dimensiones
-            nombre_nueva = st.text_input("Asignar nombre de la matriz (Ej: A, M1):", key="input_nom_manual").upper().strip()
-            
-            col_m, col_n = st.columns(2)
-            with col_m:
-                filas = st.number_input("Número de filas:", min_value=1, max_value=10, value=2, step=1, key="num_filas_mat")
-            with col_n:
-                columnas = st.number_input("Número de columnas:", min_value=1, max_value=10, value=2, step=1, key="num_cols_mat")
-                
-            st.divider()
-            
-            st.markdown("#### Componentes de la Matriz")
-            
-            matriz_elementos = []
-            error_sintaxis = False
-            
-            # Generación de la cuadrícula interactiva celda por celda (a_ij)
-            for i in range(filas):
-                cols = st.columns(columnas)
-                fila_vals = []
-                for j in range(columnas):
-                    with cols[j]:
-                        val_str = st.text_input(
-                            f"Elemento ({i+1}, {j+1}):", 
-                            value="0", 
-                            key=f"celda_{i}_{j}_{filas}_{columnas}"
-                        ).strip()
-                        
-                        try:
-                            val_sym = leer_expresion_st(val_str)
-                            if val_sym is not None:
-                                fila_vals.append(val_sym)
-                            else:
-                                error_sintaxis = True
-                        except Exception:
+        st.divider()
+        
+        st.markdown('<div class="card-subheader-title">🧩 Componentes de la Matriz</div>', unsafe_allow_html=True)
+        
+        matriz_elementos = []
+        error_sintaxis = False
+        
+        # Generación de la cuadrícula interactiva celda por celda (a_ij)
+        for i in range(filas):
+            cols = st.columns(columnas)
+            fila_vals = []
+            for j in range(columnas):
+                with cols[j]:
+                    val_str = st.text_input(
+                        f"Elemento ({i+1}, {j+1}):", 
+                        value="0", 
+                        key=f"celda_{i}_{j}_{filas}_{columnas}"
+                    ).strip()
+                    
+                    try:
+                        val_sym = leer_expresion_st(val_str)
+                        if val_sym is not None:
+                            fila_vals.append(val_sym)
+                        else:
                             error_sintaxis = True
-                matriz_elementos.append(fila_vals)
+                    except Exception:
+                        error_sintaxis = True
+            matriz_elementos.append(fila_vals)
+        
+        st.write("")
+        if error_sintaxis:
+            st.error("⚠️ Ingrese expresiones matemáticas o números válidos en todas las celdas.")
+        else:
+            matriz_temp = sp.Matrix(matriz_elementos)
             
-            st.write("")
-            if error_sintaxis:
-                st.error("⚠️ Ingrese expresiones matemáticas o números válidos en todas las celdas.")
-            else:
-                matriz_temp = sp.Matrix(matriz_elementos)
-                
-                # Vista previa previa al guardado
-                st.markdown("**Vista previa:**")
-                st.latex(f"{nombre_nueva if nombre_nueva else 'M'} = {sp.latex(matriz_temp)}")
-                
-                if st.button("💾 Guardar Matriz", key="btn_guardar_mat_manual", use_container_width=True):
-                    if not nombre_nueva:
-                        st.error("Por favor, asigna un nombre a la matriz.")
-                    else:
-                        if nombre_nueva in st.session_state.mis_matrices:
-                            st.warning(f"La matriz '{nombre_nueva}' fue sobreescrita.")
-                        st.session_state.mis_matrices[nombre_nueva] = matriz_temp
-                        st.success(f"¡Matriz '{nombre_nueva}' guardada exitosamente!")
-                        st.rerun()
+            # Vista previa
+            st.markdown("**Vista previa:**")
+            st.latex(f"{nombre_nueva if nombre_nueva else 'M'} = {sp.latex(matriz_temp)}")
+            
+            if st.button("💾 Guardar Matriz", key="btn_guardar_mat_manual", use_container_width=True):
+                if not nombre_nueva:
+                    st.error("Por favor, asigna un nombre a la matriz.")
+                else:
+                    if nombre_nueva in st.session_state.mis_matrices:
+                        st.warning(f"La matriz '{nombre_nueva}' fue sobreescrita.")
+                    st.session_state.mis_matrices[nombre_nueva] = matriz_temp
+                    st.success(f"¡Matriz '{nombre_nueva}' guardada exitosamente!")
+                    st.rerun()
+
+        st.markdown('</div>', unsafe_allow_html=True) # Cierre de cajón 1
 
     with col_g2:
-        with st.container(border=True):
-            st.markdown("### 🔀 Importación y Exportación")
-            fuente_import = st.selectbox("¿De dónde desea importar?", ["Seleccione...", "De una Transformación Activa", "De un Conjunto de Vectores"])
-            
-            if fuente_import == "De una Transformación Activa":
-                if st.session_state.get('mis_transformaciones'):
-                    tl_import = st.selectbox("Seleccione la T.L.:", list(st.session_state.mis_transformaciones.keys()), key="imp_tl_main")
-                    nom_mat_tl = st.text_input("Guardar matriz asociada como (Ej. M_T1):", key="nom_mat_tl_main").upper().strip()
-                    
-                    if st.button("⬇️ Importar Matriz Asociada", use_container_width=True):
-                        if nom_mat_tl:
-                            st.session_state.mis_matrices[nom_mat_tl] = st.session_state.mis_transformaciones[tl_import]["matriz_asociada"]
-                            st.success(f"Matriz '{nom_mat_tl}' importada con éxito.")
-                            st.rerun()
-                        else:
-                            st.error("Ingrese un nombre para guardar la matriz.")
-                else:
-                    st.info("No hay transformaciones definidas en memoria.")
-                    
-            elif fuente_import == "De un Conjunto de Vectores":
-                if st.session_state.get('mis_vectores'):
-                    vecs_import = st.multiselect("Seleccione vectores para formar las columnas:", list(st.session_state.mis_vectores.keys()), key="imp_vecs_main")
-                    nom_mat_vec = st.text_input("Guardar matriz generada como (Ej. BASE1):", key="nom_mat_vec_main").upper().strip()
-                    
-                    if st.button("⬇️ Construir e Importar Matriz", key="btn_build_vec", use_container_width=True):
-                        if not vecs_import or not nom_mat_vec:
-                            st.error("Complete los campos obligatorios.")
-                        else:
-                            try:
-                                lista_vectores = [st.session_state.mis_vectores[v] for v in vecs_import]
-                                matriz_armada = sp.Matrix.hstack(*lista_vectores)
-                                st.session_state.mis_matrices[nom_mat_vec] = matriz_armada
-                                st.success(f"Matriz '{nom_mat_vec}' construida e importada.")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error: Los vectores deben tener la misma dimensión. Detalle: {e}")
-                else:
-                    st.info("No hay vectores definidos en memoria.")
-                    
-            st.divider()
-            st.markdown("### 📤 Exportar a Transformación")
-            if st.session_state.mis_matrices:
-                mat_export = st.selectbox("Matriz a exportar:", list(st.session_state.mis_matrices.keys()), key="exp_mat_tl_main")
-                nombre_tl = st.text_input("Nombre de la nueva T.L. (Ej. T1):", key="nombre_tl_main").upper().strip()
+        # Cajón 2: Importación y Exportación
+        st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+        st.markdown('<div class="card-header-title">🔀 Importación y Exportación</div>', unsafe_allow_html=True)
+        
+        fuente_import = st.selectbox("¿De dónde desea importar?", ["Seleccione...", "De una Transformación Activa", "De un Conjunto de Vectores"])
+        
+        if fuente_import == "De una Transformación Activa":
+            if st.session_state.get('mis_transformaciones'):
+                tl_import = st.selectbox("Seleccione la T.L.:", list(st.session_state.mis_transformaciones.keys()), key="imp_tl_main")
+                nom_mat_tl = st.text_input("Guardar matriz asociada como (Ej. M_T1):", key="nom_mat_tl_main").upper().strip()
                 
-                if st.button("Crear Transformación", key="btn_crear_tl_main", use_container_width=True):
-                    if nombre_tl:
-                        A_export = st.session_state.mis_matrices[mat_export]
-                        filas, columnas = A_export.shape
-                        vars_input = sp.symbols(f'x1:{columnas+1}')
-                        regla_correspondencia = A_export * sp.Matrix(vars_input)
-                        
-                        st.session_state.mis_transformaciones[nombre_tl] = {
-                            "matriz_asociada": A_export,
-                            "regla": regla_correspondencia,
-                            "variables": vars_input,
-                            "dim_V": columnas,
-                            "dim_W": filas,
-                            "base_dominio": sp.eye(columnas),
-                            "base_codominio": sp.eye(filas)
-                        }
-                        st.success(f"T.L. '{nombre_tl}' creada exitosamente en el módulo de Transformaciones.")
+                if st.button("⬇️ Importar Matriz Asociada", use_container_width=True):
+                    if nom_mat_tl:
+                        st.session_state.mis_matrices[nom_mat_tl] = st.session_state.mis_transformaciones[tl_import]["matriz_asociada"]
+                        st.success(f"Matriz '{nom_mat_tl}' importada con éxito.")
+                        st.rerun()
                     else:
-                        st.error("Ingrese un nombre para la T.L.")
+                        st.error("Ingrese un nombre para guardar la matriz.")
+            else:
+                st.info("No hay transformaciones definidas en memoria.")
+                
+        elif fuente_import == "De un Conjunto de Vectores":
+            if st.session_state.get('mis_vectores'):
+                vecs_import = st.multiselect("Seleccione vectores para formar las columnas:", list(st.session_state.mis_vectores.keys()), key="imp_vecs_main")
+                nom_mat_vec = st.text_input("Guardar matriz generada como (Ej. BASE1):", key="nom_mat_vec_main").upper().strip()
+                
+                if st.button("⬇️ Construir e Importar Matriz", key="btn_build_vec", use_container_width=True):
+                    if not vecs_import or not nom_mat_vec:
+                        st.error("Complete los campos obligatorios.")
+                    else:
+                        try:
+                            lista_vectores = [st.session_state.mis_vectores[v] for v in vecs_import]
+                            matriz_armada = sp.Matrix.hstack(*lista_vectores)
+                            st.session_state.mis_matrices[nom_mat_vec] = matriz_armada
+                            st.success(f"Matriz '{nom_mat_vec}' construida e importada.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: Los vectores deben tener la misma dimensión. Detalle: {e}")
+            else:
+                st.info("No hay vectores definidos en memoria.")
+                
+        st.divider()
+        
+        st.markdown('<div class="card-subheader-title">📤 Exportar a Transformación</div>', unsafe_allow_html=True)
+        if st.session_state.mis_matrices:
+            mat_export = st.selectbox("Matriz a exportar:", list(st.session_state.mis_matrices.keys()), key="exp_mat_tl_main")
+            nombre_tl = st.text_input("Nombre de la nueva T.L. (Ej. T1):", key="nombre_tl_main").upper().strip()
+            
+            if st.button("Crear Transformación", key="btn_crear_tl_main", use_container_width=True):
+                if nombre_tl:
+                    A_export = st.session_state.mis_matrices[mat_export]
+                    filas, columnas = A_export.shape
+                    vars_input = sp.symbols(f'x1:{columnas+1}')
+                    regla_correspondencia = A_export * sp.Matrix(vars_input)
+                    
+                    st.session_state.mis_transformaciones[nombre_tl] = {
+                        "matriz_asociada": A_export,
+                        "regla": regla_correspondencia,
+                        "variables": vars_input,
+                        "dim_V": columnas,
+                        "dim_W": filas,
+                        "base_dominio": sp.eye(columnas),
+                        "base_codominio": sp.eye(filas)
+                    }
+                    st.success(f"T.L. '{nombre_tl}' creada exitosamente en el módulo de Transformaciones.")
+                else:
+                    st.error("Ingrese un nombre para la T.L.")
+                    
+        st.markdown('</div>', unsafe_allow_html=True) 
 
 # --------------------------------------------------------------------------
 # PESTAÑA 1: Operaciones Básicas
@@ -306,63 +352,72 @@ with tab_basicas:
     if not st.session_state.mis_matrices:
         st.info("👈 Comience creando o importando una matriz en la pestaña 'Gestión y Creación'.")
     else:
-        with st.container(border=True):
-            st.subheader("Operaciones Álgebraicas Básicas")
-            col1, col2, col3 = st.columns([1, 1, 2])
+        st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+        st.markdown('<div class="card-header-title">➕ Operaciones Álgebraicas Básicas</div>', unsafe_allow_html=True)
+        st.caption("Realice suma, resta, multiplicación y producto escalar entre las matrices en memoria.")
+        
+        col1, col2, col3 = st.columns([1, 1, 2])
+        
+        with col1:
+            mat_A_nombre = st.selectbox("Matriz A", list(st.session_state.mis_matrices.keys()), key="op_matA")
+        with col2:
+            operacion = st.selectbox("Operación", ["+", "-", "*", "* Escalar"])
+        with col3:
+            if operacion == "* Escalar":
+                escalar_str = st.text_input("Ingrese Escalar (Ej: 2, x, 1/2):", value="1")
+            else:
+                mat_B_nombre = st.selectbox("Matriz B", list(st.session_state.mis_matrices.keys()), key="op_matB")
+                
+        if st.button("🧮 Calcular Resultado", key="btn_basicas", use_container_width=True):
+            matA = st.session_state.mis_matrices[mat_A_nombre]
+            res = None
             
-            with col1:
-                mat_A_nombre = st.selectbox("Matriz A", list(st.session_state.mis_matrices.keys()), key="op_matA")
-            with col2:
-                operacion = st.selectbox("Operación", ["+", "-", "*", "* Escalar"])
-            with col3:
-                if operacion == "* Escalar":
-                    escalar_str = st.text_input("Ingrese Escalar (Ej: 2, x, 1/2):", value="1")
-                else:
-                    mat_B_nombre = st.selectbox("Matriz B", list(st.session_state.mis_matrices.keys()), key="op_matB")
-                    
-            if st.button("Calcular Resultado", key="btn_basicas"):
-                matA = st.session_state.mis_matrices[mat_A_nombre]
-                res = None
-                
-                if operacion == "* Escalar":
-                    try:
-                        esc = leer_expresion_st(escalar_str)
-                        if esc is not None:
-                            res = esc * matA
-                        else:
-                            st.error("Escalar inválido.")
-                    except Exception:
-                        st.error("Escalar inválido.")
-                else:
-                    matB = st.session_state.mis_matrices[mat_B_nombre]
-                    if operacion in ["+", "-"] and matA.shape != matB.shape:
-                        st.error("Error: Las matrices deben tener la misma dimensión.")
-                    elif operacion == "*" and matA.shape[1] != matB.shape[0]:
-                        st.error("Error: Las dimensiones no son compatibles para multiplicar.")
+            if operacion == "* Escalar":
+                try:
+                    esc = leer_expresion_st(escalar_str)
+                    if esc is not None:
+                        res = esc * matA
                     else:
-                        if operacion == "+": res = matA + matB
-                        elif operacion == "-": res = matA - matB
-                        elif operacion == "*": res = matA * matB
-                
-                if res is not None:
-                    st.session_state.temp_matriz = res
+                        st.error("Escalar inválido.")
+                except Exception:
+                    st.error("Escalar inválido.")
+            else:
+                matB = st.session_state.mis_matrices[mat_B_nombre]
+                if operacion in ["+", "-"] and matA.shape != matB.shape:
+                    st.error("Error: Las matrices deben tener la misma dimensión para sumar o restar.")
+                elif operacion == "*" and matA.shape[1] != matB.shape[0]:
+                    st.error("Error: Las dimensiones no son compatibles para multiplicar.")
+                else:
+                    if operacion == "+": res = matA + matB
+                    elif operacion == "-": res = matA - matB
+                    elif operacion == "*": res = matA * matB
+            
+            if res is not None:
+                st.session_state.temp_matriz = res
 
-            if 'temp_matriz' in st.session_state:
-                st.success("Resultado de la operación:")
-                imprimir_matriz_simbolica(st.session_state.temp_matriz)
-                
-                col_save1, col_save2 = st.columns([2, 1])
-                with col_save1:
-                    nombre_save = st.text_input("Guardar este resultado como (Ej. R1):", key="save_name_basicas").upper().strip()
-                with col_save2:
-                    st.write("") 
-                    if st.button("💾 Guardar Matriz", key="save_basicas", use_container_width=True):
-                        if nombre_save:
-                            st.session_state.mis_matrices[nombre_save] = st.session_state.temp_matriz
-                            st.session_state.pop("temp_matriz", None)
-                            st.rerun()
-                        else:
-                            st.error("Ingrese un nombre.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        if 'temp_matriz' in st.session_state:
+            st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+            st.markdown('<div class="card-subheader-title">🎯 Resultado de la Operación</div>', unsafe_allow_html=True)
+            
+            imprimir_matriz_simbolica(st.session_state.temp_matriz)
+            
+            col_save1, col_save2 = st.columns([2, 1])
+            with col_save1:
+                nombre_save = st.text_input("Guardar este resultado como (Ej. R1):", key="save_name_basicas").upper().strip()
+            with col_save2:
+                st.write("") 
+                if st.button("💾 Guardar Matriz", key="save_basicas", use_container_width=True):
+                    if nombre_save:
+                        st.session_state.mis_matrices[nombre_save] = st.session_state.temp_matriz
+                        st.session_state.pop("temp_matriz", None)
+                        st.success(f"Matriz '{nombre_save}' guardada exitosamente.")
+                        st.rerun()
+                    else:
+                        st.error("Ingrese un nombre.")
+                        
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------
 # PESTAÑA 2: Propiedades y Reducción Gaussiana
@@ -371,119 +426,130 @@ with tab_propiedades:
     if not st.session_state.mis_matrices:
         st.info("👈 Comience creando o importando una matriz en la pestaña 'Gestión y Creación'.")
     else:
-        with st.container(border=True):
-            st.subheader("Análisis Estructural y Reducción Gaussiana")
-            mat_sel_nombre = st.selectbox("Seleccione Matriz a analizar:", list(st.session_state.mis_matrices.keys()), key="prop_mat")
-            M = st.session_state.mis_matrices[mat_sel_nombre]
+        st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+        st.markdown('<div class="card-header-title">🔎 Análisis Estructural y Reducción Gaussiana</div>', unsafe_allow_html=True)
+        
+        mat_sel_nombre = st.selectbox("Seleccione Matriz a analizar:", list(st.session_state.mis_matrices.keys()), key="prop_mat")
+        M = st.session_state.mis_matrices[mat_sel_nombre]
+        
+        st.markdown('<div class="card-subheader-title">⚙️ Propiedad o Transformación a Evaluar</div>', unsafe_allow_html=True)
+        prop_elegida = st.radio("Seleccione el análisis:", [
+            "Determinante", "Traza", "Inversa", "Adjunta Clásica", "Transpuesta Conjugada", 
+            "Rango y Subespacios", "Matriz Reducida (RREF)"
+        ], horizontal=True)
+        
+        if st.button("🚀 Analizar Propiedad", key="btn_prop", use_container_width=True):
+            res_matriz = None 
             
-            prop_elegida = st.radio("Propiedad a evaluar:", [
-                "Determinante", "Traza", "Inversa", "Adjunta Clásica", "Transpuesta Conjugada", 
-                "Rango y Subespacios", "Matriz Reducida (RREF)"
-            ], horizontal=True)
-            
-            if st.button("Analizar Propiedad", key="btn_prop"):
-                res_matriz = None 
-                
-                if prop_elegida == "Determinante":
-                    if M.is_square: 
-                        try:
-                            det_val = calcular_con_limite(M.det, timeout=5)
-                            st.success(f"**Determinante:** {det_val}")
-                        except TimeoutError as e:
-                            st.error(str(e))
-                    else: st.error("La matriz debe ser cuadrada.")
-                
-                elif prop_elegida == "Traza":
-                    if M.is_square: st.success(f"**Traza:** {M.trace()}")
-                    else: st.error("La matriz debe ser cuadrada.")
-                        
-                elif prop_elegida == "Inversa":
-                    if M.is_square:
-                        try:
-                            M_num = evaluar_numerico(M)
-                            if M_num is not None and M.shape[0] >= 4:
-                                st.info("💡 Matriz numérica grande: Evaluando con motor NumPy para mayor velocidad.")
-                                inv_np = np.linalg.inv(M_num)
-                                res_matriz = sp.Matrix(np.round(inv_np, 4))
-                            else:
-                                res_matriz = calcular_con_limite(M.inv, timeout=5)
-                            st.write("Matriz Inversa ($A^{-1}$):")
-                        except TimeoutError as e:
-                            st.error(str(e))
-                        except Exception:
-                            st.error("La matriz es singular (Determinante = 0) o no se puede invertir numéricamente.")
-                    else: st.error("La matriz debe ser cuadrada.")
-                        
-                elif prop_elegida == "Adjunta Clásica":
-                    if M.is_square:
-                        try:
-                            res_matriz = calcular_con_limite(M.adjugate, timeout=5)
-                            st.write("Matriz Adjunta Clásica (Matriz de Cofactores Transpuesta):")
-                        except TimeoutError as e:
-                            st.error(str(e))
-                    else: st.error("La matriz debe ser cuadrada.")
-                        
-                elif prop_elegida == "Transpuesta Conjugada":
-                    res_matriz = M.H
-                    st.write("Matriz Transpuesta Conjugada ($A^*$ o $A^H$):")
-                    if not M.has(sp.I):
-                        st.info("No contiene complejos; la Transpuesta Conjugada es igual a la Transpuesta normal.")
-                    
-                elif prop_elegida == "Matriz Reducida (RREF)":
+            if prop_elegida == "Determinante":
+                if M.is_square: 
                     try:
-                        rref_sp, pivotes = calcular_con_limite(M.rref, timeout=5)
-                        res_matriz = rref_sp
-                        st.write("Forma Escalonada Reducida por Renglones:")
-                        st.info(f"Pivotes encontrados en las columnas: {pivotes}")
+                        det_val = calcular_con_limite(M.det, timeout=5)
+                        st.success(f"**Determinante:** {det_val}")
                     except TimeoutError as e:
                         st.error(str(e))
+                else: st.error("La matriz debe ser cuadrada.")
+            
+            elif prop_elegida == "Traza":
+                if M.is_square: st.success(f"**Traza:** {M.trace()}")
+                else: st.error("La matriz debe ser cuadrada.")
                     
-                elif prop_elegida == "Rango y Subespacios":
+            elif prop_elegida == "Inversa":
+                if M.is_square:
                     try:
-                        rref_sp, pivotes = calcular_con_limite(M.rref, timeout=5)
-                        st.success(f"**Rango de la matriz:** {len(pivotes)}")
-                        
-                        col_sub1, col_sub2 = st.columns(2)
-                        with col_sub1:
-                            st.write("**Base del Espacio Renglón ($L_r(A)$):**")
-                            renglones = [rref_sp.row(i) for i in range(rref_sp.rows) if rref_sp.row(i) != sp.zeros(1, rref_sp.cols)]
-                            if renglones: imprimir_matriz_simbolica(sp.Matrix(renglones))
-                            else: st.write("Trivial")
-                            
-                        with col_sub2:
-                            st.write("**Base del Espacio Columna ($L_c(A)$):**")
-                            columnas = [M.col(j) for j in pivotes]
-                            if columnas: imprimir_matriz_simbolica(sp.Matrix.hstack(*columnas))
-                            else: st.write("Trivial")
-                            
-                        st.divider()
-                        st.write("**Base del Kernel (Espacio Nulo):**")
-                        base_kernel = calcular_con_limite(M.nullspace, timeout=5)
-                        if base_kernel:
-                            for i, vec in enumerate(base_kernel): imprimir_matriz_simbolica(vec)
-                            st.write(f"**Nulidad:** {len(base_kernel)}")
+                        M_num = evaluar_numerico(M)
+                        if M_num is not None and M.shape[0] >= 4:
+                            st.info("💡 Matriz numérica grande: Evaluando con motor NumPy para mayor velocidad.")
+                            inv_np = np.linalg.inv(M_num)
+                            res_matriz = sp.Matrix(np.round(inv_np, 4))
                         else:
-                            st.write("El Kernel es trivial (vector cero).")
+                            res_matriz = calcular_con_limite(M.inv, timeout=5)
+                        st.write("Matriz Inversa ($A^{-1}$):")
                     except TimeoutError as e:
                         st.error(str(e))
+                    except Exception:
+                        st.error("La matriz es singular (Determinante = 0) o no se puede invertir numéricamente.")
+                else: st.error("La matriz debe ser cuadrada.")
+                    
+            elif prop_elegida == "Adjunta Clásica":
+                if M.is_square:
+                    try:
+                        res_matriz = calcular_con_limite(M.adjugate, timeout=5)
+                        st.write("Matriz Adjunta Clásica (Matriz de Cofactores Transpuesta):")
+                    except TimeoutError as e:
+                        st.error(str(e))
+                else: st.error("La matriz debe ser cuadrada.")
+                    
+            elif prop_elegida == "Transpuesta Conjugada":
+                res_matriz = M.H
+                st.write("Matriz Transpuesta Conjugada ($A^*$ o $A^H$):")
+                if not M.has(sp.I):
+                    st.info("No contiene complejos; la Transpuesta Conjugada es igual a la Transpuesta normal.")
+                
+            elif prop_elegida == "Matriz Reducida (RREF)":
+                try:
+                    rref_sp, pivotes = calcular_con_limite(M.rref, timeout=5)
+                    res_matriz = rref_sp
+                    st.write("Forma Escalonada Reducida por Renglones:")
+                    st.info(f"Pivotes encontrados en las columnas: {pivotes}")
+                except TimeoutError as e:
+                    st.error(str(e))
+                
+            elif prop_elegida == "Rango y Subespacios":
+                try:
+                    rref_sp, pivotes = calcular_con_limite(M.rref, timeout=5)
+                    st.success(f"**Rango de la matriz:** {len(pivotes)}")
+                    
+                    col_sub1, col_sub2 = st.columns(2)
+                    with col_sub1:
+                        st.write("**Base del Espacio Renglón ($L_r(A)$):**")
+                        renglones = [rref_sp.row(i) for i in range(rref_sp.rows) if rref_sp.row(i) != sp.zeros(1, rref_sp.cols)]
+                        if renglones: imprimir_matriz_simbolica(sp.Matrix(renglones))
+                        else: st.write("Trivial")
+                        
+                    with col_sub2:
+                        st.write("**Base del Espacio Columna ($L_c(A)$):**")
+                        columnas = [M.col(j) for j in pivotes]
+                        if columnas: imprimir_matriz_simbolica(sp.Matrix.hstack(*columnas))
+                        else: st.write("Trivial")
+                        
+                    st.divider()
+                    st.write("**Base del Kernel (Espacio Nulo):**")
+                    base_kernel = calcular_con_limite(M.nullspace, timeout=5)
+                    if base_kernel:
+                        for i, vec in enumerate(base_kernel): imprimir_matriz_simbolica(vec)
+                        st.write(f"**Nulidad:** {len(base_kernel)}")
+                    else:
+                        st.write("El Kernel es trivial (vector cero).")
+                except TimeoutError as e:
+                    st.error(str(e))
 
-                if res_matriz is not None:
-                    st.session_state.temp_prop_matriz = res_matriz
+            if res_matriz is not None:
+                st.session_state.temp_prop_matriz = res_matriz
 
-            if 'temp_prop_matriz' in st.session_state:
-                imprimir_matriz_simbolica(st.session_state.temp_prop_matriz)
-                c1, c2 = st.columns([2, 1])
-                with c1:
-                    nombre_save = st.text_input("Guardar esta matriz como:", key="name_prop").upper().strip()
-                with c2:
-                    st.write("")
-                    if st.button("💾 Guardar", key="save_prop", use_container_width=True):
-                        if nombre_save:
-                            st.session_state.mis_matrices[nombre_save] = st.session_state.temp_prop_matriz
-                            st.session_state.pop("temp_prop_matriz", None)
-                            st.rerun()
-                        else:
-                            st.error("Ingrese un nombre.")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        if 'temp_prop_matriz' in st.session_state:
+            st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+            st.markdown('<div class="card-subheader-title">🎯 Matriz Resultante</div>', unsafe_allow_html=True)
+            
+            imprimir_matriz_simbolica(st.session_state.temp_prop_matriz)
+            
+            c1, c2 = st.columns([2, 1])
+            with c1:
+                nombre_save = st.text_input("Guardar esta matriz como:", key="name_prop").upper().strip()
+            with c2:
+                st.write("")
+                if st.button("💾 Guardar Matriz", key="save_prop", use_container_width=True):
+                    if nombre_save:
+                        st.session_state.mis_matrices[nombre_save] = st.session_state.temp_prop_matriz
+                        st.session_state.pop("temp_prop_matriz", None)
+                        st.success(f"Matriz '{nombre_save}' guardada exitosamente.")
+                        st.rerun()
+                    else:
+                        st.error("Ingrese un nombre.")
+                        
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------
 # PESTAÑA 3: Cálculo Multivariable (Hessiana / Jacobiana)
@@ -492,13 +558,21 @@ with tab_avanzadas:
     if not st.session_state.mis_matrices:
         st.info("👈 Comience creando o importando una matriz en la pestaña 'Gestión y Creación'.")
     else:
-        with st.container(border=True):
-            st.subheader("Cálculo Diferencial Matricial")
+        # Encabezado de la pestaña
+        st.markdown('<div class="card-header-title">⚡ Cálculo Diferencial Matricial</div>', unsafe_allow_html=True)
+        st.write("")
+        
+        col_av1, col_av2 = st.columns(2)
+        
+        # --- COLUMNA 1: MATRIZ HESSIANA ---
+        with col_av1:
+            st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+            st.markdown('<div class="card-header-title">📐 1. Matriz Hessiana</div>', unsafe_allow_html=True)
+            st.caption("Derivadas parciales de segundo orden para funciones escalares.")
             
-            st.markdown("#### 1. Matriz Hessiana")
-            expr_str = st.text_input("Ingrese la función escalar $f$ (Ej: 2*x**2 + 12*x*y):")
+            expr_str = st.text_input("Ingrese la función escalar $f$ (Ej: 2*x**2 + 12*x*y):", key="input_hessian")
             
-            if st.button("Calcular Hessiana"):
+            if st.button("🧮 Calcular Hessiana", key="btn_hessian", use_container_width=True):
                 try:
                     f = leer_expresion_st(expr_str)
                     if f is not None:
@@ -513,21 +587,26 @@ with tab_avanzadas:
                 except TimeoutError as e:
                     st.error(str(e))
                 except Exception:
-                    st.error("Error matemático o de sintaxis.")
+                    st.error("Error matemático o de sintaxis al procesar la función.")
                     
-            st.divider()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # --- COLUMNA 2: MATRIZ JACOBIANA ---
+        with col_av2:
+            st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+            st.markdown('<div class="card-header-title">🔄 2. Matriz Jacobiana</div>', unsafe_allow_html=True)
+            st.caption("Matriz de derivadas parciales de primer orden para funciones vectoriales.")
             
-            st.markdown("#### 2. Matriz Jacobiana")
             mat_jac_nombre = st.selectbox("Seleccione Vector base:", list(st.session_state.mis_matrices.keys()), key="jac_mat")
             
-            if st.button("Calcular Jacobiana"):
+            if st.button("🧮 Calcular Jacobiana", key="btn_jacobian", use_container_width=True):
                 M_jac = st.session_state.mis_matrices[mat_jac_nombre]
                 variables = list(M_jac.free_symbols)
                 
                 if not variables:
                     st.error("La matriz no contiene variables simbólicas.")
                 elif M_jac.shape[0] != 1 and M_jac.shape[1] != 1:
-                    st.error(f"Error Matemático: La Jacobiana está definida estrictamente para funciones vectoriales. La matriz mide {M_jac.shape[0]}x{M_jac.shape[1]}.")
+                    st.error(f"Error Matemático: La Jacobiana requiere un vector (1xF o Fx1). La matriz mide {M_jac.shape[0]}x{M_jac.shape[1]}.")
                 else:
                     variables.sort(key=lambda v: v.name)
                     try:
@@ -539,17 +618,30 @@ with tab_avanzadas:
                     except Exception as e:
                         st.error(f"Error inesperado al procesar la Jacobiana: {e}")
 
-            if 'temp_avanzada' in st.session_state:
-                imprimir_matriz_simbolica(st.session_state.temp_avanzada)
-                c1, c2 = st.columns([2, 1])
-                with c1: nom_av = st.text_input("Guardar matriz como:", key="name_av").upper().strip()
-                with c2:
-                    st.write("")
-                    if st.button("💾 Guardar", key="save_av", use_container_width=True):
-                        if nom_av:
-                            st.session_state.mis_matrices[nom_av] = st.session_state.temp_avanzada
-                            st.session_state.pop("temp_avanzada", None)
-                            st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # --- RESULTADO Y GUARDADO DE MATRIZ RESULTANTE ---
+        if 'temp_avanzada' in st.session_state:
+            st.markdown('<div class="blue-card">', unsafe_allow_html=True)
+            st.markdown('<div class="card-subheader-title">🎯 Resultado del Cálculo Diferencial</div>', unsafe_allow_html=True)
+            
+            imprimir_matriz_simbolica(st.session_state.temp_avanzada)
+            
+            c1, c2 = st.columns([2, 1])
+            with c1: 
+                nom_av = st.text_input("Guardar matriz resultante como:", key="name_av").upper().strip()
+            with c2:
+                st.write("")
+                if st.button("💾 Guardar Matriz", key="save_av", use_container_width=True):
+                    if nom_av:
+                        st.session_state.mis_matrices[nom_av] = st.session_state.temp_avanzada
+                        st.session_state.pop("temp_avanzada", None)
+                        st.success(f"Matriz '{nom_av}' guardada exitosamente.")
+                        st.rerun()
+                    else:
+                        st.error("Ingrese un nombre para guardar la matriz.")
+                        
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------
 # PESTAÑA 4: Análisis Espectral
