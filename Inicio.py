@@ -154,21 +154,21 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# ENCABEZADO 
+# ENCABEZADO ADAPTATIVO (TRANSPARENTE EN MODO CLARO Y OSCURO)
 # ==========================================
 st.markdown("""
     <div style="
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.08) 0%, rgba(99, 102, 241, 0.08) 100%);
         padding: 32px 24px;
         border-radius: 20px;
-        border: 1px solid rgba(56, 189, 248, 0.2);
-        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+        border: 1px solid rgba(2, 132, 199, 0.25);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
         margin-bottom: 25px;
         text-align: center;
     ">
         <span style="
             background: rgba(56, 189, 248, 0.15);
-            color: #38bdf8;
+            color: #0284c7;
             font-size: 11px;
             font-weight: 700;
             letter-spacing: 1.5px;
@@ -177,24 +177,24 @@ st.markdown("""
             text-transform: uppercase;
             display: inline-block;
             margin-bottom: 12px;
-            border: 1px solid rgba(56, 189, 248, 0.4);
+            border: 1px solid rgba(2, 132, 199, 0.3);
         ">🏛️ UNAM • Facultad de Ciencias • Actuaría</span>
         <h1 style="
             font-size: 50px;
             font-weight: 900;
             margin: 0;
             letter-spacing: 4px;
-            background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc);
+            background: linear-gradient(90deg, #0284c7, #6366f1, #8b5cf6);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             line-height: 1.1;
         ">MATHESIS</h1>
         <p style="
-            color: #cbd5e1;
             font-size: 17px;
-            font-weight: 500;
+            font-weight: 600;
             margin-top: 10px;
             margin-bottom: 0px;
+            opacity: 0.85;
         ">Matemáticas que se calculan, se exploran y se visualizan.</p>
     </div>
 """, unsafe_allow_html=True)
