@@ -6,7 +6,7 @@ import scipy.integrate as spi
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application, convert_xor
 
 try:
-    from utils import leer_expresion_simbolica, imprimir_matriz_simbolica
+    from utils import leer_expresion_st, imprimir_matriz_simbolica
     try:
         from utils import parse_seguro
     except ImportError:
@@ -265,8 +265,8 @@ with tab_sistemas:
                         a22 = st.text_input("d:", value="5")
                     if st.form_submit_button("Cargar Sistema Lineal", use_container_width=True):
                         try:
-                            st.session_state.sys_P = leer_expresion_simbolica(a11)*x_sym + leer_expresion_simbolica(a12)*y_sym
-                            st.session_state.sys_Q = leer_expresion_simbolica(a21)*x_sym + leer_expresion_simbolica(a22)*y_sym
+                            st.session_state.sys_P = leer_expresion_st(a11)*x_sym + leer_expresion_st(a12)*y_sym
+                            st.session_state.sys_Q = leer_expresion_st(a21)*x_sym + leer_expresion_st(a22)*y_sym
                             st.session_state.sys_R = None
                         except: st.error("Error en las entradas.")
                         
@@ -287,9 +287,9 @@ with tab_sistemas:
                         a33 = st.text_input("a33:", value="-2")
                     if st.form_submit_button("Cargar Sistema Lineal 3x3", use_container_width=True):
                         try:
-                            st.session_state.sys_P = leer_expresion_simbolica(a11)*x_sym + leer_expresion_simbolica(a12)*y_sym + leer_expresion_simbolica(a13)*z_sym
-                            st.session_state.sys_Q = leer_expresion_simbolica(a21)*x_sym + leer_expresion_simbolica(a22)*y_sym + leer_expresion_simbolica(a23)*z_sym
-                            st.session_state.sys_R = leer_expresion_simbolica(a31)*x_sym + leer_expresion_simbolica(a32)*y_sym + leer_expresion_simbolica(a33)*z_sym
+                            st.session_state.sys_P = leer_expresion_st(a11)*x_sym + leer_expresion_st(a12)*y_sym + leer_expresion_st(a13)*z_sym
+                            st.session_state.sys_Q = leer_expresion_st(a21)*x_sym + leer_expresion_st(a22)*y_sym + leer_expresion_st(a23)*z_sym
+                            st.session_state.sys_R = leer_expresion_st(a31)*x_sym + leer_expresion_st(a32)*y_sym + leer_expresion_st(a33)*z_sym
                         except: st.error("Error en las entradas.")
 
             elif fuente_matriz == "Importar del Módulo de Matrices":
@@ -338,7 +338,7 @@ with tab_sistemas:
                 t_eval = 0.0
                 if not es_autonomo:
                     st.warning("El campo es **No Autónomo**. Seleccione un instante de evaluación $t$:")
-                    t_eval = st.slider("Evaluar espacio en t =", min_value=-10.0, max_value=10.0, value=0.0, step=0.5)
+                    t_eval = st.slider("Evaluar espacio in t =", min_value=-10.0, max_value=10.0, value=0.0, step=0.5)
                     
                 P_f = P_expr.subs(t_sym, t_eval)
                 Q_f = Q_expr.subs(t_sym, t_eval)
@@ -618,6 +618,7 @@ with tab_sistemas:
                     except Exception as e:
                         st.error(f"Error al generar proyecciones: {e}")
             else:
+                # SECCIÓN 2D (Retrato de fase y campo vectorial en el plano)
                 tab_fase2d, tab_isoclinas = st.tabs(["🌌 Retrato de Fase 2D (Streamplot)", "📈 Isoclinas y Campo de Direcciones"])
                 
                 with tab_fase2d:
@@ -667,7 +668,7 @@ with tab_edo1:
             try:
                 x_s = sp.Symbol('x')
                 y_s = sp.Function('y')(x_s)
-                expr_edo = parse_seguro(str_edo, transformaciones=transf, local_dict={'x': x_s, 'y': y_s, 'exp': sp.exp, 'sin': sp.sin, 'cos': sp.cos})
+                expr_edo = parse_seguro(str_edo, transformations=transf, local_dict={'x': x_s, 'y': y_s, 'exp': sp.exp, 'sin': sp.sin, 'cos': sp.cos})
                 
                 eq_diff = sp.Eq(y_s.diff(x_s), expr_edo)
                 st.latex(rf"\frac{{dy}}{{dx}} = {sp.latex(expr_edo)}")
