@@ -16,7 +16,7 @@ if 'mis_complejos' not in st.session_state:
     st.session_state.mis_complejos = {}
 
 # ==============================================================================
-# INYECCIÓN DIRECTA DE CSS (ESTILOS UNIFICADOS, SUBTÍTULOS Y TARJETAS)
+# INYECCIÓN DIRECTA DE CSS (ESTILOS UNIFICADOS Y LIMPIOS)
 # ==============================================================================
 st.markdown("""
     <style>
@@ -51,29 +51,7 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
 
-    /* 4. ESTILIZADO GLOBAL PARA SUBTÍTULOS (H2, H3, ST.HEADER, ST.SUBHEADER) */
-    .stMarkdown h2, [data-testid="stHeader"] h2 {
-        color: #38bdf8 !important;
-        font-size: 1.35rem !important;
-        font-weight: 800 !important;
-        border-bottom: 2px solid rgba(56, 189, 248, 0.3) !important;
-        padding-bottom: 6px !important;
-        margin-top: 1.2rem !important;
-        margin-bottom: 1rem !important;
-        letter-spacing: -0.3px !important;
-    }
-
-    .stMarkdown h3, [data-testid="stSubheader"] h3 {
-        color: #38bdf8 !important;
-        font-size: 1.15rem !important;
-        font-weight: 700 !important;
-        border-left: 4px solid #0284c7 !important;
-        padding-left: 10px !important;
-        margin-top: 1rem !important;
-        margin-bottom: 0.8rem !important;
-    }
-
-    /* 5. CONTENEDORES NATIVOS AZULES (ELIMINA RECUADROS FANTASMA) */
+    /* 4. CONTENEDORES NATIVOS AZULES (ELIMINA RECUADROS FANTASMA) */
     [data-testid="stVerticalBlockBorderWrapper"] {
         background: linear-gradient(135deg, rgba(2, 132, 199, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%) !important;
         border: 1px solid rgba(56, 189, 248, 0.35) !important;
@@ -82,7 +60,7 @@ st.markdown("""
         margin-bottom: 1rem !important;
     }
 
-    /* 6. TÍTULOS Y SUBTÍTULOS RESALTADOS DENTRO DE LAS TARJETAS */
+    /* 5. TÍTULOS Y SUBTÍTULOS RESALTADOS DENTRO DE LAS TARJETAS */
     .card-header-title {
         background: linear-gradient(135deg, #0284c7 0%, #6366f1 100%);
         color: #ffffff !important;
@@ -105,7 +83,7 @@ st.markdown("""
         margin-bottom: 12px;
     }
 
-    /* 7. DISEÑO MODERNO DE PESTAÑAS (ST.TABS) */
+    /* 6. DISEÑO MODERNO DE PESTAÑAS (ST.TABS) */
     [data-baseweb="tab-list"] {
         gap: 10px !important;
         background-color: rgba(2, 132, 199, 0.05) !important;
@@ -149,11 +127,17 @@ st.markdown("""
         display: none !important;
     }
 
-    /* 8. ESTILOS DE BARRA LATERAL (SIDEBAR UNIFICADO) */
+    /* 7. ESTILOS DE BARRA LATERAL (SIDEBAR UNIFICADO Y RESPONSIVO) */
     [data-testid="stSidebar"], section[data-testid="stSidebar"] {
-        min-width: 300px !important;
-        max-width: 320px !important;
+        width: 100% !important;
+        max-width: 280px !important;
         border-right: 1px solid rgba(2, 132, 199, 0.2) !important;
+    }
+
+    @media (max-width: 768px) {
+        [data-testid="stSidebar"], section[data-testid="stSidebar"] {
+            max-width: 240px !important;
+        }
     }
 
     [data-testid="stSidebarNav"] ul li div a, [data-testid="stSidebarNav"] a {
