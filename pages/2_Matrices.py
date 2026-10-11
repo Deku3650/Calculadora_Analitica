@@ -122,11 +122,17 @@ st.markdown("""
         display: none !important;
     }
 
-    /* 7. ESTILOS DE BARRA LATERAL (SIDEBAR UNIFICADO) */
+    /* 7. ESTILOS DE BARRA LATERAL (SIDEBAR UNIFICADO Y RESPONSIVO) */
     [data-testid="stSidebar"], section[data-testid="stSidebar"] {
-        min-width: 300px !important;
-        max-width: 320px !important;
+        width: 100% !important;
+        max-width: 280px !important;
         border-right: 1px solid rgba(2, 132, 199, 0.2) !important;
+    }
+
+    @media (max-width: 768px) {
+        [data-testid="stSidebar"], section[data-testid="stSidebar"] {
+            max-width: 240px !important;
+        }
     }
 
     [data-testid="stSidebarNav"] ul li div a, [data-testid="stSidebarNav"] a {
