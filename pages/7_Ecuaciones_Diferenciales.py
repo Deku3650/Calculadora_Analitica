@@ -19,7 +19,7 @@ except ImportError:
 st.set_page_config(page_title="Ecuaciones Diferenciales - MATHESIS", page_icon="🌪️", layout="wide")
 
 # ==============================================================================
-# INYECCIÓN DIRECTA DE CSS (ESTILOS UNIFICADOS Y LIMPIOS DE MATHESIS)
+# INYECCIÓN DIRECTA DE CSS (ESTILOS UNIFICADOS, LIMPIOS Y RESPONSIVOS)
 # ==============================================================================
 st.markdown("""
     <style>
@@ -152,11 +152,17 @@ st.markdown("""
         display: none !important;
     }
 
-    /* 8. ESTILOS DE BARRA LATERAL (SIDEBAR UNIFICADO) */
+    /* 8. ESTILOS DE BARRA LATERAL (RESPONSIVA Y LIMPIA) */
     [data-testid="stSidebar"], section[data-testid="stSidebar"] {
-        min-width: 300px !important;
-        max-width: 320px !important;
+        width: 100% !important;
+        max-width: 280px !important;
         border-right: 1px solid rgba(2, 132, 199, 0.2) !important;
+    }
+
+    @media (max-width: 768px) {
+        [data-testid="stSidebar"], section[data-testid="stSidebar"] {
+            max-width: 240px !important;
+        }
     }
 
     [data-testid="stSidebarNav"] ul li div a, [data-testid="stSidebarNav"] a {
@@ -223,7 +229,6 @@ x_sym, y_sym, z_sym = sp.symbols('x y z', real=True)
 c1_sym, c2_sym, c3_sym = sp.symbols('C_1 C_2 C_3', real=True)
 transf = standard_transformations + (implicit_multiplication_application, convert_xor)
 dicc_loc = {'x': x_sym, 'y': y_sym, 'z': z_sym, 't': t_sym, 'sin': sp.sin, 'cos': sp.cos, 'exp': sp.exp}
-
 # ==============================================================================
 # PESTAÑA 1: CAMPOS VECTORIALES (LINEALES Y NO LINEALES)
 # ==============================================================================
@@ -338,7 +343,7 @@ with tab_sistemas:
                 t_eval = 0.0
                 if not es_autonomo:
                     st.warning("El campo es **No Autónomo**. Seleccione un instante de evaluación $t$:")
-                    t_eval = st.slider("Evaluar espacio in t =", min_value=-10.0, max_value=10.0, value=0.0, step=0.5)
+                    t_eval = st.slider("Evaluar espacio en t =", min_value=-10.0, max_value=10.0, value=0.0, step=0.5)
                     
                 P_f = P_expr.subs(t_sym, t_eval)
                 Q_f = Q_expr.subs(t_sym, t_eval)
@@ -357,6 +362,7 @@ with tab_sistemas:
                         [sp.diff(Q_f, x_sym), sp.diff(Q_f, y_sym)]
                     ])
                     
+                # Detección rigurosa de linealidad: Si el Jacobiano no tiene variables de estado, es lineal.
                 if es_3d:
                     es_lineal = not bool(J_sym.free_symbols.intersection({x_sym, y_sym, z_sym}))
                 else:
@@ -378,6 +384,7 @@ with tab_sistemas:
                         with c_pt1: x0_val = st.number_input("x_0:", value=0.0)
                         with c_pt2: y0_val = st.number_input("y_0:", value=0.0)
                         
+                    # Verificar que el punto elegido sea realmente un equilibrio
                     sust_pto = {x_sym: x0_val, y_sym: y0_val, z_sym: z0_val} if es_3d else {x_sym: x0_val, y_sym: y0_val}
                     val_P = float(P_f.subs(sust_pto))
                     val_Q = float(Q_f.subs(sust_pto))
@@ -385,9 +392,9 @@ with tab_sistemas:
                     
                     es_equilibrio = np.isclose(val_P, 0, atol=1e-5) and np.isclose(val_Q, 0, atol=1e-5) and (not es_3d or np.isclose(val_R, 0, atol=1e-5))
                     if not es_equilibrio:
-                        st.warning(rf"⚠️ El punto evaluado **NO es un punto de equilibrio** ($V \approx [{val_P:.3f}, {val_Q:.3f}{', '+str(round(val_R, 3)) if es_3d else ''}]$).")
+                        st.warning(rf"⚠️ El punto evaluado **NO es un punto de equilibrio** (el campo vectorial no es nulo ahí: $V \approx [{val_P:.3f}, {val_Q:.3f}{', '+str(round(val_R, 3)) if es_3d else ''}]$). El análisis topológico de Hartman-Grobman carece de sentido fuera de los puntos críticos.")
                 else:
-                    st.write("El sistema es **Lineal**. El Jacobiano es la matriz constante $A$:")
+                    st.write("El sistema es **Lineal**. El Jacobiano es la matriz de coeficientes constante $A$:")
 
                 if es_3d:
                     A_eval = J_sym.subs({x_sym: x0_val, y_sym: y0_val, z_sym: z0_val})
@@ -410,18 +417,20 @@ with tab_sistemas:
                         with c_eig3: st.latex(rf"\tau^2 - 4\Delta = {sp.latex(disc)}")
 
                     vectores_propios = A_eval.eigenvects()
+                    
+                    # Verificación de Hiperbolicidad
                     real_parts = [float(sp.re(v[0])) for v in vectores_propios for _ in range(v[1])]
                     es_hiperbolico = all(not np.isclose(r, 0, atol=1e-5) for r in real_parts)
                     
                     if not es_lineal and es_equilibrio and not es_hiperbolico:
-                        st.warning("⚠️ **Punto No Hiperbólico:** Al menos un valor propio tiene parte real cero.")
+                        st.warning("⚠️ **Punto No Hiperbólico:** Al menos un valor propio tiene parte real cero. El Teorema de Hartman-Grobman falla, por lo que el sistema no lineal podría no comportarse topológicamente igual que su linealización.")
 
                     if not es_3d:
-                        if np.isclose(float(det), 0, atol=1e-5): 
-                            clasificacion = "Punto Crítico Degenerado (Det = 0)."
+                        if np.isclose(float(det), 0, atol=1e-5):
+                            clasificacion = "Punto Crítico Degenerado (Det = 0). Línea de puntos o no aislado."
                         elif float(det) < 0: 
                             clasificacion = "Punto Silla (Inestable)"
-                        else: 
+                        else: # det > 0
                             if np.isclose(float(traza), 0, atol=1e-5): 
                                 clasificacion = "Centro (Estable u Oscilatorio)"
                             elif float(disc) > 0: 
@@ -430,10 +439,11 @@ with tab_sistemas:
                                 clasificacion = "Foco Inestable (Espiral)" if float(traza) > 0 else "Foco Estable"
                             else: 
                                 clasificacion = "Nodo Propio/Impropio " + ("Inestable" if float(traza) > 0 else "Estable")
+                    
                         st.success(f"**Topología Local en $({x0_val}, {y0_val})$:** {clasificacion}")
                     else:
                         if any(np.isclose(r, 0, atol=1e-5) for r in real_parts):
-                            clasificacion = "Centro o Degenerado"
+                            clasificacion = "Centro, Degenerado o No Hiperbólico (Partes reales nulas)"
                         elif all(r < -1e-5 for r in real_parts):
                             clasificacion = "Sumidero / Nodo Estable (Atractor)"
                         elif all(r > 1e-5 for r in real_parts):
@@ -444,6 +454,9 @@ with tab_sistemas:
                             clasificacion = "No clasificado"
                         st.success(f"**Topología Local en $({x0_val}, {y0_val}, {z0_val})$:** {clasificacion}")
 
+                    # ==========================================================
+                    # ANÁLISIS PASO A PASO (DIAGONALIZACIÓN Y LÍMITES)
+                    # ==========================================================
                     val_prop_reales = all(v[0].is_real for v in vectores_propios)
                     es_diagonalizable = sum(v[1] for v in vectores_propios) == (3 if es_3d else 2) or (not es_3d and not val_prop_reales)
                     
@@ -473,13 +486,13 @@ with tab_sistemas:
                                 st.markdown("### Cambio de Coordenadas (Forma Canónica Real)")
                                 col_p1, col_p2, col_p3 = st.columns(3)
                                 with col_p1:
-                                    st.write(r"Matriz $P$:")
+                                    st.write(r"Matriz $P = [\text{Re}(v) \mid \text{Im}(v)]$:")
                                     st.latex(rf"P = {sp.latex(P_sym)}")
                                 with col_p2:
                                     st.write(r"Matriz Inversa $P^{-1}$:")
                                     st.latex(rf"P^{{-1}} = {sp.latex(P_inv)}")
                                 with col_p3:
-                                    st.write(r"Matriz $\Lambda$:")
+                                    st.write(r"Matriz $\Lambda = P^{-1}AP$:")
                                     st.latex(rf"\Lambda = {sp.latex(Lambda_sym)}")
                                 
                                 st.markdown("### Soluciones del Sistema")
@@ -490,7 +503,8 @@ with tab_sistemas:
                                 
                                 C1, C2 = sp.symbols('C1 C2')
                                 X_sol = sp.Matrix([eq.rhs.subs({C1: c1_sym, C2: c2_sym}) for eq in sol_dsolve])
-                                st.write("**Solución analítica $x(t)$:**")
+                                
+                                st.write("**Solución analítica del sistema original $x(t)$:**")
                                 st.latex(rf"x(t) = {sp.latex(X_sol)}")
                             else:
                                 P_mat = []
@@ -509,13 +523,13 @@ with tab_sistemas:
                                         st.markdown("### Cambio de Coordenadas (Diagonalización)")
                                         col_p1, col_p2, col_p3 = st.columns(3)
                                         with col_p1:
-                                            st.write("Matriz $P$:")
+                                            st.write("Matriz $P$ (Vectores Propios):")
                                             st.latex(rf"P = {sp.latex(P_sym)}")
                                         with col_p2:
                                             st.write("Matriz Inversa $P^{-1}$:")
                                             st.latex(rf"P^{{-1}} = {sp.latex(P_inv)}")
                                         with col_p3:
-                                            st.write("Matriz $\Lambda$:")
+                                            st.write("Matriz Diagonal $\Lambda = P^{-1}AP$:")
                                             st.latex(rf"\Lambda = {sp.latex(Lambda_sym)}")
                                         
                                         st.markdown("### Soluciones del Sistema")
@@ -529,12 +543,61 @@ with tab_sistemas:
                                             y2_sol = c2_sym * sp.exp(lambdas[1] * t_sym)
                                             Y_sol = sp.Matrix([y1_sol, y2_sol])
                                         
+                                        st.write(r"**1. Solución en el eje canónico desacoplado $\dot{y} = \Lambda y$:**")
+                                        st.latex(rf"y(t) = {sp.latex(Y_sol)}")
+                                        
                                         X_sol = P_sym * Y_sol
+                                        st.write("**2. Solución en el sistema original $x(t) = P y(t)$:**")
+                                        
+                                        if X_sol.has(sp.I):
+                                            try:
+                                                x_f, y_f = sp.Function('x')(t_sym), sp.Function('y')(t_sym)
+                                                funcs = [x_f, y_f]
+                                                if es_3d: funcs.append(sp.Function('z')(t_sym))
+                                                eqs = [sp.Eq(funcs[i].diff(t_sym), sum(A_eval[i,j]*funcs[j] for j in range(len(funcs)))) for i in range(len(funcs))]
+                                                sol_dsolve = sp.dsolve(eqs)
+                                                C1, C2, C3 = sp.symbols('C1 C2 C3')
+                                                X_sol = sp.Matrix([eq.rhs.subs({C1: c1_sym, C2: c2_sym, C3: c3_sym}) for eq in sol_dsolve])
+                                                X_sol = sp.simplify(X_sol)
+                                            except Exception:
+                                                pass 
+                                        
                                         st.latex(rf"x(t) = {sp.latex(sp.simplify(X_sol))}")
-                                    except Exception:
-                                        pass
+
+                                        if val_prop_reales:
+                                            if not es_3d and lambdas[0] != lambdas[1]:
+                                                st.markdown("### Comportamiento Asintótico (Límites)")
+                                                x_t_expr = X_sol[0]
+                                                y_t_expr = X_sol[1]
+                                                razon_expr = y_t_expr / x_t_expr
+                                                
+                                                st.write(r"Pendiente de las trayectorias $m(t) = \frac{y(t)}{x(t)}$:")
+                                                st.latex(rf"m(t) = \frac{{{sp.latex(y_t_expr)}}}{{{sp.latex(x_t_expr)}}}")
+                                                
+                                                try:
+                                                    lim_inf_pos = sp.limit(razon_expr, t_sym, sp.oo)
+                                                    lim_inf_neg = sp.limit(razon_expr, t_sym, -sp.oo)
+                                                    
+                                                    c_lim1, c_lim2 = st.columns(2)
+                                                    with c_lim1:
+                                                        st.write(r"Dirección cuando $t \to \infty$:")
+                                                        st.latex(rf"\lim_{{t \to \infty}} m(t) = {sp.latex(lim_inf_pos)}")
+                                                    with c_lim2:
+                                                        st.write(r"Dirección cuando $t \to -\infty$:")
+                                                        st.latex(rf"\lim_{{t \to -\infty}} m(t) = {sp.latex(lim_inf_neg)}")
+                                                        
+                                                    st.caption("Los límites asintóticos confirman que las trayectorias nacen o mueren siendo tangentes/paralelas a los vectores propios.")
+                                                except:
+                                                    st.warning("Los límites asintóticos dependen fuertemente de las condiciones iniciales.")
+                                        else:
+                                            st.info("💡 **Nota Importante:** Los valores propios son imaginarios/complejos. Esto indica un comportamiento oscilatorio (rotaciones, focos o centros). Las soluciones implican funciones trigonométricas (seno y coseno) mediante la identidad de Euler, por lo que el análisis de asíntotas no aplica de forma directa.")
+
+                                    except Exception as e:
+                                        st.error(f"Error en la diagonalización: {e}")
+                        
                 except Exception as e:
-                    st.error(f"Error al procesar el sistema analítico: {e}")
+                    st.error(f"El Jacobiano contiene singularidades numéricas en este punto. Detalle: {e}")
+                    vectores_propios = []
 
         st.divider()
         with st.container(border=True):
@@ -545,7 +608,7 @@ with tab_sistemas:
             if es_3d: func_W = sp.lambdify((x_sym, y_sym, z_sym), R_f, modules=['numpy'])
             
             if es_3d:
-                tab_vect3d, tab_fase3d, tab_proy = st.tabs(["🔀 Campo Vectorial 3D (Quiver)", "🌌 Retrato de Fase 3D", "🪞 Proyecciones en 2D"])
+                tab_vect3d, tab_fase3d, tab_proy = st.tabs(["🔀 Campo Vectorial 3D (Quiver)", "🌌 Retrato de Fase 3D (Trayectorias)", "🪞 Proyecciones en 2D"])
                 
                 with tab_vect3d:
                     try:
@@ -559,20 +622,29 @@ with tab_sistemas:
                         
                         ax3d.quiver(X_q, Y_q, Z_q, U_q, V_q, W_q, length=0.6, normalize=True, color='mediumpurple', alpha=0.7)
                         ax3d.set_xlabel("x"); ax3d.set_ylabel("y"); ax3d.set_zlabel("z")
+                        ax3d.set_title("Campo Vectorial en 3D")
                         st.pyplot(fig3d)
                     except Exception as e:
                         st.error(f"Error al generar gráfica 3D: {e}")
                         
                 with tab_fase3d:
+                    st.write(r"Generando trayectorias representativas en el espacio fase $\mathbb{R}^3$...")
                     try:
                         fig3d_fase = plt.figure(figsize=(8, 7))
                         ax3d_fase = fig3d_fase.add_subplot(111, projection='3d')
                         
                         def vector_field_3d(Y, t):
                             x_v, y_v, z_v = Y
-                            return [func_U(x_v, y_v, z_v), func_V(x_v, y_v, z_v), func_W(x_v, y_v, z_v)]
+                            u = func_U(x_v, y_v, z_v)
+                            v = func_V(x_v, y_v, z_v)
+                            w = func_W(x_v, y_v, z_v)
+                            return [u, v, w]
                         
-                        ics = [[1, 1, 1], [-1, -1, -1], [1, -1, 1], [-1, 1, -1], [2, 0, 0], [0, 2, 0], [0, 0, 2]]
+                        ics = [
+                            [1, 1, 1], [-1, -1, -1], [1, -1, 1], [-1, 1, -1],
+                            [2, 0, 0], [0, 2, 0], [0, 0, 2],
+                            [-2, 0, 0], [0, -2, 0], [0, 0, -2]
+                        ]
                         t_span = np.linspace(0, 5, 200) 
                         t_span_rev = np.linspace(0, -5, 200) 
                         
@@ -580,80 +652,190 @@ with tab_sistemas:
                             try:
                                 traj_f = spi.odeint(vector_field_3d, ic, t_span)
                                 traj_b = spi.odeint(vector_field_3d, ic, t_span_rev)
+                                
                                 ax3d_fase.plot(traj_f[:,0], traj_f[:,1], traj_f[:,2], color='blue', alpha=0.6, linewidth=1.2)
                                 ax3d_fase.plot(traj_b[:,0], traj_b[:,1], traj_b[:,2], color='red', alpha=0.6, linewidth=1.2)
+                                
+                                if len(traj_f) > 20:
+                                    mid_idx = max(0, len(traj_f) // 10)
+                                    pt = traj_f[mid_idx]
+                                    u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
+                                    norm = np.linalg.norm([u, v, w])
+                                    if norm > 1e-5:
+                                        ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='blue', length=0.4, normalize=True, arrow_length_ratio=0.4)
+                                
+                                if len(traj_b) > 20:
+                                    mid_idx = max(0, len(traj_b) // 10)
+                                    pt = traj_b[mid_idx]
+                                    u, v, w = func_U(*pt), func_V(*pt), func_W(*pt)
+                                    norm = np.linalg.norm([u, v, w])
+                                    if norm > 1e-5:
+                                        ax3d_fase.quiver(pt[0], pt[1], pt[2], u/norm, v/norm, w/norm, color='red', length=0.4, normalize=True, arrow_length_ratio=0.4)
                             except Exception:
                                 pass 
                                 
-                        ax3d_fase.set_xlabel("x"); ax3d_fase.set_ylabel("y"); ax3d_fase.set_zlabel("z")
+                        ax3d_fase.set_xlabel("x")
+                        ax3d_fase.set_ylabel("y")
+                        ax3d_fase.set_zlabel("z")
                         ax3d_fase.set_xlim([-4, 4]); ax3d_fase.set_ylim([-4, 4]); ax3d_fase.set_zlim([-4, 4])
+                        ax3d_fase.set_title("Trayectorias en el Espacio de Fase 3D (Rojo: t<0, Azul: t>0)")
                         st.pyplot(fig3d_fase)
                     except Exception as e:
                         st.error(f"Error al generar trayectorias 3D: {e}")
                         
                 with tab_proy:
+                    st.write("Visualización del flujo interceptando los planos principales en el origen.")
                     try:
                         fig_proy, (ax_xy, ax_xz, ax_yz) = plt.subplots(1, 3, figsize=(15, 5))
                         Y_m, X_m = np.mgrid[-4:4:50j, -4:4:50j]
                         
-                        # Plano XY
+                        # Plano XY (z=0)
                         U_xy = np.broadcast_to(func_U(X_m, Y_m, 0), X_m.shape).astype(np.float64)
                         V_xy = np.broadcast_to(func_V(X_m, Y_m, 0), X_m.shape).astype(np.float64)
-                        ax_xy.streamplot(X_m, Y_m, U_xy, V_xy, color=np.sqrt(U_xy**2 + V_xy**2), cmap='viridis', density=1.2)
-                        ax_xy.set_title("Plano XY (z=0)"); ax_xy.grid(True, linestyle='--', alpha=0.5)
+                        vel_xy = np.sqrt(U_xy**2 + V_xy**2)
+                        ax_xy.streamplot(X_m, Y_m, U_xy, V_xy, color=vel_xy, cmap='viridis', density=1.2)
+                        ax_xy.set_title("Plano XY (z=0)")
+                        ax_xy.set_xlabel("x"); ax_xy.set_ylabel("y")
+                        ax_xy.grid(True, linestyle='--', alpha=0.5)
+                        ax_xy.axhline(0, color='black'); ax_xy.axvline(0, color='black')
                         
-                        # Plano XZ
+                        # Plano XZ (y=0) -> x es horizontal, z es vertical
                         U_xz = np.broadcast_to(func_U(X_m, 0, Y_m), X_m.shape).astype(np.float64)
                         W_xz = np.broadcast_to(func_W(X_m, 0, Y_m), X_m.shape).astype(np.float64)
-                        ax_xz.streamplot(X_m, Y_m, U_xz, W_xz, color=np.sqrt(U_xz**2 + W_xz**2), cmap='viridis', density=1.2)
-                        ax_xz.set_title("Plano XZ (y=0)"); ax_xz.grid(True, linestyle='--', alpha=0.5)
+                        vel_xz = np.sqrt(U_xz**2 + W_xz**2)
+                        ax_xz.streamplot(X_m, Y_m, U_xz, W_xz, color=vel_xz, cmap='viridis', density=1.2)
+                        ax_xz.set_title("Plano XZ (y=0)")
+                        ax_xz.set_xlabel("x"); ax_xz.set_ylabel("z")
+                        ax_xz.grid(True, linestyle='--', alpha=0.5)
+                        ax_xz.axhline(0, color='black'); ax_xz.axvline(0, color='black')
                         
-                        # Plano YZ
+                        # Plano YZ (x=0) -> y es horizontal, z es vertical
                         V_yz = np.broadcast_to(func_V(0, X_m, Y_m), X_m.shape).astype(np.float64)
                         W_yz = np.broadcast_to(func_W(0, X_m, Y_m), X_m.shape).astype(np.float64)
-                        ax_yz.streamplot(X_m, Y_m, V_yz, W_yz, color=np.sqrt(V_yz**2 + W_yz**2), cmap='viridis', density=1.2)
-                        ax_yz.set_title("Plano YZ (x=0)"); ax_yz.grid(True, linestyle='--', alpha=0.5)
+                        vel_yz = np.sqrt(V_yz**2 + W_yz**2)
+                        ax_yz.streamplot(X_m, Y_m, V_yz, W_yz, color=vel_yz, cmap='viridis', density=1.2)
+                        ax_yz.set_title("Plano YZ (x=0)")
+                        ax_yz.set_xlabel("y"); ax_yz.set_ylabel("z")
+                        ax_yz.grid(True, linestyle='--', alpha=0.5)
+                        ax_yz.axhline(0, color='black'); ax_yz.axvline(0, color='black')
                         
+                        plt.tight_layout()
                         st.pyplot(fig_proy)
                     except Exception as e:
                         st.error(f"Error al generar proyecciones: {e}")
             else:
-                # SECCIÓN 2D (Retrato de fase y campo vectorial en el plano)
-                tab_fase2d, tab_isoclinas = st.tabs(["🌌 Retrato de Fase 2D (Streamplot)", "📈 Isoclinas y Campo de Direcciones"])
-                
-                with tab_fase2d:
-                    try:
-                        fig2d, ax2d = plt.subplots(figsize=(7, 6))
-                        Y_m, X_m = np.mgrid[-4:4:40j, -4:4:40j]
-                        U_m = np.broadcast_to(func_U(X_m, Y_m), X_m.shape).astype(np.float64)
-                        V_m = np.broadcast_to(func_V(X_m, Y_m), X_m.shape).astype(np.float64)
-                        speed = np.sqrt(U_m**2 + V_m**2)
-                        
-                        ax2d.streamplot(X_m, Y_m, U_m, V_m, color=speed, cmap='autumn', density=1.5)
-                        ax2d.set_xlim([-4, 4]); ax2d.set_ylim([-4, 4])
-                        ax2d.set_xlabel("x"); ax2d.set_ylabel("y")
-                        ax2d.set_title("Retrato de Fase 2D")
-                        ax2d.grid(True, linestyle='--', alpha=0.5)
-                        st.pyplot(fig2d)
-                    except Exception as e:
-                        st.error(f"Error al generar retrato de fase 2D: {e}")
+                if es_lineal and Lambda_sym is not None and val_prop_reales:
+                    tab_fase, tab_vect, tab_canonico = st.tabs(["🌊 Retrato de Fase (Original)", "🔀 Campo Vectorial (Quiver)", "📐 Plano Canónico (y1, y2)"])
+                    mostrar_canonico = True
+                else:
+                    tab_fase, tab_vect = st.tabs(["🌊 Retrato de Fase (Original)", "🔀 Campo Vectorial (Quiver)"])
+                    mostrar_canonico = False
 
-                with tab_isoclinas:
+                try:
+                    p_eq = P_f
+                    q_eq = Q_f
+                    
+                    puntos_criticos = []
                     try:
-                        fig_iso, ax_iso = plt.subplots(figsize=(7, 6))
-                        Y_m, X_m = np.mgrid[-4:4:25j, -4:4:25j]
-                        U_m = np.broadcast_to(func_U(X_m, Y_m), X_m.shape).astype(np.float64)
-                        V_m = np.broadcast_to(func_V(X_m, Y_m), X_m.shape).astype(np.float64)
-                        
-                        ax_iso.quiver(X_m, Y_m, U_m, V_m, angles='xy', scale_units='xy', scale=5, color='teal', alpha=0.8)
-                        ax_iso.set_xlim([-4, 4]); ax_iso.set_ylim([-4, 4])
-                        ax_iso.set_xlabel("x"); ax_iso.set_ylabel("y")
-                        ax_iso.set_title("Campo de Direcciones (Quiver)")
-                        ax_iso.grid(True, linestyle='--', alpha=0.5)
-                        st.pyplot(fig_iso)
-                    except Exception as e:
-                        st.error(f"Error al generar isoclinas: {e}")
+                        equilibrios = sp.solve([p_eq, q_eq], (x_sym, y_sym), dict=True)
+                        if isinstance(equilibrios, list):
+                            for sol in equilibrios:
+                                if x_sym in sol and y_sym in sol:
+                                    if sol[x_sym].is_real and sol[y_sym].is_real:
+                                        puntos_criticos.append((float(sol[x_sym]), float(sol[y_sym])))
+                    except Exception:
+                        pass
+                    
+                    # ==========================================
+                    # FIGURA 1: CAMPO VECTORIAL (QUIVER)
+                    # ==========================================
+                    fig1, ax1 = plt.subplots(figsize=(7, 6))
+                    Y_m, X_m = np.mgrid[-4:4:20j, -4:4:20j]
+                    U_m = np.broadcast_to(func_U(X_m, Y_m), X_m.shape).astype(np.float64)
+                    V_m = np.broadcast_to(func_V(X_m, Y_m), X_m.shape).astype(np.float64)
+                    
+                    mag = np.hypot(U_m, V_m)
+                    mag[mag == 0] = 1.0  # Evitar división por cero
+                    
+                    ax1.quiver(X_m, Y_m, U_m/mag, V_m/mag, mag, cmap='cool', angles='xy', scale_units='xy', scale=2.5)
+                    ax1.set_xlim([-4, 4]); ax1.set_ylim([-4, 4])
+                    ax1.set_xlabel("x"); ax1.set_ylabel("y")
+                    ax1.set_title("Campo de Direcciones (Quiver Normalizado)")
+                    ax1.grid(True, linestyle='--', alpha=0.5)
+                    ax1.axhline(0, color='black', alpha=0.3); ax1.axvline(0, color='black', alpha=0.3)
+                    
+                    for pt in puntos_criticos:
+                        ax1.plot(pt[0], pt[1], 'ro', markersize=8, label=f'Punto Crítico ({pt[0]:.2f}, {pt[1]:.2f})')
+                    if puntos_criticos:
+                        ax1.legend(loc='upper right')
 
+                    with tab_vect:
+                        st.pyplot(fig1)
+
+                    # ==========================================
+                    # FIGURA 2: RETRATO DE FASE (STREAMPLOT)
+                    # ==========================================
+                    fig2, ax2 = plt.subplots(figsize=(7, 6))
+                    Y_dense, X_dense = np.mgrid[-4:4:50j, -4:4:50j]
+                    U_dense = np.broadcast_to(func_U(X_dense, Y_dense), X_dense.shape).astype(np.float64)
+                    V_dense = np.broadcast_to(func_V(X_dense, Y_dense), X_dense.shape).astype(np.float64)
+                    speed = np.sqrt(U_dense**2 + V_dense**2)
+                    
+                    ax2.streamplot(X_dense, Y_dense, U_dense, V_dense, color=speed, cmap='autumn', density=1.4, linewidth=1.2)
+                    ax2.set_xlim([-4, 4]); ax2.set_ylim([-4, 4])
+                    ax2.set_xlabel("x"); ax2.set_ylabel("y")
+                    ax2.set_title("Retrato de Fase 2D (Streamplot)")
+                    ax2.grid(True, linestyle='--', alpha=0.5)
+                    ax2.axhline(0, color='black', alpha=0.3); ax2.axvline(0, color='black', alpha=0.3)
+                    
+                    # Graficar subespacios propios (Eingenspaces) si es lineal
+                    if es_lineal and val_prop_reales and 'vectores_propios' in locals():
+                        t_vals = np.linspace(-5, 5, 100)
+                        colores_v = ['#38bdf8', '#a855f7', '#ec4899']
+                        idx_c = 0
+                        for val, mult, vecs in vectores_propios:
+                            for vec in vecs:
+                                vx = float(vec[0])
+                                vy = float(vec[1])
+                                ax2.plot(t_vals * vx, t_vals * vy, '--', color=colores_v[idx_c % len(colores_v)], 
+                                         linewidth=2, label=rf'$E_{{\lambda={sp.latex(val)}}}$')
+                                idx_c += 1
+                        ax2.legend(loc='upper right')
+
+                    for pt in puntos_criticos:
+                        ax2.plot(pt[0], pt[1], 'ro', markersize=8)
+
+                    with tab_fase:
+                        st.pyplot(fig2)
+
+                    # ==========================================
+                    # FIGURA 3: PLANO CANÓNICO DESACOLADO (OPCIONAL)
+                    # ==========================================
+                    if mostrar_canonico:
+                        fig3, ax3 = plt.subplots(figsize=(7, 6))
+                        Y1_c, Y2_c = np.mgrid[-4:4:40j, -4:4:40j]
+                        
+                        l1 = float(lambdas[0])
+                        l2 = float(lambdas[1])
+                        
+                        U_c = l1 * Y1_c
+                        V_c = l2 * Y2_c
+                        speed_c = np.sqrt(U_c**2 + V_c**2)
+                        
+                        ax3.streamplot(Y1_c, Y2_c, U_c, V_c, color=speed_c, cmap='plasma', density=1.4)
+                        ax3.set_xlim([-4, 4]); ax3.set_ylim([-4, 4])
+                        ax3.set_xlabel(r"$y_1$"); ax3.set_ylabel(r"$y_2$")
+                        ax3.set_title(r"Plano Canónico Desacoplado ($\dot{y} = \Lambda y$)")
+                        ax3.grid(True, linestyle='--', alpha=0.5)
+                        ax3.axhline(0, color='#38bdf8', linewidth=2, linestyle='--', label=r'Eje Específico $y_1$')
+                        ax3.axvline(0, color='#a855f7', linewidth=2, linestyle='--', label=r'Eje Específico $y_2$')
+                        ax3.legend(loc='upper right')
+
+                        with tab_canonico:
+                            st.pyplot(fig3)
+
+                except Exception as e:
+                    st.error(f"Error al generar visualizaciones 2D: {e}")
 # ==============================================================================
 # PESTAÑA 2: RESOLUTOR DE EDOs (1ER ORDEN)
 # ==============================================================================
