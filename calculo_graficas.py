@@ -1,3 +1,4 @@
+# calculo_graficas.py
 """
 calculo_graficas.py
 ===================
@@ -24,22 +25,32 @@ AZUL = "#0284c7"
 NARANJA = "#ea580c"
 VERDE = "#16a34a"
 ROJO = "#dc2626"
-GRIS = "#6b7280"
+GRIS = "#64748b"
+TEXTO = "#334155"
+FONDO_AX = "#f8fafc"
 MAX_PUNTOS = 400          # tope por eje en mallas 2D (evita gráficas que tardan o gastan memoria)
 
 
 def _fig(w=7.2, h=4.4):
     f = Figure(figsize=(w, h), dpi=110, layout="constrained")
-    f.patch.set_alpha(0.0)
+    f.patch.set_facecolor("#ffffff")
+    f.patch.set_alpha(0.92)
     return f
 
 
 def _estilo(ax):
-    ax.grid(True, alpha=0.25)
+    ax.set_facecolor(FONDO_AX)
+    ax.grid(True, alpha=0.3, color="#94a3b8", linestyle="--")
     for lado in ("top", "right"):
         ax.spines[lado].set_visible(False)
-    ax.axhline(0, color=GRIS, lw=0.8, alpha=0.6)
-    ax.axvline(0, color=GRIS, lw=0.8, alpha=0.6)
+    for lado in ("left", "bottom"):
+        ax.spines[lado].set_color("#94a3b8")
+    ax.tick_params(colors=TEXTO, labelsize=8.5)
+    ax.xaxis.label.set_color(TEXTO)
+    ax.yaxis.label.set_color(TEXTO)
+    ax.title.set_color("#0f172a")
+    ax.axhline(0, color=GRIS, lw=0.9, alpha=0.65)
+    ax.axvline(0, color=GRIS, lw=0.9, alpha=0.65)
 
 
 def _evaluar(expr, vars_, *arrays):
@@ -66,6 +77,16 @@ def _f(v):
         return None
 
 
+def _cortar_saltos(arr, ylo, yhi):
+    """Corta trazos verticales falsos en asíntotas o saltos bruscos."""
+    out = arr.copy()
+    rango = max(yhi - ylo, 1e-9)
+    salto = np.abs(np.diff(out)) > rango * 1.2
+    out[1:][salto] = np.nan
+    out[(out < ylo - 5 * rango) | (out > yhi + 5 * rango)] = np.nan
+    return out
+
+
 # ------------------------------------------------------------------ una variable
 def _vacio(ax, texto):
     ax.text(0.5, 0.5, texto, transform=ax.transAxes, ha="center", va="center", color=GRIS, fontsize=11, wrap=True)
@@ -89,6 +110,7 @@ def fig_funcion_1d(expr, x, ventana=(-6.0, 6.0), verticales=(), horizontales=(),
         if fc is not None and a < fc < b:
             ys[min(int(np.searchsorted(xs, fc)), len(xs) - 1)] = np.nan
     finitos = ys[np.isfinite(ys)]
+    ylo, yhi = -6.0, 6.0
     if not finitos.size:
         _vacio(ax, "La función no está definida (no toma valores reales)\nen esta ventana de x.")
     if finitos.size:
@@ -97,11 +119,7 @@ def fig_funcion_1d(expr, x, ventana=(-6.0, 6.0), verticales=(), horizontales=(),
         ylo, yhi = lo - pad, hi + pad
         if hi - lo < 1e-9:
             ylo, yhi = lo - 1, hi + 1
-        # cortar el trazo en las asíntotas (saltos enormes)
-        ys = ys.copy()
-        salto = np.abs(np.diff(ys)) > (yhi - ylo) * 1.2
-        ys[1:][salto] = np.nan
-        ys[(ys < ylo - 5 * (yhi - ylo)) | (ys > yhi + 5 * (yhi - ylo))] = np.nan
+        ys = _cortar_saltos(ys, ylo, yhi)
         ax.set_ylim(ylo, yhi)
     ax.plot(xs, ys, color=AZUL, lw=2.2, label="f(x)")
     if sombrear is not None:
@@ -118,6 +136,7 @@ def fig_funcion_1d(expr, x, ventana=(-6.0, 6.0), verticales=(), horizontales=(),
                     ax.plot([fc], [v], "o", mfc="white", mec=AZUL, ms=6, zorder=6)
     if derivada is not None:
         d = _evaluar(derivada, [x], xs)
+        d = _cortar_saltos(d, ylo, yhi)
         ax.plot(xs, d, color=VERDE, lw=1.6, ls="--", label="f′(x)")
     if tangente is not None:
         t = _evaluar(tangente, [x], xs)
@@ -138,38 +157,43 @@ def fig_funcion_1d(expr, x, ventana=(-6.0, 6.0), verticales=(), horizontales=(),
         fx, fy = _f(px), _f(py)
         if fx is not None and fy is not None and a <= fx <= b:
             ax.plot([fx], [fy], "o", color=col, ms=7, zorder=5)
-            ax.annotate(et, (fx, fy), textcoords="offset points", xytext=(6, 8), fontsize=8, color=col)
+            ax.annotate(et, (fx, fy), textcoords="offset points", xytext=(6, 8), fontsize=8, color=col, fontweight="bold")
     ax.set_xlim(a, b)
     ax.set_xlabel("x")
     if titulo:
-        ax.set_title(titulo, fontsize=10)
+        ax.set_title(titulo, fontsize=10, fontweight="bold")
     if derivada is not None or tangente is not None:
-        ax.legend(fontsize=8, frameon=False)
+        ax.legend(fontsize=8, frameon=True, facecolor="white", framealpha=0.85)
     return fig
 
 
 def fig_taylor(expr, x, centro, polinomios, ventana=None):
     """polinomios = [(orden, expresión)]. La ventana por defecto es centro ± 4."""
-    c = _f(centro) or 0.0
+    c = _f(centro)
+    c = c if c is not None else 0.0
     a, b = ventana if ventana else (c - 4, c + 4)
     xs = np.linspace(a, b, 1500)
     ys = _evaluar(expr, [x], xs)
     fig = _fig()
     ax = fig.add_subplot(111)
     _estilo(ax)
-    ax.plot(xs, ys, color="black", lw=2.6, label="f(x)")
-    cmap = [AZUL, VERDE, NARANJA, "#9333ea", "#0891b2", "#be185d"]
-    for i, (k, P) in enumerate(polinomios):
-        ax.plot(xs, _evaluar(P, [x], xs), color=cmap[i % len(cmap)], lw=1.6, label=f"orden {k}")
     ref = ys[np.isfinite(ys)]
     if ref.size:
         lo, hi = np.percentile(ref, [2, 98])
         pad = (hi - lo) * 0.6 + 1e-9
-        ax.set_ylim(lo - pad, hi + pad)
-    ax.plot([c], [_f(expr.subs(x, centro))] if _f(expr.subs(x, centro)) is not None else [], "o", color=ROJO, zorder=6)
+        ylo, yhi = lo - pad, hi + pad
+        ys = _cortar_saltos(ys, ylo, yhi)
+        ax.set_ylim(ylo, yhi)
+    ax.plot(xs, ys, color="#0f172a", lw=2.6, label="f(x)")
+    cmap = [AZUL, VERDE, NARANJA, "#9333ea", "#0891b2", "#be185d"]
+    for i, (k, P) in enumerate(polinomios):
+        ax.plot(xs, _evaluar(P, [x], xs), color=cmap[i % len(cmap)], lw=1.6, label=f"orden {k}")
+    yc = _f(expr.subs(x, centro))
+    if yc is not None and math.isfinite(yc):
+        ax.plot([c], [yc], "o", color=ROJO, ms=7, zorder=6)
     ax.set_xlim(a, b)
-    ax.legend(fontsize=8, frameon=False, ncol=3)
-    ax.set_title("Aproximación de Taylor", fontsize=10)
+    ax.legend(fontsize=8, frameon=True, facecolor="white", framealpha=0.85, ncol=3)
+    ax.set_title("Aproximación de Taylor", fontsize=10, fontweight="bold")
     return fig
 
 
@@ -243,7 +267,7 @@ def fig_niveles(expr, x, y, ventana=(-3, 3, -3, 3), niveles=None, gradiente=Fals
     ax.set_ylim(ventana[2], ventana[3])
     ax.set_xlabel(sp.latex(x).join(["$", "$"]))
     ax.set_ylabel(sp.latex(y).join(["$", "$"]))
-    ax.set_title("Curvas de nivel" + (" y campo de gradiente (flechas naranja)" if gradiente else ""), fontsize=10)
+    ax.set_title("Curvas de nivel" + (" y campo de gradiente (flechas naranja)" if gradiente else ""), fontsize=10, fontweight="bold")
     return fig
 
 
@@ -262,7 +286,7 @@ def fig_cortes(expr, vars3, nivel, valores_z, ventana=(-3, 3, -3, 3), N=200):
             ax.contour(X, Y, Z, levels=[nivel], colors=[AZUL], linewidths=2)
         else:
             ax.text(0.5, 0.5, "vacío", transform=ax.transAxes, ha="center", color=GRIS)
-        ax.set_title(f"z = {z0:.3g}", fontsize=9)
+        ax.set_title(f"z = {z0:.3g}", fontsize=9, fontweight="bold")
         ax.set_xlim(ventana[0], ventana[1])
         ax.set_ylim(ventana[2], ventana[3])
     return fig
@@ -273,6 +297,7 @@ def fig_superficie(expr, x, y, ventana=(-3, 3, -3, 3), plano=None, punto=None, N
     Z = _evaluar(expr, [x, y], X, Y)
     fig = _fig(6.6, 5.4)
     ax = fig.add_subplot(111, projection="3d")
+    ax.set_facecolor(FONDO_AX)
     if np.isfinite(Z).any():
         zl, zh = np.nanpercentile(Z, [1, 99])
         Zc = np.where((Z >= zl - 2 * (zh - zl)) & (Z <= zh + 2 * (zh - zl)), Z, np.nan)
@@ -289,10 +314,11 @@ def fig_superficie(expr, x, y, ventana=(-3, 3, -3, 3), plano=None, punto=None, N
         ax.set_zlim(zl - 0.1 * (zh - zl), zh + 0.1 * (zh - zl))
     else:
         ax.text2D(0.5, 0.5, "La función no está definida en esta ventana.", transform=ax.transAxes, ha="center", color=GRIS)
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_zlabel("z")
-    ax.set_title("z = f(x, y)" + (" y plano tangente (naranja)" if plano is not None else ""), fontsize=10)
+    ax.set_xlabel("x", color=TEXTO)
+    ax.set_ylabel("y", color=TEXTO)
+    ax.set_zlabel("z", color=TEXTO)
+    ax.tick_params(colors=TEXTO, labelsize=8)
+    ax.set_title("z = f(x, y)" + (" y plano tangente (naranja)" if plano is not None else ""), fontsize=10, fontweight="bold", color="#0f172a")
     return fig
 
 
@@ -325,7 +351,7 @@ def fig_region(rel, x, y, ventana=(-3, 3, -3, 3), N=320, titulo=None):
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     if titulo:
-        ax.set_title(titulo, fontsize=10)
+        ax.set_title(titulo, fontsize=10, fontweight="bold")
     return fig
 
 
@@ -340,7 +366,7 @@ def fig_sumas_parciales(sumas, suma=None, titulo="Sumas parciales $S_N$"):
     ax.plot(Ns, Ss, "o-", color=AZUL, lw=2)
     if suma is not None and _f(suma) is not None:
         ax.axhline(_f(suma), color=ROJO, ls="--", lw=1.4, label=f"suma = {_f(suma):.6g}")
-        ax.legend(fontsize=8, frameon=False)
+        ax.legend(fontsize=8, frameon=True, facecolor="white", framealpha=0.85)
     ax.set_xscale("log")
     if Ss:
         ref = Ss + ([_f(suma)] if suma is not None and _f(suma) is not None else [])
@@ -348,7 +374,7 @@ def fig_sumas_parciales(sumas, suma=None, titulo="Sumas parciales $S_N$"):
         pad = (hi - lo) * 0.25 + 1e-9
         ax.set_ylim(lo - pad, hi + pad)
     ax.set_xlabel("N (número de términos)")
-    ax.set_title(titulo, fontsize=10)
+    ax.set_title(titulo, fontsize=10, fontweight="bold")
     return fig
 
 
@@ -362,11 +388,11 @@ def fig_sucesion(valores, n0=1, limite=None):
     ax.plot(ns, vs, "o", color=AZUL, ms=4)
     if limite is not None and _f(limite) is not None:
         ax.axhline(_f(limite), color=ROJO, ls="--", lw=1.4, label=f"límite = {_f(limite):.6g}")
-        ax.legend(fontsize=8, frameon=False)
+        ax.legend(fontsize=8, frameon=True, facecolor="white", framealpha=0.85)
     if vs:
         lo, hi = np.percentile(vs, [2, 98])
         pad = (hi - lo) * 0.3 + 1e-9
         ax.set_ylim(lo - pad, hi + pad)
     ax.set_xlabel("n")
-    ax.set_title("Términos $a_n$", fontsize=10)
+    ax.set_title("Términos $a_n$", fontsize=10, fontweight="bold")
     return fig
