@@ -1,16 +1,15 @@
+# Inicio.py
 import streamlit as st
 from estilos import cargar_estilos_globales
-from utils import inicializar_estado
 
 # ==========================================
-# 1. Configuración de la página y estilos
+# 1. Configuración de la página
 # ==========================================
 st.set_page_config(page_title="MATHESIS", page_icon="🏛️", layout="centered")
 cargar_estilos_globales()
-inicializar_estado()
 
 # ==========================================
-# ENCABEZADO ADAPTATIVO
+# 2. Encabezado Institucional Adaptativo
 # ==========================================
 st.markdown("""
     <div style="
@@ -56,14 +55,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown(
-    "¡Bienvenidos a **MATHESIS**! Aquí encontrarás distintas herramientas para explorar, resolver y visualizar problemas matemáticos y actuariales de forma interactiva."
+    "¡Bienvenidos a **MATHESIS**! Aquí encontrarás distintas herramientas para explorar, resolver y visualizar problemas matemáticos de forma interactiva."
 )
 st.markdown(
     "Toca el **nombre de cualquiera de los módulos** para acceder directamente a la herramienta interactiva."
 )
 
 # ==========================================
-# MENÚ DE MÓDULOS
+# 3. Menú de Módulos
 # ==========================================
 st.markdown("""
     <div class="menu-header-container">
@@ -72,61 +71,61 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Tarjeta destacada de Cálculo (Nuevo en V0.2)
+# Tarjeta destacada: Módulo de Cálculo con Teclado Matemático
 with st.container(border=True):
     st.markdown('<span class="module-badge">✨ Nuevo en V0.2 • Con Teclado Matemático</span>', unsafe_allow_html=True)
     st.page_link("pages/9_Calculo.py", label="∑ Cálculo Diferencial, Integral y Multivariable")
     st.caption(
-        "Intérprete en español con teclado interactivo: dominio, límites 1D y multivariable, continuidad, derivadas, "
-        "gradiente, Hessiana, multiplicadores de Lagrange, integrales múltiples, series, Taylor y superficies 3D."
+        "Intérprete en español con teclado interactivo: dominio, límites, continuidad, derivadas, "
+        "extremos con Lagrange, integrales múltiples, series, Taylor y superficies 3D."
     )
 
 col1, col2 = st.columns(2)
 
 with col1:
     with st.container(border=True):
-        st.markdown('<span class="module-badge">Geometría 2D / 3D</span>', unsafe_allow_html=True)
+        st.markdown('<span class="module-badge">Geometría</span>', unsafe_allow_html=True)
         st.page_link("pages/1_Geometria.py", label="📐 Geometría")
         st.caption("Áreas, volúmenes, geometría analítica y visualización 3D interactiva.")
 
     with st.container(border=True):
         st.markdown('<span class="module-badge">Álgebra Lineal</span>', unsafe_allow_html=True)
         st.page_link("pages/3_Transformaciones.py", label="🔄 Transformaciones Lineales")
-        st.caption("Núcleo, imagen, isomorfismos, composición, espacio dual y matrices de cambio de base.")
+        st.caption("Núcleo, imagen, isomorfismos, composición y matrices de cambio de base.")
 
     with st.container(border=True):
-        st.markdown('<span class="module-badge">Finanzas y Actuaría</span>', unsafe_allow_html=True)
+        st.markdown('<span class="module-badge">Finanzas Actuariales</span>', unsafe_allow_html=True)
         st.page_link("pages/6_Matematicas_Financieras.py", label="📈 Matemáticas Financieras")
         st.caption("Plataforma actuarial de valuación, tasas equivalentes, escenarios dinámicos y cuadros de amortización.")
 
     with st.container(border=True):
         st.markdown('<span class="module-badge">Teoría Económica</span>', unsafe_allow_html=True)
-        st.page_link("pages/8_Economia_microeconomia.py", label="📊 Economía y Microeconomía")
-        st.caption("Precio y cantidad de equilibrio, excedentes, elasticidad, impuestos y óptimo del consumidor.")
+        st.page_link("pages/8_Economia_microeconomia.py", label="💰 Economía y Microeconomía")
+        st.caption("Equilibrio de mercado, excedentes del consumidor y productor, elasticidad y optimización del consumidor.")
 
 with col2:
     with st.container(border=True):
         st.markdown('<span class="module-badge">Álgebra Lineal</span>', unsafe_allow_html=True)
         st.page_link("pages/2_Matrices.py", label="🧮 Matrices")
-        st.caption("Operaciones lineales, determinantes, RREF, matrices Hessianas, Jacobianas y análisis espectral.")
+        st.caption("Operaciones matriciales, determinantes, subespacios, matrices Hessianas/Jacobianas y análisis espectral.")
 
     with st.container(border=True):
-        st.markdown('<span class="module-badge">Fundamentos</span>', unsafe_allow_html=True)
+        st.markdown('<span class="module-badge">Álgebra y Variable Compleja</span>', unsafe_allow_html=True)
         st.page_link("pages/4_Algebra_Superior.py", label="🔢 Álgebra Superior")
-        st.caption("Teoría de números, algoritmo de Euclides, identidad de Bézout, congruencias y números complejos.")
+        st.caption("Teoría de números, algoritmo de Euclides paso a paso, congruencias lineales y números complejos.")
 
     with st.container(border=True):
         st.markdown('<span class="module-badge">Álgebra Lineal</span>', unsafe_allow_html=True)
         st.page_link("pages/5_Vectores_Ecuaciones.py", label="↗️ Vectores y Sistemas")
-        st.caption("Proyecciones, ángulos, ortogonalización de Gram-Schmidt y sistemas de ecuaciones lineales.")
+        st.caption("Proyecciones, ángulos, Gram-Schmidt, base dual y resolución general de sistemas lineales.")
 
     with st.container(border=True):
         st.markdown('<span class="module-badge">Sistemas Dinámicos</span>', unsafe_allow_html=True)
         st.page_link("pages/7_Ecuaciones_Diferenciales.py", label="🌪️ Ecuaciones Diferenciales")
-        st.caption("Sistemas lineales y no lineales, retratos de fase, ceroclinas, plano Traza-Det y EDOs de 1er orden.")
+        st.caption("Sistemas lineales y no lineales, retratos de fase, ceroclinas, plano Traza-Determinante y EDOs de 1er orden.")
 
 # ==========================================
-# ACERCA DE
+# 4. Acerca de MATHESIS
 # ==========================================
 st.markdown("---")
 st.markdown('<div class="formal-title">ℹ️ Acerca de MATHESIS</div>', unsafe_allow_html=True)
@@ -134,7 +133,7 @@ st.markdown('<div class="formal-title">ℹ️ Acerca de MATHESIS</div>', unsafe_
 st.markdown("""
     <div class="formal-card">
         <p style="margin: 0; font-size: 15px; line-height: 1.6;">
-            <b>MATHESIS</b> es un entorno computacional interactivo diseñado para facilitar el análisis, la exploración cuantitativa y la resolución práctica de modelos matemáticos aplicados en <b>Cálculo, Álgebra, Geometría, Sistemas Dinámicos, Economía y Matemáticas Financieras</b>.
+            <b>MATHESIS</b> es un entorno computacional interactivo diseñado para facilitar el análisis, la exploración cuantitativa y la resolución práctica de modelos matemáticos aplicados en <b>Cálculo, Álgebra Lineal, Geometría, Sistemas Dinámicos, Economía y Matemáticas Financieras</b>.
         </p>
     </div>
 """, unsafe_allow_html=True)
