@@ -1,3 +1,4 @@
+# teclado_matematico.py
 """
 teclado_matematico.py
 =====================
@@ -22,13 +23,6 @@ Uso mínimo
     latex = teclado_matematico("mi_campo")          # "" hasta que se pulse ↵
     if latex:
         expr = latex_a_sympy(latex)                 # -> sympy.Basic
-
-Notas
------
-* El editor (MathLive) se descarga de un CDN la primera vez: hace falta internet.
-  La versión está fijada en MATHLIVE_VERSION; cámbiala solo probando antes.
-* Streamlit se importa de forma perezosa, así que los layouts se pueden probar con
-  pytest sin tener Streamlit instalado.
 """
 from __future__ import annotations
 
@@ -61,18 +55,6 @@ MATHLIVE_FONTS = f"{_CDN}/dist/fonts"
 # ==============================================================================
 # 1. LAYOUTS (pestañas y teclas)
 # ==============================================================================
-# Cada tecla es un dict compacto que viaja como JSON hacia el navegador:
-#   l  etiqueta (HTML de confianza: constantes de este archivo)
-#   i  LaTeX que se inserta.  #@ = lo seleccionado / argumento previo,
-#                             #? = casilla vacía,  #0 = selección o casilla
-#   c  clases CSS (num, var, op, fn, sm, xs, abc)
-#   s  columnas que ocupa (por defecto 1)
-#   t  texto de ayuda (tooltip / lector de pantalla)
-#   a  acción especial en lugar de insertar (por ahora solo "shift")
-#   u  versión con Mayús activado: {"l": ..., "i": ...}
-#   sp  separador vacío de ese ancho (no es una tecla)
-# La columna de control (⌫ ← → ↵) la agrega el componente en todas las pestañas.
-
 def _k(l, i=None, c="", s=1, t="", u=None, a=None) -> dict:
     d: dict[str, Any] = {"l": l}
     if i is not None:
@@ -166,7 +148,7 @@ def _tab_fx() -> dict:
          _k(_DDX, r"\frac{\mathrm{d}}{\mathrm{d}#?}#?", "fn", t="derivada"),
          _k(_PDX, r"\frac{\partial}{\partial #?}#?", "fn", t="derivada parcial"),
          _k("∇", r"\nabla", "fn", t="nabla / gradiente"),
-         _k("<i>f</i>(<i>x</i>)", r"f\left(#?\right)", "fn", t="función f")],
+         _k("<i>z</i>", "z", "var", t="variable z")],
         [_k("<sub>n</sub>C<sub>r</sub>", r"\binom{#?}{#?}", "fn", t="combinaciones"),
          _k("sgn", r"\operatorname{sgn}\left(#0\right)", "fn", t="signo"),
          _k("máx", r"\max\left(#?,#?\right)", "fn", t="máximo"),
@@ -178,7 +160,6 @@ def _tab_fx() -> dict:
 
 def _tab_trig() -> dict:
     def nombre_latex(n: str) -> str:
-        # \sech y \csch no están en todas las versiones de MathLive: operatorname es seguro
         return rf"\operatorname{{{n}}}" if n in ("sech", "csch") else rf"\{n}"
 
     def fila(nombres, inversa, cls):
@@ -334,7 +315,7 @@ _CSS = r"""
   background: color-mix(in srgb, var(--mk-fg) 9%, var(--mk-bg));
 }
 .mk-tab{
-  flex: 1 1 auto; min-width: 0; padding: 9px 8px; border: 0; border-radius: 10px; text-align: center;
+  flex: 1 1 auto; min-width: 0; padding: 9px 8px; border-0; border-radius: 10px; text-align: center;
   background: transparent; color: inherit; font: inherit; font-size: .84rem; font-weight: 700;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; opacity: .72;
   touch-action: manipulation; -webkit-tap-highlight-color: transparent;
@@ -454,12 +435,20 @@ export default function (component) {
   root.classList.toggle('mk-docked', !!cfg.acoplado);
   root.classList.remove('mk-open');
 
+  // Si Python cambió programáticamente valor_inicial (ej. botón de ejemplo rápido), sincronizar
+  const cfgVal = cfg.valor_inicial || '';
+  if (host.__mkInitCfg !== cfgVal) {
+    host.__mkInitCfg = cfgVal;
+    host.__mkLast = cfgVal;
+    host.__mkSent = cfgVal;
+  }
+
   const tabs = (cfg.layout && cfg.layout.tabs) || [];
   const offs = [];
   const timers = new Set();
   let vivo = true, mf = null, shifted = false, repT = null, repI = null, deb = null;
   let activa = Math.min(host.__mkTab || 0, Math.max(tabs.length - 1, 0));
-  let ultimoEnviado = host.__mkSent !== undefined ? host.__mkSent : (cfg.valor_inicial || '');
+  let ultimoEnviado = host.__mkSent !== undefined ? host.__mkSent : cfgVal;
 
   const on = (t, ev, fn, o) => { t.addEventListener(ev, fn, o); offs.push(() => t.removeEventListener(ev, fn, o)); };
   const luego = (fn, ms) => { const t = setTimeout(() => { timers.delete(t); fn(); }, ms); timers.add(t); return t; };
@@ -514,7 +503,6 @@ export default function (component) {
     if (!cfg.acoplado) return;
     root.classList.add('mk-open');
     spacer.style.height = kb.offsetHeight + 'px';
-    // el campo debe quedar visible POR ENCIMA del teclado (Streamlit hace scroll en un contenedor interno)
     luego(() => {
       try {
         const libre = window.innerHeight - kb.offsetHeight;
@@ -563,7 +551,7 @@ export default function (component) {
     if (!mf) return;
     if (k.a) acciones[k.a]();
     else if (k.i !== undefined) acciones.insertar(k.i);
-    if (shifted) { shifted = false; pintar(); }   // Mayús de un solo uso
+    if (shifted) { shifted = false; pintar(); }
   }
   function detener() { clearTimeout(repT); clearInterval(repI); repT = repI = null; }
 
@@ -571,11 +559,11 @@ export default function (component) {
     on(cont, 'pointerdown', (e) => {
       const b = e.target.closest('button.mk-key, button.mk-ctl');
       if (!b || (e.pointerType === 'mouse' && e.button !== 0)) return;
-      e.preventDefault();                       // no le quitamos el foco al campo
+      e.preventDefault();
       ejecutar(b);
       if (b._k && b._k.rep) { detener(); repT = setTimeout(() => { repI = setInterval(() => ejecutar(b), 65); }, 360); }
     });
-    on(cont, 'click', (e) => {                  // activación con teclado físico (Tab + Enter/Espacio)
+    on(cont, 'click', (e) => {
       const b = e.target.closest('button.mk-key, button.mk-ctl');
       if (b && e.detail === 0) ejecutar(b);
     });
@@ -605,16 +593,16 @@ export default function (component) {
     if (!vivo) return;
     mf = document.createElement('math-field');
     mf.className = 'mk-mf';
-    mf.setAttribute('math-virtual-keyboard-policy', 'manual');   // el teclado de MathLive no se usa
+    mf.setAttribute('math-virtual-keyboard-policy', 'manual');
     wrap.prepend(mf);
     try { mf.mathVirtualKeyboardPolicy = 'manual'; } catch (_) {}
     try { mf.smartMode = false; } catch (_) {}
     try { if (cfg.placeholder) mf.placeholder = cfg.placeholder; } catch (_) {}
-    const inicial = host.__mkLast !== undefined ? host.__mkLast : (cfg.valor_inicial || '');
+    const inicial = host.__mkLast !== undefined ? host.__mkLast : cfgVal;
     if (inicial) { mf.value = inicial; clearBtn.hidden = false; }
     status.remove();
 
-    if (!cfg.teclado_nativo) {                                    // que no salga el teclado del sistema
+    if (!cfg.teclado_nativo) {
       mf.setAttribute('inputmode', 'none');
       const sink = () => {
         const ta = mf.shadowRoot && mf.shadowRoot.querySelector('textarea');
@@ -633,7 +621,7 @@ export default function (component) {
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); e.stopPropagation(); acciones.enter(); }
     }, true);
     on(mf, 'focusin', abrir);
-    on(mf, 'focusout', () => luego(enviar, 0));                   // confirmar al salir del campo
+    on(mf, 'focusout', () => luego(enviar, 0));
     on(clearBtn, 'pointerdown', (e) => {
       e.preventDefault(); mf.value = ''; clearBtn.hidden = true; host.__mkLast = ''; mf.focus();
       if (cfg.en_vivo) enviar();
@@ -655,9 +643,15 @@ export default function (component) {
 }
 """
 
+_COMPONENTE_INSTANCIA = None
+
 
 def _componente():
-    """Registra el componente una sola vez y lo devuelve (Streamlit se importa aquí)."""
+    """Registra el componente una sola vez en caché y lo devuelve."""
+    global _COMPONENTE_INSTANCIA
+    if _COMPONENTE_INSTANCIA is not None:
+        return _COMPONENTE_INSTANCIA
+
     import streamlit as st
 
     if not hasattr(st, "components") or not hasattr(st.components, "v2"):
@@ -665,13 +659,14 @@ def _componente():
             "El teclado necesita Streamlit >= 1.51 (Custom Components v2). "
             "Actualiza con: pip install -U streamlit  y sube esa versión a requirements.txt."
         )
-    return st.components.v2.component(
+    _COMPONENTE_INSTANCIA = st.components.v2.component(
         "teclado_matematico",
         html=_HTML,
         css=_CSS,
         js=_JS,
         isolate_styles=True,
     )
+    return _COMPONENTE_INSTANCIA
 
 
 def _latex_texto(txt: str) -> str:
@@ -692,17 +687,6 @@ def teclado_matematico(
 ) -> str:
     """
     Muestra el campo de escritura matemática con su teclado y devuelve el LaTeX.
-
-    key             identificador único del widget (igual que en cualquier widget).
-    layout          nombre del layout de LAYOUTS ("calculo" por ahora).
-    valor_inicial   LaTeX con el que arranca el campo.
-    acoplado        True = el teclado se desliza desde el borde inferior al enfocar
-                    el campo (estilo móvil); False = siempre visible bajo el campo.
-    en_vivo         True = envía el valor mientras se escribe (cada ~0.5 s);
-                    False = solo al pulsar ↵, al dar Enter o al salir del campo.
-    teclado_nativo  True = permite que aparezca el teclado del sistema en móviles.
-
-    Devuelve "" mientras no se haya confirmado nada.
     """
     if layout not in LAYOUTS:
         raise ValueError(f"Layout desconocido: {layout!r}. Disponibles: {list(LAYOUTS)}")
@@ -725,7 +709,4 @@ def teclado_matematico(
     return resultado.latex or ""
 
 
-# ==============================================================================
-# El intérprete LaTeX -> SymPy vive ahora en interprete_latex.py (aquí se reexporta por compatibilidad)
-# ==============================================================================
 from interprete_latex import ErrorLatex, ErrorNoSoportado, latex_a_sympy  # noqa: E402,F401
