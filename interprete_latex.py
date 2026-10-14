@@ -1,3 +1,4 @@
+# interprete_latex.py
 """
 interprete_latex.py
 ===================
@@ -236,6 +237,22 @@ class _Parser:
             return True
         if tok.startswith("\\"):
             return tok not in _NO_ATOMO
+        return False
+
+    def _es_factor_monomio(self, tok) -> bool:
+        """¿Puede `tok` seguir dentro del argumento de `\\sin 2x` sin paréntesis?"""
+        if tok is None:
+            return False
+        if self._es_diferencial(self.p) is not None:
+            return False
+        if tok[0].isdigit() or (tok[0] == "." and len(tok) > 1):
+            return True
+        if len(tok) == 1 and tok.isalpha():
+            return True
+        if tok in (r"\pi", r"\exponentialE", r"\imaginaryI", r"\imaginaryJ"):
+            return True
+        if tok.startswith("\\") and tok[1:] in _GRIEGAS:
+            return True
         return False
 
     # -- gramática ----------------------------------------------------------
@@ -748,6 +765,13 @@ class _Parser:
             raise ErrorNoSoportado("La norma ‖·‖ de vectores aún no está soportada (para un número usa |x|).")
         raise ErrorLatex(f"Delimitador no reconocido: «{d}».")
 
+    def _argumento_sin_parentesis(self):
+        """Evalúa el argumento de \\sin 2x o \\cos -x agrupando monomios simples."""
+        val = self.unario()
+        while self._es_factor_monomio(self.peek()):
+            val = val * self.potencia()
+        return val
+
     def argumentos(self) -> list:
         tok = self.peek()
         if tok == r"\left":
@@ -762,7 +786,7 @@ class _Parser:
             args = self._lista()
             self.expect(")")
             return args
-        return [self.unario()]                      # \sin x
+        return [self._argumento_sin_parentesis()]
 
     def _lista(self) -> list:
         args = [self.relacion()]
@@ -947,7 +971,7 @@ def _ev_ast(n: ast.AST, reales: bool, i_imag: bool):
         nombre = n.id
         if nombre in _ASCII_CONST:
             return _ASCII_CONST[nombre]
-        if nombre == "I" or (nombre == "i" and i_imag):
+        if nombre == "I" or (nombre in ("i", "j") and i_imag):
             return sp.I
         if len(nombre) > 12 or "__" in nombre:
             raise ErrorLatex(f"Nombre no válido: «{nombre}».")
@@ -1048,8 +1072,6 @@ _ORDINAL = {4: "cuarta", 5: "quinta", 6: "sexta", 7: "séptima", 8: "octava", 9:
 _REL_TXT = {sp.Eq: "es igual a", sp.Ne: "es distinto de", sp.Lt: "es menor que", sp.Le: "es menor o igual que",
             sp.Gt: "es mayor que", sp.Ge: "es mayor o igual que"}
 
-# niveles: 0 átomo · 1 potencia · 2 función · 3 producto/cociente · 4 suma · 5 operación/relación
-
 
 def _env(txt: str, nivel: int, minimo: int = 1) -> str:
     return f"({txt})" if nivel >= minimo else txt
@@ -1072,7 +1094,7 @@ def _grado_total(t) -> float:
 
 
 def _ordenar_terminos(e) -> list:
-    """Términos de una suma por grado descendente (SymPy pone el 1 de 1 - x² antes que x²)."""
+    """Términos de una suma por grado descendente."""
     base = list(e.as_ordered_terms())
     return sorted(base, key=lambda t: -_grado_total(t))
 
@@ -1215,7 +1237,6 @@ def _v_inner(e) -> tuple[str, int]:
     if e.is_Mul or e.is_Pow:
         num, den = sp.fraction(e)
         if den != 1:
-            # logaritmo en otra base: log(a)/log(b)
             if isinstance(num, sp.log) and isinstance(den, sp.log) and not den.args[0].free_symbols:
                 return f"logaritmo en base {_v(den.args[0])[0]} de {_env(*_v(num.args[0]))}", 2
             nt, nn = _v(num)
@@ -1255,8 +1276,7 @@ def _v_inner(e) -> tuple[str, int]:
 
 
 def leer_en_espanol(obj) -> str:
-    """Frase en español con lo que entendió el intérprete. Sin mayúscula inicial: la interfaz
-    la antepone a «Entiendo: …» (así no se convierte una variable «x» o «α» en «X» o «Α»)."""
+    """Frase en español con lo que entendió el intérprete."""
     txt, _ = _v(obj)
     return txt + "."
 
@@ -1310,15 +1330,7 @@ def _describir_funcion(expr, vars_) -> str:
 
 
 def clasificar_entrada(obj) -> dict:
-    """
-    ¿Qué es lo que se escribió?  Devuelve un dict con:
-      tipo       funcion | constante | relacion | limite | limite_multi | integral | serie |
-                 suma_finita | producto | derivada | gradiente | compuesta
-      etiqueta   nombre legible ("Función de 2 variables", "Serie infinita"…)
-      variables  lista de símbolos libres (sin los índices/variables ligadas)
-      n          cantidad de variables
-      detalle    texto corto adicional (tipo de función, definida/indefinida, etc.)
-    """
+    """Clasifica el objeto de SymPy devuelto por el intérprete."""
     vars_ = _variables(obj)
     n = len(vars_)
     info: dict[str, Any] = {"variables": vars_, "n": n, "detalle": ""}
@@ -1390,27 +1402,22 @@ def _a(n, t):
 
 
 def diagnosticar(obj, latex: str = "") -> list[dict]:
-    """
-    Revisa si lo escrito TIENE SENTIDO matemático y avisa de lo dudoso.
-    Devuelve una lista de {"nivel": "error"|"aviso"|"info", "texto": str}.
-    "error" = no tiene sentido (la app no debería calcular); "aviso" = tiene sentido pero
-    probablemente no es lo que se quería; "info" = aclaración útil.
-    """
+    """Revisa si lo escrito TIENE SENTIDO matemático y avisa de lo dudoso."""
     r: list[dict] = []
 
-    # --- a nivel de texto LaTeX ---
     if latex:
         if re.search(r"(?<![A-Za-z\\])[fgh]\\left\(|(?<![A-Za-z\\])[fgh]\(", latex):
             r.append(_a("aviso", "Escribiste algo como «f(x)». La app no define funciones con nombre: lo lee como el producto "
                         "de f por (x). Si querías definir una función, escribe directamente su fórmula (por ejemplo x²+1)."))
         if re.search(r"\\mathrm\{d\}\s*\\mathrm\{d\}", latex):
             r.append(_a("aviso", "Hay dos diferenciales seguidos; revisa que no sobre una «d»."))
+        if re.search(r"\\log(?!_)", latex):
+            r.append(_a("info", "Nota: la tecla «log» sin base se evalúa como logaritmo en **base 10** ($\\log_{10}$). "
+                        "Para el logaritmo natural usa la tecla **ln**."))
 
-    # --- recorrer la estructura ---
     for nodo in sp.preorder_traversal(obj):
         _diag_nodo(nodo, r)
 
-    # --- comprobaciones globales de expresiones ---
     if isinstance(obj, sp.Expr) and not isinstance(obj, _OPERACIONES):
         if obj.has(sp.zoo, sp.nan):
             r.append(_a("error", "La expresión contiene una división entre cero o una operación indefinida "
@@ -1448,7 +1455,6 @@ def diagnosticar(obj, latex: str = "") -> list[dict]:
             "siempre verdadera (por ejemplo, los dos lados son idénticos): no restringe nada." if obj == sp.true
             else "siempre falsa (una contradicción): no tiene solución.")))
 
-    # --- notas informativas de convención ---
     if isinstance(obj, sp.Basic):
         nombres = {s.name for s in obj.free_symbols if isinstance(s, sp.Symbol)}
         if "n" in nombres and len(nombres) > 1 and not obj.has(sp.Sum, sp.Limit):
@@ -1483,12 +1489,9 @@ def _diag_trozos(pw: sp.Piecewise, r: list[dict]) -> None:
                     "Si querías cubrir todos los casos, agrega un trozo final «en otro caso»."))
     if solapes and pw.args[-1][1] != sp.true:
         r.append(_a("aviso", "Algunos trozos se traslapan; SymPy aplica el primero cuyas condiciones se cumplan."))
-    elif solapes:
-        pass
 
 
 def _diag_nodo(n, r: list[dict]) -> None:
-    # ---------- Límite ----------
     if isinstance(n, sp.Limit):
         f, x, a = n.args[0], n.args[1], n.args[2]
         d = str(n.args[3]) if len(n.args) > 3 else "+-"
@@ -1503,7 +1506,6 @@ def _diag_nodo(n, r: list[dict]) -> None:
         extra = sorted((s.name for s in f.free_symbols if s != x), key=str)
         if extra:
             r.append(_a("aviso", f"El límite contiene otras variables ({', '.join(extra)}): se tratarán como constantes (parámetros)."))
-    # ---------- Límite de varias variables ----------
     elif isinstance(n, LimiteMulti):
         f, xs, as_ = n.args
         if len(xs) != len(as_):
@@ -1515,7 +1517,6 @@ def _diag_nodo(n, r: list[dict]) -> None:
             r.append(_a("error", "Hay una variable repetida en el límite."))
         if len(xs) == 1:
             r.append(_a("info", "Escribiste un límite con una sola variable entre paréntesis; se tratará como límite normal."))
-    # ---------- Integral ----------
     elif isinstance(n, sp.Integral):
         for l in n.limits:
             v = l[0]
@@ -1539,7 +1540,6 @@ def _diag_nodo(n, r: list[dict]) -> None:
         vars_int = [l[0] for l in n.limits]
         if len(set(vars_int)) != len(vars_int):
             r.append(_a("error", "Se integra dos veces respecto de la misma variable: revisa los diferenciales."))
-    # ---------- Suma / Producto ----------
     elif isinstance(n, (sp.Sum, sp.Product)):
         k, a, b = n.limits[0]
         que = "suma" if isinstance(n, sp.Sum) else "producto"
@@ -1559,7 +1559,6 @@ def _diag_nodo(n, r: list[dict]) -> None:
                         f"(vale {'0' if isinstance(n, sp.Sum) else '1'} por convención)."))
         if b == -sp.oo:
             r.append(_a("aviso", "El límite superior es −∞; normalmente es +∞ o un entero."))
-    # ---------- Derivada ----------
     elif isinstance(n, sp.Derivative):
         total = sum(c for _, c in n.variable_count)
         for v, c in n.variable_count:
@@ -1569,13 +1568,11 @@ def _diag_nodo(n, r: list[dict]) -> None:
             r.append(_a("aviso", f"Derivada de orden {total}: puede tardar y producir expresiones enormes."))
         if n.expr.has(sp.Abs, sp.floor, sp.ceiling, sp.sign, sp.Piecewise, sp.Max, sp.Min):
             r.append(_a("info", "La expresión contiene valor absoluto, parte entera, signo o trozos: no es derivable en algunos puntos."))
-    # ---------- Gradiente ----------
     elif isinstance(n, Gradiente):
         if not n.args[0].free_symbols:
             r.append(_a("aviso", "El gradiente de una constante es el vector cero."))
         elif len(n.args[0].free_symbols) == 1:
             r.append(_a("info", "Con una sola variable el gradiente es simplemente la derivada."))
-    # ---------- Funciones con dominio restringido (constantes obvias) ----------
     elif isinstance(n, sp.log) and not n.args[0].free_symbols:
         v = _num_val(n.args[0])
         if v is not None and v <= 0:
