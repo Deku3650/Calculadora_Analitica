@@ -97,7 +97,7 @@ st.markdown("""
 
     /* 7. DISEÑO MODERNO DE PESTAÑAS (ST.TABS) */
     [data-baseweb="tab-list"] {
-        gap: 10px !important;
+        gap: 6px !important;
         background-color: rgba(2, 132, 199, 0.05) !important;
         padding: 8px 10px !important;
         border-radius: 16px !important;
@@ -107,9 +107,9 @@ st.markdown("""
 
     button[data-baseweb="tab"] {
         border-radius: 12px !important;
-        padding: 10px 22px !important;
+        padding: 8px 14px !important;
         font-weight: 700 !important;
-        font-size: 15px !important;
+        font-size: 13px !important;
         color: #94a3b8 !important;
         background-color: transparent !important;
         border: 1px solid transparent !important;
@@ -145,34 +145,6 @@ st.markdown("""
         max-width: 320px !important;
         border-right: 1px solid rgba(2, 132, 199, 0.2) !important;
     }
-
-    [data-testid="stSidebarNav"] ul li div a, [data-testid="stSidebarNav"] a {
-        border-radius: 12px !important;
-        padding: 10px 14px !important;
-        margin: 4px 8px !important;
-        border: 1px solid rgba(2, 132, 199, 0.18) !important;
-        background-color: rgba(2, 132, 199, 0.03) !important;
-        transition: all 0.25s ease-in-out !important;
-        white-space: nowrap !important;
-    }
-
-    [data-testid="stSidebarNav"] ul li div a:hover, [data-testid="stSidebarNav"] a:hover {
-        border-color: #0284c7 !important;
-        background: rgba(2, 132, 199, 0.12) !important;
-        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2) !important;
-        transform: translateX(4px);
-    }
-
-    [data-testid="stSidebarNav"] ul li div a[aria-current="page"], [data-testid="stSidebarNav"] a[aria-current="page"] {
-        background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(79, 70, 229, 0.25) 100%) !important;
-        border: 1px solid #38bdf8 !important;
-        box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25) !important;
-    }
-
-    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span, [data-testid="stSidebarNav"] a[aria-current="page"] span {
-        color: #38bdf8 !important;
-        font-weight: 800 !important;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -185,7 +157,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-st.markdown("Herramientas analíticas para equilibrio de mercado, elasticidades y restricción presupuestaria.")
+st.markdown("Herramientas analíticas integrales: mercado, elasticidad, presupuesto, optimización, producción y costos.")
 
 tab_eq, tab_elas, tab_pres, tab_opt, tab_prod, tab_cost = st.tabs([
     "1. Equilibrio (S=D)", 
@@ -195,6 +167,7 @@ tab_eq, tab_elas, tab_pres, tab_opt, tab_prod, tab_cost = st.tabs([
     "5. Producción (PMe, PMg)",
     "6. Estructura de Costos"
 ])
+
 # ==============================================================================
 # PESTAÑA 1: EQUILIBRIO DE MERCADO
 # ==============================================================================
@@ -227,15 +200,10 @@ with tab_eq:
                 p_eq = (a_dem - c_of) / (b_dem + d_of)
                 q_eq = a_dem - (b_dem * p_eq)
                 
-                if p_eq < 0 or q_eq < 0:
-                    st.warning("Advertencia: El punto de equilibrio matemático arroja precios o cantidades negativas. Revise los coeficientes.")
-                
                 st.success("¡Equilibrio calculado exitosamente!")
                 col_r1, col_r2 = st.columns(2)
-                with col_r1:
-                    st.metric("Precio de Equilibrio ($P^*$)", f"${p_eq:,.2f}")
-                with col_r2:
-                    st.metric("Cantidad de Equilibrio ($Q^*$)", f"{q_eq:,.2f} unidades")
+                with col_r1: st.metric("Precio de Equilibrio ($P^*$)", f"${p_eq:,.2f}")
+                with col_r2: st.metric("Cantidad de Equilibrio ($Q^*$)", f"{q_eq:,.2f} unidades")
                     
                 st.latex(r"Q_d = Q_s \implies a - bP = c + dP \implies P^* = \frac{a - c}{b + d}")
                 
@@ -248,12 +216,9 @@ with tab_eq:
                 with col_e1: st.metric("Cantidad Demandada", f"{qd_eval:,.2f}")
                 with col_e2: st.metric("Cantidad Ofrecida", f"{qs_eval:,.2f}")
                 with col_e3: 
-                    if diferencia > 0:
-                        st.metric("Situación", "Exceso de Oferta", f"{diferencia:,.2f}")
-                    elif diferencia < 0:
-                        st.metric("Situación", "Exceso de Demanda", f"{abs(diferencia):,.2f}")
-                    else:
-                        st.metric("Situación", "Mercado en Equilibrio", "0.00")
+                    if diferencia > 0: st.metric("Situación", "Exceso de Oferta", f"{diferencia:,.2f}")
+                    elif diferencia < 0: st.metric("Situación", "Exceso de Demanda", f"{abs(diferencia):,.2f}")
+                    else: st.metric("Situación", "Mercado en Equilibrio", "0.00")
 
                 st.markdown('<div class="card-subheader-title">📊 Gráfica de Equilibrio de Mercado</div>', unsafe_allow_html=True)
                 p_min = max(0.0, p_eq * 0.2)
@@ -306,15 +271,9 @@ with tab_elas:
                 ep = (delta_q / prom_q) / (delta_p / prom_p)
                 ep_abs = abs(ep)
                 
-                if ep_abs > 1:
-                    tipo_elas = "Elástica ($E > 1$)"
-                    interp_elas = "Los consumidores son muy sensibles al cambio de precio. Una subida de precio reduce drásticamente los ingresos totales."
-                elif ep_abs < 1:
-                    tipo_elas = "Inelástica ($E < 1$)"
-                    interp_elas = "Los consumidores son poco sensibles al cambio de precio (bienes de primera necesidad). Una subida de precio aumenta los ingresos totales."
-                else:
-                    tipo_elas = "Elasticidad Unitaria ($E = 1$)"
-                    interp_elas = "El cambio porcentual en la cantidad es exactamente igual al cambio porcentual en el precio."
+                if ep_abs > 1: tipo_elas = "Elástica ($E > 1$)"
+                elif ep_abs < 1: tipo_elas = "Inelástica ($E < 1$)"
+                else: tipo_elas = "Elasticidad Unitaria ($E = 1$)"
                     
                 st.success("Cálculo de elasticidad completado.")
                 col_er1, col_er2 = st.columns([1, 1.5])
@@ -322,50 +281,8 @@ with tab_elas:
                     st.metric("Elasticidad Precio ($|E|$)", f"{ep_abs:,.4f}")
                     st.write(f"**Clasificación:** {tipo_elas}")
                 with col_er2:
-                    st.write("**Interpretación:**")
-                    st.info(interp_elas)
                     st.write("**Fórmula aplicada (Arco):**")
                     st.latex(r"E = \frac{\frac{Q_2 - Q_1}{(Q_1 + Q_2)/2}}{\frac{P_2 - P_1}{(P_1 + P_2)/2}}")
-
-# ==============================================================================
-# PESTAÑA 3: RESTRICCIÓN PRESUPUESTARIA
-# ==============================================================================
-with tab_pres:
-    with st.container(border=True):
-        st.markdown('<div class="card-header-title">Conjunto Asequible y Línea de Presupuesto</div>', unsafe_allow_html=True)
-        st.info(r"💡 *Analiza las combinaciones máximas de consumo de dos bienes dados tu ingreso y sus precios.*")
-        
-        with st.form("form_presupuesto"):
-            cp1, cp2, cp3 = st.columns(3)
-            with cp1: ingreso_m = st.number_input("Ingreso Total ($m$):", min_value=1.0, value=1000.0, step=100.0)
-            with cp2: p_bien1 = st.number_input("Precio del Bien 1 ($P_1$):", min_value=0.01, value=50.0, step=5.0)
-            with cp3: p_bien2 = st.number_input("Precio del Bien 2 ($P_2$):", min_value=0.01, value=20.0, step=2.0)
-            
-            submit_pres = st.form_submit_button("Calcular y Graficar Recta Presupuestaria", use_container_width=True)
-            
-        if submit_pres:
-            max_b1 = ingreso_m / p_bien1
-            max_b2 = ingreso_m / p_bien2
-            
-            st.success("Valuación presupuestaria completada.")
-            col_pr1, col_pr2 = st.columns(2)
-            with col_pr1:
-                st.metric("Consumo Máximo Bien 1 ($m / P_1$)", f"{max_b1:,.2f} unidades")
-            with col_pr2:
-                st.metric("Consumo Máximo Bien 2 ($m / P_2$)", f"{max_b2:,.2f} unidades")
-                
-            st.latex(r"P_1X_1 + P_2X_2 = m \implies X_2 = \frac{m}{P_2} - \frac{P_1}{P_2}X_1")
-            
-            st.markdown('<div class="card-subheader-title">📈 Línea de Restricción Presupuestaria</div>', unsafe_allow_html=True)
-            x1_vector = np.linspace(0, max_b1, 100)
-            x2_vector = (ingreso_m - (p_bien1 * x1_vector)) / p_bien2
-            
-            df_presupuesto = pd.DataFrame({
-                "Bien 1 (X1)": x1_vector,
-                "Bien 2 (X2)": np.where(x2_vector >= 0, x2_vector, 0)
-            }).set_index("Bien 1 (X1)")
-            
-            st.line_chart(df_presupuesto)
 
 # ==============================================================================
 # PESTAÑA 3: RESTRICCIÓN PRESUPUESTARIA
