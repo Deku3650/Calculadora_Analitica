@@ -6,7 +6,7 @@ import sympy as sp
 # 1. CONFIGURACIÓN DE PÁGINA (SIEMPRE PRIMERO)
 st.set_page_config(page_title="Álgebra Lineal: Matrices - MATHESIS", page_icon="🧮", layout="wide")
 
-from estilos import cargar_estilos_globales, encabezado_pagina, titulo_tarjeta  # noqa: E402
+from estilos import cargar_estilos_globales  # noqa: E402
 from utils import (  # noqa: E402
     calcular_con_limite,
     evaluar_numerico,
@@ -25,10 +25,23 @@ except Exception:
 cargar_estilos_globales()
 inicializar_estado()
 
+
+def header_tarjeta(texto: str):
+    st.markdown(f'<div class="card-header-title">{texto}</div>', unsafe_allow_html=True)
+
+
+def subheader_tarjeta(texto: str):
+    st.markdown(f'<div class="card-subheader-title">{texto}</div>', unsafe_allow_html=True)
+
+
 # ==============================================================================
 # ENCABEZADO PRINCIPAL
 # ==============================================================================
-encabezado_pagina("🧮 Álgebra Lineal: Matrices")
+st.markdown("""
+    <div class="title-container">
+        <h1 class="title-text">🧮 Álgebra Lineal: Matrices</h1>
+    </div>
+""", unsafe_allow_html=True)
 
 # ==============================================================================
 # BARRA LATERAL (INVENTARIO)
@@ -66,11 +79,11 @@ tab_gestion, tab_basicas, tab_propiedades, tab_avanzadas, tab_espectral = st.tab
 # --------------------------------------------------------------------------
 with tab_gestion:
     st.subheader("Constructor y Puentes de Datos")
-    col_g1, col_g2 = st.columns(2)
+    col_g1, col_g2 = st.columns(2, gap="large")
 
     with col_g1:
         with st.container(border=True):
-            titulo_tarjeta("➕ Nueva Matriz Manual")
+            header_tarjeta("➕ Nueva Matriz Manual")
 
             nombre_nueva = st.text_input("Asignar nombre de la matriz (Ej: A, M1):", key="input_nom_manual").upper().strip()
 
@@ -81,7 +94,7 @@ with tab_gestion:
                 columnas = st.number_input("Número de columnas:", min_value=1, max_value=10, value=2, step=1, key="num_cols_mat")
 
             st.divider()
-            titulo_tarjeta("🧩 Componentes de la Matriz", sub=True)
+            subheader_tarjeta("🧩 Componentes de la Matriz")
 
             matriz_elementos = []
             error_sintaxis = False
@@ -128,7 +141,7 @@ with tab_gestion:
 
     with col_g2:
         with st.container(border=True):
-            titulo_tarjeta("🔀 Importación y Exportación")
+            header_tarjeta("🔀 Importación y Exportación")
 
             fuente_import = st.selectbox(
                 "¿De dónde desea importar?",
@@ -171,7 +184,7 @@ with tab_gestion:
                     st.info("No hay vectores definidos en memoria.")
 
             st.divider()
-            titulo_tarjeta("📤 Exportar a Transformación", sub=True)
+            subheader_tarjeta("📤 Exportar a Transformación")
             if st.session_state.mis_matrices:
                 mat_export = st.selectbox("Matriz a exportar:", list(st.session_state.mis_matrices.keys()), key="exp_mat_tl_main")
                 nombre_tl = st.text_input("Nombre de la nueva T.L. (Ej. T1):", key="nombre_tl_main").upper().strip()
@@ -208,10 +221,10 @@ with tab_basicas:
         st.info("👈 Comience creando o importando una matriz en la pestaña 'Gestión y Creación'.")
     else:
         with st.container(border=True):
-            titulo_tarjeta("➕ Operaciones Algebraicas Básicas")
+            header_tarjeta("➕ Operaciones Algebraicas Básicas")
             st.caption("Realice suma, resta, multiplicación, potencia entera y producto escalar entre las matrices en memoria.")
 
-            col1, col2, col3 = st.columns([1, 1, 2])
+            col1, col2, col3 = st.columns([1, 1, 2], gap="medium")
 
             with col1:
                 mat_A_nombre = st.selectbox("Matriz A", list(st.session_state.mis_matrices.keys()), key="op_matA")
@@ -257,7 +270,7 @@ with tab_basicas:
 
         if "temp_matriz" in st.session_state:
             with st.container(border=True):
-                titulo_tarjeta("🎯 Resultado de la Operación", sub=True)
+                subheader_tarjeta("🎯 Resultado de la Operación")
                 imprimir_matriz_simbolica(st.session_state.temp_matriz)
 
                 col_save1, col_save2 = st.columns([2, 1])
@@ -282,12 +295,12 @@ with tab_propiedades:
         st.info("👈 Comience creando o importando una matriz en la pestaña 'Gestión y Creación'.")
     else:
         with st.container(border=True):
-            titulo_tarjeta("🔎 Análisis Estructural y Reducción Gaussiana")
+            header_tarjeta("🔎 Análisis Estructural y Reducción Gaussiana")
 
             mat_sel_nombre = st.selectbox("Seleccione Matriz a analizar:", list(st.session_state.mis_matrices.keys()), key="prop_mat")
             M = st.session_state.mis_matrices[mat_sel_nombre]
 
-            titulo_tarjeta("⚙️ Propiedad o Transformación a Evaluar", sub=True)
+            subheader_tarjeta("⚙️ Propiedad o Transformación a Evaluar")
             prop_elegida = st.radio(
                 "Seleccione el análisis:",
                 [
@@ -424,7 +437,7 @@ with tab_propiedades:
 
         if "temp_prop_matriz" in st.session_state:
             with st.container(border=True):
-                titulo_tarjeta("🎯 Matriz Resultante", sub=True)
+                subheader_tarjeta("🎯 Matriz Resultante")
                 imprimir_matriz_simbolica(st.session_state.temp_prop_matriz)
 
                 c1, c2 = st.columns([2, 1])
@@ -445,11 +458,11 @@ with tab_propiedades:
 # PESTAÑA 3: Cálculo Multivariable (Hessiana siempre activa + Jacobiana)
 # --------------------------------------------------------------------------
 with tab_avanzadas:
-    col_av1, col_av2 = st.columns(2)
+    col_av1, col_av2 = st.columns(2, gap="large")
 
     with col_av1:
         with st.container(border=True):
-            titulo_tarjeta("📐 1. Matriz Hessiana (Función Escalar)")
+            header_tarjeta("📐 1. Matriz Hessiana (Función Escalar)")
             st.caption("Derivadas parciales de segundo orden $H_f(x_1, \\dots, x_n)$. No requiere tener matrices previas.")
 
             usar_kb_hess = False
@@ -500,7 +513,7 @@ with tab_avanzadas:
 
     with col_av2:
         with st.container(border=True):
-            titulo_tarjeta("🔄 2. Matriz Jacobiana (Campo Vectorial)")
+            header_tarjeta("🔄 2. Matriz Jacobiana (Campo Vectorial)")
             st.caption("Matriz de derivadas parciales de primer orden para un vector simbólico guardado.")
 
             if not st.session_state.mis_matrices:
@@ -528,7 +541,7 @@ with tab_avanzadas:
 
     if "temp_avanzada" in st.session_state:
         with st.container(border=True):
-            titulo_tarjeta("🎯 Resultado del Cálculo Diferencial", sub=True)
+            subheader_tarjeta("🎯 Resultado del Cálculo Diferencial")
             imprimir_matriz_simbolica(st.session_state.temp_avanzada)
 
             c1, c2 = st.columns([2, 1])
@@ -553,7 +566,7 @@ with tab_espectral:
         st.info("👈 Comience creando o importando una matriz en la pestaña 'Gestión y Creación'.")
     else:
         with st.container(border=True):
-            titulo_tarjeta("🌈 Valores y Vectores Propios (Eigen-Análisis)")
+            header_tarjeta("🌈 Valores y Vectores Propios (Eigen-Análisis)")
             st.caption("Cálculo del polinomio característico, subespacios propios y diagonalización $A = P D P^{-1}$.")
 
             mat_esp_nombre = st.selectbox("Seleccione Matriz a analizar:", list(st.session_state.mis_matrices.keys()), key="esp_mat")
@@ -570,7 +583,7 @@ with tab_espectral:
                     polinomio = calcular_con_limite(A.charpoly, args=(lamda,), timeout=5)
 
                     with st.container(border=True):
-                        titulo_tarjeta("1. Polinomio Característico", sub=True)
+                        subheader_tarjeta("1. Polinomio Característico")
                         st.latex(f"p(\\lambda) = \\det(A - \\lambda I) = {sp.latex(polinomio.as_expr())}")
 
                     A_num = evaluar_numerico(A)
@@ -579,7 +592,7 @@ with tab_espectral:
                         w, v = np.linalg.eig(A_num)
 
                         with st.container(border=True):
-                            titulo_tarjeta("2. Espectro y Bases (Aproximación Numérica)", sub=True)
+                            subheader_tarjeta("2. Espectro y Bases (Aproximación Numérica)")
                             columnas_P = []
                             for i in range(len(w)):
                                 val_propio = np.round(w[i], 4)
@@ -590,7 +603,7 @@ with tab_espectral:
                                 st.latex(rf"v_{{{i+1}}} = {sp.latex(vec_propio)}")
 
                         with st.container(border=True):
-                            titulo_tarjeta("3. Diagonalización", sub=True)
+                            subheader_tarjeta("3. Diagonalización")
                             rango_P = np.linalg.matrix_rank(v, tol=1e-5)
 
                             if rango_P == A.shape[0]:
@@ -622,7 +635,7 @@ with tab_espectral:
                             pass
 
                         with st.container(border=True):
-                            titulo_tarjeta("2. Espectro y Subespacios Propios", sub=True)
+                            subheader_tarjeta("2. Espectro y Subespacios Propios")
                             columnas_P, valores_D = [], []
 
                             for val, mult_alg, vects in vectores_propios:
@@ -649,7 +662,7 @@ with tab_espectral:
                                     st.latex(f"v_{{{i+1}}} = {sp.latex(v_entero)}")
 
                         with st.container(border=True):
-                            titulo_tarjeta("3. Diagonalización ($A = P D P^{-1}$)", sub=True)
+                            subheader_tarjeta("3. Diagonalización ($A = P D P^{-1}$)")
                             if len(columnas_P) == A.shape[0]:
                                 st.success("La matriz **SÍ** es diagonalizable ($\\sum m_g = n$).")
                                 P = sp.Matrix.hstack(*columnas_P)
