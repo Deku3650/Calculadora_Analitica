@@ -474,7 +474,7 @@ with tab_avanzadas:
                     "hess_func_kb",
                     valor_inicial=r"2x^{2}+12xy+y^{3}",
                     placeholder="Escribe f(x, y) y pulsa ↵",
-                    acoplado=True,
+                    acoplado=False,
                 )
                 btn_h = st.button("🧮 Calcular Hessiana", key="btn_hessian_kb", use_container_width=True)
                 if btn_h:
