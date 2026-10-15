@@ -188,9 +188,12 @@ st.markdown("""
 st.markdown("Herramientas analíticas para equilibrio de mercado, elasticidades y restricción presupuestaria.")
 
 tab_eq, tab_elas, tab_pres = st.tabs([
-    "1. Equilibrio de Mercado (S = D)", 
-    "2. Elasticidad Precio", 
-    "3. Restricción Presupuestaria"
+    "1. Equilibrio (S=D)", 
+    "2. Elasticidad", 
+    "3. Presupuesto",
+    "4. Utilidad / Elección",
+    "5. Producción (PMe, PMg)",
+    "6. Estructura de Costos"
 ])
 
 # ==============================================================================
@@ -364,3 +367,140 @@ with tab_pres:
             }).set_index("Bien 1 (X1)")
             
             st.line_chart(df_presupuesto)
+
+# ==============================================================================
+# PESTAÑA 3: RESTRICCIÓN PRESUPUESTARIA
+# ==============================================================================
+with tab_pres:
+    with st.container(border=True):
+        st.markdown('<div class="card-header-title">Conjunto Asequible y Línea de Presupuesto</div>', unsafe_allow_html=True)
+        
+        with st.form("form_presupuesto"):
+            cp1, cp2, cp3 = st.columns(3)
+            with cp1: ingreso_m = st.number_input("Ingreso Total ($m$):", min_value=1.0, value=1000.0, step=100.0)
+            with cp2: p_bien1 = st.number_input("Precio del Bien 1 ($P_1$):", min_value=0.01, value=50.0, step=5.0)
+            with cp3: p_bien2 = st.number_input("Precio del Bien 2 ($P_2$):", min_value=0.01, value=20.0, step=2.0)
+            
+            submit_pres = st.form_submit_button("Calcular y Graficar Recta Presupuestaria", use_container_width=True)
+            
+        if submit_pres:
+            max_b1 = ingreso_m / p_bien1
+            max_b2 = ingreso_m / p_bien2
+            
+            st.success("Valuación presupuestaria completada.")
+            col_pr1, col_pr2 = st.columns(2)
+            with col_pr1: st.metric("Consumo Máximo Bien 1", f"{max_b1:,.2f} un.")
+            with col_pr2: st.metric("Consumo Máximo Bien 2", f"{max_b2:,.2f} un.")
+                
+            st.latex(r"P_1X_1 + P_2X_2 = m")
+            
+            x1_vector = np.linspace(0, max_b1, 100)
+            x2_vector = (ingreso_m - (p_bien1 * x1_vector)) / p_bien2
+            df_presupuesto = pd.DataFrame({"Bien 1 (X1)": x1_vector, "Bien 2 (X2)": np.where(x2_vector >= 0, x2_vector, 0)}).set_index("Bien 1 (X1)")
+            st.line_chart(df_presupuesto)
+
+# ==============================================================================
+# PESTAÑA 4: UTILIDAD Y ELECCIÓN ÓPTIMA (Cobb-Douglas)
+# ==============================================================================
+with tab_opt:
+    with st.container(border=True):
+        st.markdown('<div class="card-header-title">Optimización del Consumidor (Utilidad Cobb-Douglas)</div>', unsafe_allow_html=True)
+        
+        with st.form("form_optimizacion"):
+            col_op1, col_op2 = st.columns(2)
+            with col_op1:
+                alpha = st.number_input("Exponente Bien 1 ($\alpha$):", min_value=0.01, value=1.0, step=0.5)
+                beta = st.number_input("Exponente Bien 2 ($\beta$):", min_value=0.01, value=1.0, step=0.5)
+            with col_op2:
+                m_opt = st.number_input("Ingreso ($m$):", min_value=1.0, value=1200.0, step=100.0)
+                p1_opt = st.number_input("Precio Bien 1 ($P_1$):", min_value=0.01, value=40.0, step=5.0)
+                p2_opt = st.number_input("Precio Bien 2 ($P_2$):", min_value=0.01, value=30.0, step=5.0)
+                
+            submit_opt = st.form_submit_button("Resolver Elección Óptima", use_container_width=True)
+            
+        if submit_opt:
+            x1_opt = (alpha / (alpha + beta)) * (m_opt / p1_opt)
+            x2_opt = (beta / (alpha + beta)) * (m_opt / p2_opt)
+            utilidad_val = (x1_opt ** alpha) * (x2_opt ** beta)
+            
+            st.success("¡Optimización resuelta con éxito vía Lagrange!")
+            col_res1, col_res2, col_res3 = st.columns(3)
+            with col_res1: st.metric("Canasta Óptima X1", f"{x1_opt:,.2f} un.")
+            with col_res2: st.metric("Canasta Óptima X2", f"{x2_opt:,.2f} un.")
+            with col_res3: st.metric("Utilidad Máxima (U*)", f"{utilidad_val:,.2f}")
+                
+            st.latex(r"X_1^* = \frac{\alpha}{\alpha + \beta}\frac{m}{P_1}, \quad X_2^* = \frac{\beta}{\alpha + \beta}\frac{m}{P_2}")
+
+# ==============================================================================
+# PESTAÑA 5: TEORÍA DE LA PRODUCCIÓN (PMe y PMg)
+# ==============================================================================
+with tab_prod:
+    with st.container(border=True):
+        st.markdown('<div class="card-header-title">Teoría de la Producción a Corto Plazo ($Q = f(L)$)</div>', unsafe_allow_html=True)
+        st.info(r"💡 *Analiza la función de producción cúbica típica: $Q = aL^3 + bL^2 + cL$ y sus curvas de Producto Medio ($PMe$) y Producto Marginal ($PMg$).*")
+        
+        with st.form("form_produccion"):
+            col_pr1, col_pr2, col_pr3 = st.columns(3)
+            with col_pr1: coef_a = st.number_input("Coeficiente $L^3$ ($a$):", value=-0.1, step=0.05)
+            with col_pr2: coef_b = st.number_input("Coeficiente $L^2$ ($b$):", value=3.0, step=0.5)
+            with col_pr3: coef_c = st.number_input("Coeficiente $L$ ($c$):", value=10.0, step=1.0)
+            
+            submit_prod = st.form_submit_button("Calcular y Graficar Producción", use_container_width=True)
+            
+        if submit_prod:
+            l_vector = np.linspace(0, 20, 100)
+            q_vector = (coef_a * (l_vector**3)) + (coef_b * (l_vector**2)) + (coef_c * l_vector)
+            # Evitar división por cero en L=0
+            pme_vector = np.where(l_vector > 0, q_vector / l_vector, 0)
+            pmg_vector = (3 * coef_a * (l_vector**2)) + (2 * coef_b * l_vector) + coef_c
+            
+            st.success("Cálculo de producción completado.")
+            st.latex(r"PMe = \frac{Q}{L}, \quad PMg = \frac{dQ}{dL}")
+            
+            df_produccion = pd.DataFrame({
+                "Trabajo (L)": l_vector,
+                "Producto Total (Q)": np.where(q_vector >= 0, q_vector, 0),
+                "Producto Medio (PMe)": np.where(pme_vector >= 0, pme_vector, np.nan),
+                "Producto Marginal (PMg)": pmg_vector
+            }).set_index("Trabajo (L)")
+            
+            st.line_chart(df_produccion)
+
+# ==============================================================================
+# PESTAÑA 6: ESTRUCTURA DE COSTOS (CF, CV, CT, CMe, CMg)
+# ==============================================================================
+with tab_cost:
+    with st.container(border=True):
+        st.markdown('<div class="card-header-title">Estructura de Costos de la Empresa</div>', unsafe_allow_html=True)
+        st.info(r"💡 *Modela los costos en función de la cantidad $Q$: $CT(Q) = CF + aQ - bQ^2 + cQ^3$.*")
+        
+        with st.form("form_costos"):
+            cc1, cc2, cc3, cc4 = st.columns(4)
+            with cc1: cf_val = st.number_input("Costo Fijo ($CF$):", value=100.0, step=10.0)
+            with cc2: alpha_c = st.number_input("Parámetro lineal ($a$):", value=20.0, step=5.0)
+            with cc3: beta_c = st.number_input("Parámetro cuadrático ($b$):", value=2.0, step=0.5)
+            with cc4: gamma_c = st.number_input("Parámetro cúbico ($c$):", value=0.1, step=0.05)
+            
+            submit_cost = st.form_submit_button("Calcular Curvas de Costos", use_container_width=True)
+            
+        if submit_cost:
+            q_cost = np.linspace(0.1, 30, 100)
+            cv_vector = (alpha_c * q_cost) - (beta_c * (q_cost**2)) + (gamma_c * (q_cost**3))
+            ct_vector = cf_val + cv_vector
+            cme_vector = ct_vector / q_cost
+            cvme_vector = cv_vector / q_cost
+            cfme_vector = cf_val / q_cost
+            cmg_vector = alpha_c - (2 * beta_c * q_cost) + (3 * gamma_c * (q_cost**2))
+            
+            st.success("Curvas de costos generadas exitosamente.")
+            st.latex(r"CT = CF + CV, \quad CMe = \frac{CT}{Q}, \quad CMg = \frac{dCT}{dQ}")
+            
+            df_costos = pd.DataFrame({
+                "Cantidad (Q)": q_cost,
+                "Costo Total (CT)": ct_vector,
+                "Costo Medio (CMe)": cme_vector,
+                "Costo Marginal (CMg)": cmg_vector,
+                "Costo Variable Medio (CVMe)": cvme_vector
+            }).set_index("Cantidad (Q)")
+            
+            st.line_chart(df_costos)
