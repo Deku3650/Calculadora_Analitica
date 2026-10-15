@@ -1,3 +1,4 @@
+# calculo_motor.py
 """
 calculo_motor.py
 ================
@@ -171,7 +172,7 @@ def lim(expr, x, a, direccion="+-"):
             izq, der = lim(expr, x, a, "-"), lim(expr, x, a, "+")
             if izq is None or der is None:
                 return None
-            return izq if izq == der else sp.zoo
+            return izq if _igual(izq, der) else sp.zoo
         expr = _resolver_trozos(expr, x, a, -1 if direccion == "-" else 1)
         direccion = "+-" if a in (sp.oo, -sp.oo) else direccion
     try:
@@ -192,9 +193,7 @@ def _desc_lim(v) -> str:
 
 
 def _valor_en(expr, sub: dict):
-    """Valor de expr sustituyendo TODAS las variables A LA VEZ (simultaneous=True).
-    Importante: sustituir en secuencia daría 0 para xy/(x²+y²) en el origen (0·y/y² = 0), cuando en
-    realidad es 0/0."""
+    """Valor de expr sustituyendo TODAS las variables A LA VEZ (simultaneous=True)."""
     try:
         v = expr.subs(sub, simultaneous=True) if len(sub) > 1 else expr.subs(sub)
         return v
@@ -325,7 +324,6 @@ def condiciones_dominio(expr) -> list[tuple]:
             add(sp.Ne(n.args[0], 0), "la cotangente/cosecante hiperbólica no existe en 0")
         elif isinstance(n, sp.factorial):
             add(sp.Ge(n.args[0], 0), "el factorial exige un argumento no negativo")
-    # una condición «≠ 0» sobra si ya hay «> 0» sobre la misma expresión (la implica)
     estrictas = {sp.srepr(r.lhs) for r, _ in conds if isinstance(r, sp.StrictGreaterThan) and r.rhs == 0}
     conds = [(r, t) for r, t in conds
              if not (isinstance(r, sp.Ne) and r.rhs == 0 and sp.srepr(r.lhs) in estrictas)]
@@ -449,7 +447,7 @@ def _candidatos(expr, x, dom=None):
         pass
     try:
         sing = singularities(expr, x)
-        if isinstance(sing, sp.FiniteSet):          # los conjuntos infinitos NO se recorren (no terminaría)
+        if isinstance(sing, sp.FiniteSet):
             cand |= set(sing)
     except Exception:  # noqa: BLE001
         pass
@@ -577,7 +575,7 @@ def monotonia_extremos(expr, x):
     except Exception:  # noqa: BLE001
         pass
     b.append(L(f"f'(x)={sp.latex(f1)}"))
-    dom = _dom_1d(expr, x)
+    huecos_dom, dom = _candidatos(expr, x)
     crit, nota = sol_reales(f1, x)
     # puntos donde f' no existe pero f sí (picos, tangentes verticales)
     sing = []
@@ -600,8 +598,9 @@ def monotonia_extremos(expr, x):
     if sing:
         b.append(T("Donde $f'$ no existe pero $f$ sí:  " + ", ".join(f"$x={sp.latex(c)}$" for c in sing)))
 
-    rangos = _intervalos(puntos)
-    # también cortar por huecos del dominio para que el signo tenga sentido
+    # Cortar también por asíntotas/huecos del dominio para que cada intervalo sea continuo
+    cortes_totales = sorted(set(puntos) | set(huecos_dom), key=lambda p: _flt(p))
+    rangos = _intervalos(cortes_totales)
     filas = []
     for a, bb, prueba in rangos:
         s = _signo(f1, x, prueba)
@@ -628,7 +627,7 @@ def monotonia_extremos(expr, x):
             if sg is not None:
                 tipo = "mínimo local" if sg > 0 else "máximo local"
         if tipo is None:
-            vecinos = [p for p in puntos if p != c]
+            vecinos = [p for p in cortes_totales if p != c]
             d = min([abs(_flt(p) - _flt(c)) for p in vecinos] + [2.0]) / 2
             sl = _signo(f1, x, c - sp.Float(d, 15))
             sr = _signo(f1, x, c + sp.Float(d, 15))
@@ -658,13 +657,14 @@ def concavidad(expr, x):
     except Exception:  # noqa: BLE001
         pass
     b.append(L(f"f''(x)={sp.latex(f2)}"))
-    dom = _dom_1d(expr, x)
+    huecos_dom, dom = _candidatos(expr, x)
     cand, nota = sol_reales(f2, x)
     cand = [c for c in cand if dom.contains(c) == True]  # noqa: E712
     if nota == "no_resuelto":
         b.append(AV("No pude resolver $f''(x)=0$ de forma exacta; la lista de inflexiones puede estar incompleta."))
+    cortes_conc = sorted(set(cand) | set(huecos_dom), key=lambda p: _flt(p))
     filas, signos = [], []
-    for a, bb, prueba in _intervalos(cand):
+    for a, bb, prueba in _intervalos(cortes_conc):
         s = _signo(f2, x, prueba)
         if s is None:
             continue
@@ -678,7 +678,8 @@ def concavidad(expr, x):
         fc = _valor_en(expr, {x: c})
         if fc is None or _clase(fc) != "fin":
             continue
-        d = 0.5
+        vecinos = [p for p in cortes_conc if p != c]
+        d = min([abs(_flt(p) - _flt(c)) for p in vecinos] + [1.0]) / 2
         sl, sr = _signo(f2, x, c - sp.Float(d, 15)), _signo(f2, x, c + sp.Float(d, 15))
         if sl is not None and sr is not None and sl != sr and sl != 0 and sr != 0:
             infl.append((c, fc))
@@ -816,7 +817,6 @@ def limite_1d(expr, x, a, direccion="+-"):
     inf = a in (sp.oo, -sp.oo)
     b = [H("Planteamiento"), L(sp.latex(sp.Limit(expr, x, a, "+-" if inf else direccion)))]
     d = "+-" if inf else direccion
-    dato = {}
     if not inf:
         f_a = _valor_en(expr, {x: a})
         cfa = _clase(f_a)
@@ -905,7 +905,6 @@ def limite_1d(expr, x, a, direccion="+-"):
     filas = _tabla_aproximacion(expr, x, a, d)
     if filas:
         b += [H("Comprobación numérica"), TAB(["acercamiento", "x", "f(x)"], filas)]
-        # validar el resultado simbólico contra el numérico (red de seguridad)
         try:
             ult = [f for f in filas if f[1] != "no definido"]
             if ult and final is not None and _clase(final) == "fin":
@@ -1229,7 +1228,6 @@ def tangente(expr, vars_, punto):
         else:
             b.append(T("La tangente es **horizontal** (derivada 0); la normal es la recta vertical $x=" + lx(punto[0]) + "$."))
     elif n == 2:
-        z = sp.Symbol("z")
         b += [T("$z=f(p)+f_x(p)(x-x_0)+f_y(p)(y-y_0)$:"), L("z=" + sp.latex(lin)),
               T(f"Vector normal al plano: $\\mathbf{{n}}=({lx(gp[0])},\\,{lx(gp[1])},\\,-1)$.")]
     else:
@@ -1242,7 +1240,7 @@ def tangente(expr, vars_, punto):
         real = _valor_en(expr, {k: sp.Float(val, 30) for k, val in q.items()})
         aprox = lin.subs({k: sp.Float(val, 30) for k, val in q.items()})
         if real is not None and _flt(real) is not None:
-            filas.append([lx(dlt) if False else f"${sp.latex(dlt)}$", _num_str(real, 10), _num_str(aprox, 10),
+            filas.append([f"${sp.latex(dlt)}$", _num_str(real, 10), _num_str(aprox, 10),
                           _num_str(abs(sp.N(real - aprox, 15)), 3)])
     if filas:
         b.append(TAB(["desplazamiento (en cada variable)", "f real", "L (tangente)", "error"], filas))
@@ -1407,7 +1405,6 @@ def _limite_multi_core(expr, vars_, punto):
     b = []
     p = list(punto)
     sin_trozos = not expr.has(sp.Piecewise, sp.floor, sp.ceiling, sp.sign)
-    # x**y con base y exponente variables: SymPy evalúa 0**0 = 1, pero la función NO es continua ahí
     pot_variable = any(isinstance(q, sp.Pow) and q.base.free_symbols and q.exp.free_symbols
                        for q in sp.preorder_traversal(expr))
     b.append(H("Paso 1 · Sustitución directa"))
@@ -1491,7 +1488,6 @@ def _limite_multi_core(expr, vars_, punto):
     L0 = distintos[0][1]
     b.append(T(f"Todas las trayectorias probadas dan el mismo valor ${lx(L0)}$. Eso es **evidencia**, no demostración: "
                "falta descartar trayectorias que no probamos."))
-    evidencia = True
     if n == 2:
         r = sp.Symbol("r", positive=True)
         th = sp.Symbol("theta", real=True)
@@ -1820,7 +1816,6 @@ def integral_definida(expr, x, a, bb):
                     (": falla el tramo " + ", ".join(f"$[{lx(l)},{lx(r)}]$" for l, r in malo) if len(partes) > 1 else "") + "."))
         return res(b, valor=total if len(partes) == 1 else sp.oo, converge=False)
     if any(c in ("nd", "osc") for c in clases) or total.has(sp.Integral):
-        # no exacta: intentar numéricamente
         try:
             import mpmath as mp
             f = _mp_f(expr, x)
@@ -1840,7 +1835,6 @@ def integral_definida(expr, x, a, bb):
     b.append(OK(f"**Converge** y vale ${lx(totals)}$" + ("" if totals.is_Integer or totals.is_Float else f"  $\\approx {sp.latex(sp.N(totals, 10))}$")))
     if len(partes) > 1:
         b.append(T("Tramos: " + "; ".join(f"$[{lx(l)},{lx(r)}]$: ${lx(sp.simplify(v))}$" for l, r, v in partes)))
-    # verificación numérica independiente
     try:
         import mpmath as mp
         f = _mp_f(expr, x)
@@ -1867,7 +1861,6 @@ def integral_definida(expr, x, a, bb):
 def integral_multiple(expr, limites):
     """
     Integral iterada. limites = [(var, a, b), ...] de ADENTRO hacia AFUERA.
-    Los límites de una integral pueden depender de las variables de las integrales exteriores.
     """
     if not 2 <= len(limites) <= 3:
         raise ErrorCalculo("Se admiten integrales dobles y triples.")
@@ -2016,8 +2009,7 @@ def sucesion(expr, n, n0=1):
 
 
 def _lim_sec(a, nn):
-    """Límite de a_n con respaldo: si SymPy no puede, |a_n|→0 implica a_n→0; si |a_n| no se acerca a 0
-    pero el signo alterna sin parar, la sucesión oscila (no tiene límite)."""
+    """Límite de a_n con respaldo."""
     Lv = lim(a, nn, sp.oo)
     if Lv is not None and _clase(Lv) != "nd":
         return Lv
@@ -2050,10 +2042,8 @@ def _sumas_parciales(a, nn, n0, cortes):
 
 
 def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
-    """Aplica criterios en orden; devuelve (bloques, veredicto, tipo) con
-    veredicto ∈ {'conv','div',None} y tipo ∈ {'absoluta','condicional',None}."""
+    """Aplica criterios en orden; devuelve (bloques, veredicto, tipo)."""
     b = []
-    veredicto, tipo = None, None
 
     def paso(titulo):
         b.append(H(titulo))
@@ -2117,7 +2107,7 @@ def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
         if positivo and tend in ("decreciente", "no creciente") and _clase(Lb) == "fin" and Lb == 0:
             b.append(OK("Se cumplen las tres condiciones de Leibniz → la serie **CONVERGE**."))
             if buscar_absoluta:
-                bl2, v2, _ = _serie_core(sp.Abs(bn) if False else bn, nn, n0, detalle=False, buscar_absoluta=False)
+                _, v2, _ = _serie_core(bn, nn, n0, detalle=False, buscar_absoluta=False)
                 if v2 == "conv":
                     b.append(OK("Además $\\sum |a_n|$ también converge → **converge ABSOLUTAMENTE**."))
                     return b, "conv", "absoluta"
@@ -2184,8 +2174,8 @@ def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
             if _flt(p_est) > 1:
                 b.append(OK(f"Como $\\sum 1/n^{{{lx(p_est)}}}$ converge ($p>1$), la serie **CONVERGE ABSOLUTAMENTE**."))
                 return b, "conv", "absoluta"
-            b.append(AV(f"Como $\\sum 1/n^{{{lx(p_est)}}}$ diverge ($p\\le1$), $\\sum|a_n|$ **diverge**."
-                        + (" Si la serie no es de términos positivos, esto no basta para decidir la serie original." if True else "")))
+            b.append(AV(f"Como $\\sum 1/n^{{{lx(p_est)}}}$ diverge ($p\\le1$), $\\sum|a_n|$ **diverge**. "
+                        "Si la serie no es de términos positivos, esto no basta para decidir la serie original."))
             if all(v is None or v >= 0 for v in _valores_numericos(a, nn, n0, 200)):
                 return b, "div", None
         else:
@@ -2399,7 +2389,7 @@ def niveles(expr, vars_, niveles_):
         b.append(H(f"Nivel $c={lx(c)}$"))
         b.append(L(sp.latex(sp.Eq(expr, c))))
         if n == 1:
-            pts, nota = sol_reales(expr - c, vars_[0])
+            pts, _ = sol_reales(expr - c, vars_[0])
             b.append(T(("Puntos: " + ", ".join(f"$x={lx(p)}$" for p in pts)) if pts else "No hay puntos reales en este nivel."))
             continue
         desc = _clasificar_cuadrica(expr, vars_, c)
@@ -2546,10 +2536,6 @@ def evaluar_operacion(obj):
 # ==============================================================================
 # 8. EJECUCIÓN SEGURA (proceso aparte con tiempo límite)
 # ==============================================================================
-# SymPy puede tardar horas (o agotar la memoria) con ciertas expresiones. Para que eso nunca
-# congele la app, cada operación corre en un PROCESO TRABAJADOR persistente (así SymPy ya viene
-# importado y las llamadas siguientes son rápidas). Si se pasa del tiempo, el proceso se mata y
-# se levanta otro; la app solo muestra un aviso.
 import atexit as _atexit
 import multiprocessing as _mp
 import os as _os
@@ -2587,7 +2573,7 @@ def _bucle_trabajador(conn):
     try:
         import resource
         resource.setrlimit(resource.RLIMIT_AS, (LIMITE_MEMORIA_MB * 1024 * 1024,) * 2)
-    except Exception:  # noqa: BLE001  (Windows u otros sistemas sin `resource`)
+    except Exception:  # noqa: BLE001
         pass
     while True:
         try:
@@ -2599,11 +2585,11 @@ def _bucle_trabajador(conn):
         nombre, args, kwargs = msg
         try:
             salida = ("ok", OPERACIONES[nombre](*args, **kwargs))
-        except BaseException as e:  # noqa: BLE001  (incluye MemoryError)
+        except BaseException as e:  # noqa: BLE001
             salida = ("err", f"{type(e).__name__}: {str(e)[:200]}")
         try:
             conn.send(salida)
-        except Exception as e:  # noqa: BLE001  (resultado no serializable)
+        except Exception as e:  # noqa: BLE001
             try:
                 conn.send(("err", f"No se pudo devolver el resultado ({type(e).__name__})."))
             except Exception:  # noqa: BLE001
@@ -2614,7 +2600,7 @@ class _Trabajador:
     def __init__(self):
         self.proc = None
         self.conn = None
-        self.respondio = False                       # ¿ha contestado alguna vez este trabajador?
+        self.respondio = False
         self._arrancar()
 
     def _arrancar(self):
@@ -2642,7 +2628,7 @@ class _Trabajador:
         self.conn.send((nombre, args, kwargs))
         if not self.conn.poll(timeout):
             self._matar()
-            self._arrancar()                       # deja uno nuevo listo (calentándose) para la siguiente
+            self._arrancar()
             raise TiempoAgotado()
         try:
             tipo, val = self.conn.recv()
@@ -2651,7 +2637,7 @@ class _Trabajador:
             nunca_respondio = not self.respondio
             self._matar()
             if nunca_respondio:
-                raise ErrorArranque()                # ni siquiera arrancó: no vale la pena reintentar con procesos
+                raise ErrorArranque()
             self._arrancar()
             raise ErrorCalculo("El proceso de cálculo se cerró inesperadamente (probablemente se agotó la memoria). "
                                "Prueba con una expresión más sencilla.") from None
@@ -2689,14 +2675,14 @@ def _obtener_pool():
                     q.put(t)
                 _POOL = q
                 _atexit.register(cerrar_trabajadores)
-            except Exception:  # noqa: BLE001  (entorno que no permite crear procesos)
+            except Exception:  # noqa: BLE001
                 _SIN_AISLAMIENTO = True
                 _POOL = None
         return _POOL
 
 
 def precalentar():
-    """Levanta los procesos trabajadores desde ya (así la primera operación del usuario no espera el arranque)."""
+    """Levanta los procesos trabajadores desde ya."""
     return _obtener_pool() is not None
 
 
@@ -2716,7 +2702,7 @@ def ejecutar_seguro(nombre, *args, timeout=TIEMPO_POR_DEFECTO, **kwargs):
         return res([ER(f"Operación desconocida: {nombre}.")])
     t0 = time.time()
     pool = _obtener_pool()
-    if pool is None:                                   # sin procesos: se corre aquí (sin protección contra cuelgues)
+    if pool is None:
         r = OPERACIONES[nombre](*args, **kwargs)
         r.setdefault("datos", {})["_sin_aislamiento"] = True
         return r
@@ -2726,7 +2712,7 @@ def ejecutar_seguro(nombre, *args, timeout=TIEMPO_POR_DEFECTO, **kwargs):
         return res([AV("El servidor está ocupado con otros cálculos. Inténtalo de nuevo en unos segundos.")], ocupado=True)
     try:
         r = trabajador.correr(nombre, args, kwargs, timeout)
-    except ErrorArranque:                      # los procesos no funcionan aquí: se calcula en el mismo proceso
+    except ErrorArranque:
         global _POOL, _SIN_AISLAMIENTO
         _SIN_AISLAMIENTO, _POOL = True, None
         _TRABAJADORES.clear()
