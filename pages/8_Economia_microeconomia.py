@@ -187,7 +187,7 @@ st.markdown("""
 
 st.markdown("Herramientas analíticas para equilibrio de mercado, elasticidades y restricción presupuestaria.")
 
-tab_eq, tab_elas, tab_pres = st.tabs([
+tab_eq, tab_elas, tab_pres, tab_opt, tab_prod, tab_cost = st.tabs([
     "1. Equilibrio (S=D)", 
     "2. Elasticidad", 
     "3. Presupuesto",
@@ -195,7 +195,6 @@ tab_eq, tab_elas, tab_pres = st.tabs([
     "5. Producción (PMe, PMg)",
     "6. Estructura de Costos"
 ])
-
 # ==============================================================================
 # PESTAÑA 1: EQUILIBRIO DE MERCADO
 # ==============================================================================
