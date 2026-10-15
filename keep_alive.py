@@ -1,11 +1,9 @@
+# keep_alive.py
 import os
 import sys
 from playwright.sync_api import sync_playwright
 
-URL_STREAMLIT = os.environ.get(
-    "URL_STREAMLIT",
-    "https://jwozcpf8aabf7rq5g8gryt.streamlit.app",
-)
+URL_STREAMLIT = os.environ.get("URL_STREAMLIT", "https://jwozcpf8aabf7rq5g8gryt.streamlit.app")
 
 
 def despertar_app():
@@ -22,12 +20,12 @@ def despertar_app():
             if boton_despertar.count() > 0:
                 print("💤 ¡La app estaba dormida! Haciendo clic para despertarla...")
                 boton_despertar.first.click()
-                page.wait_for_timeout(15000)
+                page.wait_for_timeout(20000)
                 print("🚀 App despertada con éxito.")
             else:
                 print("✅ La app ya estaba despierta y operativa.")
         except Exception as e:
-            print(f"❌ Error al intentar despertar la aplicación: {e}")
+            print(f"❌ Error al despertar la app: {e}")
             sys.exit(1)
         finally:
             browser.close()
