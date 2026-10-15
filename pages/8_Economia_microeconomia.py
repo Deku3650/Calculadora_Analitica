@@ -41,29 +41,7 @@ st.markdown("""
         letter-spacing: -0.5px;
     }
 
-    /* 4. ESTILIZADO GLOBAL PARA SUBTÍTULOS (H2, H3, ST.HEADER, ST.SUBHEADER) */
-    .stMarkdown h2, [data-testid="stHeader"] h2 {
-        color: #38bdf8 !important;
-        font-size: 1.35rem !important;
-        font-weight: 800 !important;
-        border-bottom: 2px solid rgba(56, 189, 248, 0.3) !important;
-        padding-bottom: 6px !important;
-        margin-top: 1.2rem !important;
-        margin-bottom: 1.0rem !important;
-        letter-spacing: -0.3px !important;
-    }
-
-    .stMarkdown h3, [data-testid="stSubheader"] h3 {
-        color: #38bdf8 !important;
-        font-size: 1.15rem !important;
-        font-weight: 700 !important;
-        border-left: 4px solid #0284c7 !important;
-        padding-left: 10px !important;
-        margin-top: 1rem !important;
-        margin-bottom: 0.8rem !important;
-    }
-
-    /* 5. CONTENEDORES NATIVOS AZULES (ELIMINA RECUADROS FANTASMA) */
+    /* 4. CONTENEDORES NATIVOS AZULES (ELIMINA RECUADROS FANTASMA) */
     [data-testid="stVerticalBlockBorderWrapper"] {
         background: linear-gradient(135deg, rgba(2, 132, 199, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%) !important;
         border: 1px solid rgba(56, 189, 248, 0.35) !important;
@@ -72,7 +50,7 @@ st.markdown("""
         margin-bottom: 1rem !important;
     }
 
-    /* 6. TÍTULOS Y SUBTÍTULOS RESALTADOS DENTRO DE LAS TARJETAS */
+    /* 5. TÍTULOS Y SUBTÍTULOS RESALTADOS DENTRO DE LAS TARJETAS */
     .card-header-title {
         background: linear-gradient(135deg, #0284c7 0%, #6366f1 100%);
         color: #ffffff !important;
@@ -95,9 +73,9 @@ st.markdown("""
         margin-bottom: 12px;
     }
 
-    /* 7. DISEÑO MODERNO DE PESTAÑAS (ST.TABS) */
+    /* 6. DISEÑO MODERNO DE PESTAÑAS (ST.TABS) */
     [data-baseweb="tab-list"] {
-        gap: 6px !important;
+        gap: 10px !important;
         background-color: rgba(2, 132, 199, 0.05) !important;
         padding: 8px 10px !important;
         border-radius: 16px !important;
@@ -107,9 +85,9 @@ st.markdown("""
 
     button[data-baseweb="tab"] {
         border-radius: 12px !important;
-        padding: 8px 14px !important;
+        padding: 10px 22px !important;
         font-weight: 700 !important;
-        font-size: 13px !important;
+        font-size: 15px !important;
         color: #94a3b8 !important;
         background-color: transparent !important;
         border: 1px solid transparent !important;
@@ -139,11 +117,45 @@ st.markdown("""
         display: none !important;
     }
 
-    /* 8. ESTILOS DE BARRA LATERAL (SIDEBAR UNIFICADO) */
+    /* 7. ESTILOS DE BARRA LATERAL (SIDEBAR UNIFICADO Y RESPONSIVO) */
     [data-testid="stSidebar"], section[data-testid="stSidebar"] {
-        min-width: 300px !important;
-        max-width: 320px !important;
+        width: 100% !important;
+        max-width: 280px !important;
         border-right: 1px solid rgba(2, 132, 199, 0.2) !important;
+    }
+
+    @media (max-width: 768px) {
+        [data-testid="stSidebar"], section[data-testid="stSidebar"] {
+            max-width: 240px !important;
+        }
+    }
+
+    [data-testid="stSidebarNav"] ul li div a, [data-testid="stSidebarNav"] a {
+        border-radius: 12px !important;
+        padding: 10px 14px !important;
+        margin: 4px 8px !important;
+        border: 1px solid rgba(2, 132, 199, 0.18) !important;
+        background-color: rgba(2, 132, 199, 0.03) !important;
+        transition: all 0.25s ease-in-out !important;
+        white-space: nowrap !important;
+    }
+
+    [data-testid="stSidebarNav"] ul li div a:hover, [data-testid="stSidebarNav"] a:hover {
+        border-color: #0284c7 !important;
+        background: rgba(2, 132, 199, 0.12) !important;
+        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.2) !important;
+        transform: translateX(4px);
+    }
+
+    [data-testid="stSidebarNav"] ul li div a[aria-current="page"], [data-testid="stSidebarNav"] a[aria-current="page"] {
+        background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(79, 70, 229, 0.25) 100%) !important;
+        border: 1px solid #38bdf8 !important;
+        box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25) !important;
+    }
+
+    [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span, [data-testid="stSidebarNav"] a[aria-current="page"] span {
+        color: #38bdf8 !important;
+        font-weight: 800 !important;
     }
     </style>
 """, unsafe_allow_html=True)
