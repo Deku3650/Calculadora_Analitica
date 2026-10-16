@@ -34,6 +34,17 @@ def subheader_tarjeta(texto: str):
     st.markdown(f'<div class="card-subheader-title">{texto}</div>', unsafe_allow_html=True)
 
 
+def _leer_seguro(texto: str):
+    """Envuelve leer_expresion_st protegiendo contra cualquier SyntaxError en ast.parse."""
+    if texto is None or not str(texto).strip():
+        return None
+    try:
+        return leer_expresion_st(str(texto).strip())
+    except (SyntaxError, ValueError, TypeError, Exception):
+        st.error(f"La expresión '{texto}' no es válida.")
+        return None
+
+
 # ==============================================================================
 # ENCABEZADO PRINCIPAL
 # ==============================================================================
@@ -44,22 +55,48 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# BARRA LATERAL (INVENTARIO)
+# BARRA LATERAL (INVENTARIO CON RENOMBRADO Y ELIMINACIÓN INDIVIDUAL)
 # ==============================================================================
 with st.sidebar:
     st.header("📦 Inventario de Matrices")
 
     if st.session_state.mis_matrices:
-        for nombre, mat in st.session_state.mis_matrices.items():
+        for nombre, mat in list(st.session_state.mis_matrices.items()):
             with st.expander(f"Matriz: {nombre} ({mat.shape[0]}×{mat.shape[1]})"):
                 imprimir_matriz_simbolica(mat)
+                nuevo_nom = st.text_input(
+                    "Renombrar a:",
+                    value=nombre,
+                    key=f"ren_mat_in_{nombre}",
+                ).upper().strip()
+
+                c_ren, c_del = st.columns(2)
+                with c_ren:
+                    if st.button("✏️ Nombre", key=f"btn_ren_mat_{nombre}", use_container_width=True):
+                        if not nuevo_nom:
+                            st.error("Nombre vacío.")
+                        elif nuevo_nom == nombre:
+                            st.info("Mismo nombre.")
+                        elif nuevo_nom in st.session_state.mis_matrices:
+                            st.error("Ya existe.")
+                        else:
+                            # Preservar el orden reemplazando la clave
+                            nuevo_dict = {}
+                            for k, v in st.session_state.mis_matrices.items():
+                                nuevo_dict[nuevo_nom if k == nombre else k] = v
+                            st.session_state.mis_matrices = nuevo_dict
+                            st.rerun()
+                with c_del:
+                    if st.button("🗑️ Borrar", key=f"btn_del_mat_{nombre}", use_container_width=True):
+                        st.session_state.mis_matrices.pop(nombre, None)
+                        st.rerun()
     else:
         st.info("No hay matrices en memoria.")
 
     st.divider()
-    if st.button("🗑️ Borrar todas las matrices", use_container_width=True):
+    if st.button("🗑️ Vaciar todas las matrices", use_container_width=True):
         st.session_state.mis_matrices.clear()
-        for k_tmp in ("temp_matriz", "temp_prop_matriz", "temp_avanzada"):
+        for k_tmp in ("temp_matriz", "temp_prop_matriz", "temp_avanzada", "temp_espectral"):
             st.session_state.pop(k_tmp, None)
         st.rerun()
 
@@ -89,9 +126,9 @@ with tab_gestion:
 
             col_m, col_n = st.columns(2)
             with col_m:
-                filas = st.number_input("Número de filas:", min_value=1, max_value=10, value=2, step=1, key="num_filas_mat")
+                filas = int(st.number_input("Número de filas:", min_value=1, max_value=10, value=2, step=1, key="num_filas_mat"))
             with col_n:
-                columnas = st.number_input("Número de columnas:", min_value=1, max_value=10, value=2, step=1, key="num_cols_mat")
+                columnas = int(st.number_input("Número de columnas:", min_value=1, max_value=10, value=2, step=1, key="num_cols_mat"))
 
             st.divider()
             subheader_tarjeta("🧩 Componentes de la Matriz")
@@ -110,13 +147,10 @@ with tab_gestion:
                             key=f"celda_{i}_{j}_{filas}_{columnas}",
                         ).strip()
 
-                        try:
-                            val_sym = leer_expresion_st(val_str)
-                            if val_sym is not None:
-                                fila_vals.append(val_sym)
-                            else:
-                                error_sintaxis = True
-                        except Exception:
+                        val_sym = _leer_seguro(val_str)
+                        if val_sym is not None:
+                            fila_vals.append(val_sym)
+                        else:
                             error_sintaxis = True
                 matriz_elementos.append(fila_vals)
 
@@ -133,8 +167,6 @@ with tab_gestion:
                     if not nombre_nueva:
                         st.error("Por favor, asigna un nombre a la matriz.")
                     else:
-                        if nombre_nueva in st.session_state.mis_matrices:
-                            st.warning(f"La matriz '{nombre_nueva}' fue sobreescrita.")
                         st.session_state.mis_matrices[nombre_nueva] = matriz_temp
                         st.success(f"¡Matriz '{nombre_nueva}' guardada exitosamente!")
                         st.rerun()
@@ -243,7 +275,7 @@ with tab_basicas:
                 res = None
 
                 if operacion == "* Escalar":
-                    esc = leer_expresion_st(escalar_str)
+                    esc = _leer_seguro(escalar_str)
                     if esc is not None:
                         res = sp.simplify(esc * matA)
                 elif operacion == "Potencia A^k":
@@ -413,7 +445,7 @@ with tab_propiedades:
                             if renglones:
                                 imprimir_matriz_simbolica(sp.Matrix(renglones))
                             else:
-                                st.write("Trivial $\\{\\mathbf{0}\\}$")
+                                st.write(r"Trivial $\{\mathbf{0}\}$")
 
                         with col_sub2:
                             st.write("**Base del Espacio Columna ($L_c(A)$):**")
@@ -421,14 +453,14 @@ with tab_propiedades:
                             if columnas:
                                 imprimir_matriz_simbolica(sp.Matrix.hstack(*columnas))
                             else:
-                                st.write("Trivial $\\{\\mathbf{0}\\}$")
+                                st.write(r"Trivial $\{\mathbf{0}\}$")
 
                         st.divider()
-                        st.write("**Base del Kernel (Espacio Nulo $\\ker A$):**")
+                        st.write(r"**Base del Kernel (Espacio Nulo $\ker A$):**")
                         if base_kernel:
                             imprimir_matriz_simbolica(sp.Matrix.hstack(*base_kernel))
                         else:
-                            st.write("El Kernel es trivial $\\{\\mathbf{0}\\}$.")
+                            st.write(r"El Kernel es trivial $\{\mathbf{0}\}$.")
                     except TimeoutError as e:
                         st.error(str(e))
 
@@ -463,7 +495,7 @@ with tab_avanzadas:
     with col_av1:
         with st.container(border=True):
             header_tarjeta("📐 1. Matriz Hessiana (Función Escalar)")
-            st.caption("Derivadas parciales de segundo orden $H_f(x_1, \\dots, x_n)$. No requiere tener matrices previas.")
+            st.caption(r"Derivadas parciales de segundo orden $H_f(x_1, \dots, x_n)$. No requiere tener matrices previas.")
 
             usar_kb_hess = False
             if _TIENE_TECLADO:
@@ -474,7 +506,7 @@ with tab_avanzadas:
                     "hess_func_kb",
                     valor_inicial=r"2x^{2}+12xy+y^{3}",
                     placeholder="Escribe f(x, y) y pulsa ↵",
-                    acoplado=False,
+                    acoplado=True,
                 )
                 btn_h = st.button("🧮 Calcular Hessiana", key="btn_hessian_kb", use_container_width=True)
                 if btn_h:
@@ -498,7 +530,7 @@ with tab_avanzadas:
             else:
                 expr_str = st.text_input("Ingrese la función escalar $f$ (Ej: 2*x^2 + 12*x*y):", value="2*x^2 + 12*x*y", key="input_hessian")
                 if st.button("🧮 Calcular Hessiana", key="btn_hessian_txt", use_container_width=True):
-                    f = leer_expresion_st(expr_str)
+                    f = _leer_seguro(expr_str)
                     if f is not None:
                         vars_list = sorted(list(f.free_symbols), key=lambda v: v.name)
                         if not vars_list:
@@ -559,7 +591,7 @@ with tab_avanzadas:
                         st.error("Ingrese un nombre para guardar la matriz.")
 
 # --------------------------------------------------------------------------
-# PESTAÑA 4: Análisis Espectral
+# PESTAÑA 4: Análisis Espectral (Pregunta antes de guardar)
 # --------------------------------------------------------------------------
 with tab_espectral:
     if not st.session_state.mis_matrices:
@@ -567,7 +599,7 @@ with tab_espectral:
     else:
         with st.container(border=True):
             header_tarjeta("🌈 Valores y Vectores Propios (Eigen-Análisis)")
-            st.caption("Cálculo del polinomio característico, subespacios propios y diagonalización $A = P D P^{-1}$.")
+            st.caption(r"Cálculo del polinomio característico, subespacios propios y diagonalización $A = P D P^{-1}$.")
 
             mat_esp_nombre = st.selectbox("Seleccione Matriz a analizar:", list(st.session_state.mis_matrices.keys()), key="esp_mat")
             btn_espectral = st.button("🚀 Ejecutar Análisis Espectral", key="btn_exec_espectral", use_container_width=True)
@@ -577,56 +609,45 @@ with tab_espectral:
 
             if not A.is_square:
                 st.error("El análisis espectral requiere una matriz cuadrada.")
+                st.session_state.pop("temp_espectral", None)
             else:
                 try:
                     lamda = sp.Symbol("lambda")
                     polinomio = calcular_con_limite(A.charpoly, args=(lamda,), timeout=5)
-
-                    with st.container(border=True):
-                        subheader_tarjeta("1. Polinomio Característico")
-                        st.latex(f"p(\\lambda) = \\det(A - \\lambda I) = {sp.latex(polinomio.as_expr())}")
+                    datos_esp = {
+                        "nombre": mat_esp_nombre,
+                        "dim": A.shape[0],
+                        "polinomio_latex": sp.latex(polinomio.as_expr()),
+                        "numerico": False,
+                        "espectro": [],
+                        "diagonalizable": False,
+                        "P": None,
+                        "D": None,
+                        "P_inv": None,
+                    }
 
                     A_num = evaluar_numerico(A)
                     if A_num is not None and A.shape[0] >= 4:
-                        st.info("💡 Matriz numérica grande detectada: Evaluando con motor NumPy.")
+                        datos_esp["numerico"] = True
                         w, v = np.linalg.eig(A_num)
+                        columnas_P = []
+                        for i in range(len(w)):
+                            val_propio = np.round(w[i], 4)
+                            val_str = str(val_propio).replace("j", "i").replace("(", "").replace(")", "")
+                            vec_propio = sp.Matrix(np.round(v[:, i], 4))
+                            columnas_P.append(vec_propio)
+                            datos_esp["espectro"].append((val_str, 1, 1, [vec_propio]))
 
-                        with st.container(border=True):
-                            subheader_tarjeta("2. Espectro y Bases (Aproximación Numérica)")
-                            columnas_P = []
-                            for i in range(len(w)):
-                                val_propio = np.round(w[i], 4)
-                                val_str = str(val_propio).replace("j", "i").replace("(", "").replace(")", "")
-                                st.markdown(rf"##### $\lambda \approx {val_str}$")
-                                vec_propio = sp.Matrix(np.round(v[:, i], 4))
-                                columnas_P.append(vec_propio)
-                                st.latex(rf"v_{{{i+1}}} = {sp.latex(vec_propio)}")
-
-                        with st.container(border=True):
-                            subheader_tarjeta("3. Diagonalización")
-                            rango_P = np.linalg.matrix_rank(v, tol=1e-5)
-
-                            if rango_P == A.shape[0]:
-                                st.success("La matriz **SÍ** es diagonalizable (Aproximación Numérica).")
-                                P = sp.Matrix.hstack(*columnas_P)
-                                D = sp.diag(*[np.round(val, 4) for val in w])
-                                try:
-                                    P_inv = sp.Matrix(np.round(np.linalg.inv(v), 4))
-                                except Exception:
-                                    P_inv = calcular_con_limite(P.inv, timeout=5)
-
-                                col_p, col_d, col_pinv = st.columns(3)
-                                with col_p:
-                                    st.write("**Matriz de Paso ($P$)**")
-                                    imprimir_matriz_simbolica(P)
-                                with col_d:
-                                    st.write("**Matriz Diagonal ($D$)**")
-                                    imprimir_matriz_simbolica(D)
-                                with col_pinv:
-                                    st.write("**Inversa ($P^{-1}$)**")
-                                    imprimir_matriz_simbolica(P_inv)
-                            else:
-                                st.error(f"La matriz **NO** es diagonalizable numéricamente (Rango de $P = {rango_P} < {A.shape[0]}$).")
+                        rango_P = np.linalg.matrix_rank(v, tol=1e-5)
+                        if rango_P == A.shape[0]:
+                            datos_esp["diagonalizable"] = True
+                            P = sp.Matrix.hstack(*columnas_P)
+                            D = sp.diag(*[np.round(val, 4) for val in w])
+                            try:
+                                P_inv = sp.Matrix(np.round(np.linalg.inv(v), 4))
+                            except Exception:
+                                P_inv = calcular_con_limite(P.inv, timeout=5)
+                            datos_esp["P"], datos_esp["D"], datos_esp["P_inv"] = P, D, P_inv
                     else:
                         vectores_propios = calcular_con_limite(A.eigenvects, timeout=8)
                         try:
@@ -634,59 +655,108 @@ with tab_espectral:
                         except Exception:
                             pass
 
-                        with st.container(border=True):
-                            subheader_tarjeta("2. Espectro y Subespacios Propios")
-                            columnas_P, valores_D = [], []
+                        columnas_P, valores_D = [], []
+                        for val, mult_alg, vects in vectores_propios:
+                            vects_limpios = []
+                            for v in vects:
+                                try:
+                                    denominadores = [sp.fraction(e)[1] for e in v]
+                                    mcm = 1
+                                    for d in denominadores:
+                                        mcm = sp.lcm(mcm, d)
+                                    v_entero = v * mcm
+                                    for e in v_entero:
+                                        if e != 0:
+                                            if e.is_real and e < 0:
+                                                v_entero = v_entero * -1
+                                            break
+                                except Exception:
+                                    v_entero = v
+                                columnas_P.append(v_entero)
+                                valores_D.append(val)
+                                vects_limpios.append(v_entero)
+                            datos_esp["espectro"].append((sp.latex(val), mult_alg, len(vects), vects_limpios))
 
-                            for val, mult_alg, vects in vectores_propios:
-                                st.markdown(f"##### $\\lambda = {sp.latex(val)}$")
-                                st.caption(f"Multiplicidad Algebraica ($m_a$): {mult_alg} | Multiplicidad Geométrica ($m_g$): {len(vects)}")
+                        if len(columnas_P) == A.shape[0]:
+                            datos_esp["diagonalizable"] = True
+                            P = sp.Matrix.hstack(*columnas_P)
+                            D = sp.diag(*valores_D)
+                            P_inv = calcular_con_limite(P.inv, timeout=5)
+                            datos_esp["P"], datos_esp["D"], datos_esp["P_inv"] = P, D, P_inv
 
-                                for i, v in enumerate(vects):
-                                    try:
-                                        denominadores = [sp.fraction(e)[1] for e in v]
-                                        mcm = 1
-                                        for d in denominadores:
-                                            mcm = sp.lcm(mcm, d)
-                                        v_entero = v * mcm
-                                        for e in v_entero:
-                                            if e != 0:
-                                                if e.is_real and e < 0:
-                                                    v_entero = v_entero * -1
-                                                break
-                                    except Exception:
-                                        v_entero = v
-
-                                    columnas_P.append(v_entero)
-                                    valores_D.append(val)
-                                    st.latex(f"v_{{{i+1}}} = {sp.latex(v_entero)}")
-
-                        with st.container(border=True):
-                            subheader_tarjeta("3. Diagonalización ($A = P D P^{-1}$)")
-                            if len(columnas_P) == A.shape[0]:
-                                st.success("La matriz **SÍ** es diagonalizable ($\\sum m_g = n$).")
-                                P = sp.Matrix.hstack(*columnas_P)
-                                D = sp.diag(*valores_D)
-                                P_inv = calcular_con_limite(P.inv, timeout=5)
-
-                                col_p, col_d, col_pinv = st.columns(3)
-                                with col_p:
-                                    st.write("**Matriz de Paso ($P$)**")
-                                    imprimir_matriz_simbolica(P)
-                                with col_d:
-                                    st.write("**Matriz Diagonal ($D$)**")
-                                    imprimir_matriz_simbolica(D)
-                                with col_pinv:
-                                    st.write("**Inversa ($P^{-1}$)**")
-                                    imprimir_matriz_simbolica(P_inv)
-
-                                st.session_state.mis_matrices[f"P_{mat_esp_nombre}"] = P
-                                st.session_state.mis_matrices[f"D_{mat_esp_nombre}"] = D
-                                st.caption(f"💡 Se guardaron automáticamente `P_{mat_esp_nombre}` y `D_{mat_esp_nombre}` en tu inventario lateral.")
-                            else:
-                                st.error("La matriz **NO** es diagonalizable (alguna multiplicidad geométrica es menor que su multiplicidad algebraica).")
-
+                    st.session_state.temp_espectral = datos_esp
                 except TimeoutError as e:
                     st.error(str(e))
                 except Exception as e:
                     st.error(f"Error procesando el análisis espectral: {e}")
+
+        if "temp_espectral" in st.session_state:
+            esp = st.session_state.temp_espectral
+
+            with st.container(border=True):
+                subheader_tarjeta("1. Polinomio Característico")
+                st.latex(f"p(\\lambda) = \\det(A - \\lambda I) = {esp['polinomio_latex']}")
+
+            with st.container(border=True):
+                subheader_tarjeta("2. Espectro y Subespacios Propios")
+                if esp["numerico"]:
+                    st.info("💡 Matriz numérica grande evaluada mediante aproximación de NumPy.")
+                for val_ltx, m_a, m_g, vects_l in esp["espectro"]:
+                    st.markdown(f"##### $\\lambda = {val_ltx}$")
+                    if not esp["numerico"]:
+                        st.caption(f"Multiplicidad Algebraica ($m_a$): {m_a} | Multiplicidad Geométrica ($m_g$): {m_g}")
+                    for idx_v, vec_item in enumerate(vects_l):
+                        st.latex(f"v_{{{idx_v+1}}} = {sp.latex(vec_item)}")
+
+            with st.container(border=True):
+                subheader_tarjeta("3. Diagonalización (A = P · D · P⁻¹)")
+                if esp["diagonalizable"]:
+                    st.success(r"La matriz **SÍ** es diagonalizable ($\sum m_g = n$).")
+                    col_p, col_d, col_pinv = st.columns(3)
+                    with col_p:
+                        st.write("**Matriz de Paso ($P$)**")
+                        imprimir_matriz_simbolica(esp["P"])
+                    with col_d:
+                        st.write("**Matriz Diagonal ($D$)**")
+                        imprimir_matriz_simbolica(esp["D"])
+                    with col_pinv:
+                        st.write("**Inversa ($P^{-1}$)**")
+                        imprimir_matriz_simbolica(esp["P_inv"])
+
+                    st.divider()
+                    desea_guardar = st.checkbox(
+                        "💾 ¿Desea guardar alguna de las matrices generadas (P, D o P⁻¹) en su inventario?",
+                        value=False,
+                        key="chk_preguntar_guardar_esp",
+                    )
+                    if desea_guardar:
+                        c_g1, c_g2, c_g3 = st.columns(3)
+                        with c_g1:
+                            g_p = st.checkbox("Guardar Matriz P", value=True, key="chk_g_p")
+                            nom_p = st.text_input("Nombre para P:", value=f"P_{esp['nombre']}", key="in_nom_p").upper().strip()
+                        with c_g2:
+                            g_d = st.checkbox("Guardar Matriz D", value=True, key="chk_g_d")
+                            nom_d = st.text_input("Nombre para D:", value=f"D_{esp['nombre']}", key="in_nom_d").upper().strip()
+                        with c_g3:
+                            g_pinv = st.checkbox("Guardar Matriz P⁻¹", value=False, key="chk_g_pinv")
+                            nom_pinv = st.text_input("Nombre para P⁻¹:", value=f"PINV_{esp['nombre']}", key="in_nom_pinv").upper().strip()
+
+                        if st.button("💾 Confirmar y Guardar Selección", key="btn_confirm_esp", use_container_width=True):
+                            guardadas = []
+                            if g_p and nom_p:
+                                st.session_state.mis_matrices[nom_p] = esp["P"]
+                                guardadas.append(nom_p)
+                            if g_d and nom_d:
+                                st.session_state.mis_matrices[nom_d] = esp["D"]
+                                guardadas.append(nom_d)
+                            if g_pinv and nom_pinv:
+                                st.session_state.mis_matrices[nom_pinv] = esp["P_inv"]
+                                guardadas.append(nom_pinv)
+
+                            if guardadas:
+                                st.success(f"Guardadas en el inventario: {', '.join(guardadas)}")
+                                st.rerun()
+                            else:
+                                st.warning("Seleccione al menos una matriz y asigne un nombre válido.")
+                else:
+                    st.error("La matriz **NO** es diagonalizable (alguna multiplicidad geométrica es menor que su multiplicidad algebraica).")
