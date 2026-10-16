@@ -23,21 +23,20 @@ PALETA_VEC = [AZUL, NARANJA, VERDE, ROJO, MORADO, "#0891b2", "#be185d"]
 
 
 def header_tarjeta(texto: str):
-    st.markdown(f'<div class="card-header-title">{texto}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-header-title">' + str(texto) + '</div>', unsafe_allow_html=True)
 
 
 def subheader_tarjeta(texto: str):
-    st.markdown(f'<div class="card-subheader-title">{texto}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card-subheader-title">' + str(texto) + '</div>', unsafe_allow_html=True)
 
 
 def _leer_seguro(texto: str):
-    """Envuelve leer_expresion_st protegiendo contra cualquier SyntaxError en ast.parse."""
     if texto is None or not str(texto).strip():
         return None
     try:
         return leer_expresion_st(str(texto).strip())
-    except (SyntaxError, ValueError, TypeError, Exception):
-        st.error(f"La expresión '{texto}' no es válida.")
+    except Exception:
+        st.error("La expresión ingresada no es válida.")
         return None
 
 
@@ -57,17 +56,17 @@ with st.sidebar:
     subheader_tarjeta("📦 Inventario de Vectores")
     if st.session_state.mis_vectores:
         for nombre, vec in list(st.session_state.mis_vectores.items()):
-            with st.expander(f"Vector {nombre} (ℝ^{vec.shape[0]})"):
+            with st.expander("Vector " + str(nombre) + " (ℝ^" + str(vec.shape[0]) + ")"):
                 imprimir_matriz_simbolica(vec)
                 nuevo_nom = st.text_input(
                     "Renombrar a:",
                     value=nombre,
-                    key=f"ren_vec_in_{nombre}",
+                    key="ren_vec_in_" + str(nombre),
                 ).upper().strip()
 
                 c_ren, c_del = st.columns(2)
                 with c_ren:
-                    if st.button("✏️ Nombre", key=f"btn_ren_vec_{nombre}", use_container_width=True):
+                    if st.button("✏️ Nombre", key="btn_ren_vec_" + str(nombre), use_container_width=True):
                         if not nuevo_nom:
                             st.error("Nombre vacío.")
                         elif nuevo_nom == nombre:
@@ -81,7 +80,7 @@ with st.sidebar:
                             st.session_state.mis_vectores = nuevo_dict
                             st.rerun()
                 with c_del:
-                    if st.button("🗑️ Borrar", key=f"btn_del_vec_{nombre}", use_container_width=True):
+                    if st.button("🗑️ Borrar", key="btn_del_vec_" + str(nombre), use_container_width=True):
                         st.session_state.mis_vectores.pop(nombre, None)
                         st.rerun()
     else:
@@ -121,14 +120,14 @@ with tab_gestion:
 
             with st.form("form_vector_main"):
                 componentes = [
-                    st.text_input(f"Componente {i + 1}:", value="1" if i == 0 else "0", key=f"comp_{i}_{dim}_main")
+                    st.text_input("Componente " + str(i + 1) + ":", value="1" if i == 0 else "0", key="comp_" + str(i) + "_" + str(dim) + "_main")
                     for i in range(dim)
                 ]
                 if st.form_submit_button("💾 Guardar Vector", use_container_width=True):
                     vec_nums = [_leer_seguro(c) for c in componentes]
                     if None not in vec_nums and nombre_nuevo:
                         st.session_state.mis_vectores[nombre_nuevo] = sp.Matrix(vec_nums)
-                        st.success(f"Vector '{nombre_nuevo}' guardado exitosamente.")
+                        st.success("Vector '" + str(nombre_nuevo) + "' guardado exitosamente.")
                         st.rerun()
                     elif not nombre_nuevo:
                         st.error("Por favor, asigna un nombre al vector.")
@@ -142,7 +141,7 @@ with tab_gestion:
                 cols_prev = st.columns(min(len(st.session_state.mis_vectores), 3))
                 for idx_v, (nom, v) in enumerate(st.session_state.mis_vectores.items()):
                     with cols_prev[idx_v % len(cols_prev)]:
-                        st.markdown(f"**{nom}** $(\\mathbb{{R}}^{{{v.rows}}})$:")
+                        st.markdown("**" + str(nom) + "** (ℝ^" + str(v.rows) + "):")
                         imprimir_matriz_simbolica(v)
             else:
                 st.warning("Aún no has creado ningún vector. Utiliza el formulario de la izquierda para comenzar.")
@@ -195,7 +194,7 @@ with tab_ops:
 
                 elif operacion == "Norma":
                     norma_v1 = sp.simplify(v1.norm())
-                    st.latex(rf"\|\mathbf{{{v1_nombre}}}\| = {sp.latex(norma_v1)} \approx {sp.latex(sp.N(norma_v1, 6))}")
+                    st.latex(r"\|\mathbf{" + str(v1_nombre) + r"}\| = " + sp.latex(norma_v1) + r" \approx " + sp.latex(sp.N(norma_v1, 6)))
 
                 elif operacion == "Vector Unitario (Normalizar)":
                     if v1.norm() == 0:
@@ -225,14 +224,18 @@ with tab_ops:
                     elif operacion == "Distancia":
                         if v1.shape == v2.shape:
                             dist = sp.simplify((v1 - v2).norm())
-                            st.latex(rf"d({v1_nombre}, {v2_nombre}) = \|\mathbf{{{v1_nombre}}} - \mathbf{{{v2_nombre}}}\| = {sp.latex(dist)} \approx {sp.latex(sp.N(dist, 6))}")
+                            st.latex(
+                                r"d(" + str(v1_nombre) + r", " + str(v2_nombre) + r") = \|\mathbf{"
+                                + str(v1_nombre) + r"} - \mathbf{" + str(v2_nombre) + r"}\| = "
+                                + sp.latex(dist) + r" \approx " + sp.latex(sp.N(dist, 6))
+                            )
                         else:
                             st.error("Error: Los vectores tienen diferente dimensión.")
 
                     elif operacion == "Producto Punto":
                         if v1.shape == v2.shape:
                             dot = sp.simplify(v1.dot(v2.conjugate()))
-                            st.latex(rf"\langle \mathbf{{{v1_nombre}}}, \mathbf{{{v2_nombre}}} \rangle = {sp.latex(dot)}")
+                            st.latex(r"\langle \mathbf{" + str(v1_nombre) + r"}, \mathbf{" + str(v2_nombre) + r"} \rangle = " + sp.latex(dot))
                             if dot == 0:
                                 st.info("✅ El producto punto es 0: los vectores son **ortogonales**.")
                         else:
@@ -242,9 +245,10 @@ with tab_ops:
                         if v1.rows == 3 and v2.rows == 3:
                             res = sp.simplify(v1.cross(v2))
                             area_par = sp.simplify(res.norm())
-                            st.success(r"Producto vectorial $v \times u$ (ortogonal a ambos):")
+                            st.success("Producto vectorial v × u (ortogonal a ambos):")
                             imprimir_matriz_simbolica(res)
-                            st.caption(rf"Área del paralelogramo generado $\Vert{}v \times u\Vert{} = {sp.latex(area_par)}$")
+                            st.write("Área del paralelogramo generado ‖v × u‖:")
+                            st.latex(r"\|\mathbf{" + str(v1_nombre) + r"} \times \mathbf{" + str(v2_nombre) + r"}\| = " + sp.latex(area_par))
                         else:
                             st.error("Ambos vectores deben pertenecer a ℝ³.")
 
@@ -256,7 +260,11 @@ with tab_ops:
                         else:
                             cos_theta = sp.simplify(v1.dot(v2) / (v1.norm() * v2.norm()))
                             ang = sp.acos(cos_theta)
-                            st.latex(rf"\cos(\theta) = {sp.latex(cos_theta)} \implies \theta = {sp.latex(ang)} \text{{ rad}} \approx {sp.N(ang * 180 / sp.pi, 5)}^\circ")
+                            st.latex(
+                                r"\cos(\theta) = " + sp.latex(cos_theta)
+                                + r" \implies \theta = " + sp.latex(ang)
+                                + r" \text{ rad} \approx " + sp.latex(sp.N(ang * 180 / sp.pi, 5)) + r"^\circ"
+                            )
 
                     elif operacion == "Proyección":
                         if v1.shape != v2.shape:
@@ -265,7 +273,7 @@ with tab_ops:
                             st.error("Error: No se puede proyectar sobre el vector nulo.")
                         else:
                             res = sp.simplify((v1.dot(v2.conjugate()) / v2.dot(v2.conjugate())) * v2)
-                            st.write(f"**Proyección ortogonal de ${v1_nombre}$ sobre ${v2_nombre}$:**")
+                            st.write("**Proyección ortogonal de " + str(v1_nombre) + " sobre " + str(v2_nombre) + ":**")
                             imprimir_matriz_simbolica(res)
 
                 if res is not None:
@@ -285,7 +293,7 @@ with tab_ops:
                         if nombre_guardar:
                             st.session_state.mis_vectores[nombre_guardar] = st.session_state.ultimo_res_vec
                             st.session_state.mostrar_guardado_vec = False
-                            st.success(f"Vector '{nombre_guardar}' guardado en el inventario.")
+                            st.success("Vector '" + str(nombre_guardar) + "' guardado en el inventario.")
                             st.rerun()
                         else:
                             st.error("Ingrese un nombre válido.")
@@ -320,7 +328,7 @@ with tab_graficas:
                         for i, v in enumerate(vecs):
                             x_v, y_v = float(v[0]), float(v[1])
                             col = PALETA_VEC[i % len(PALETA_VEC)]
-                            ax.quiver(0, 0, x_v, y_v, angles="xy", scale_units="xy", scale=1, color=col, label=f"{seleccionados[i]} ({x_v:g}, {y_v:g})")
+                            ax.quiver(0, 0, x_v, y_v, angles="xy", scale_units="xy", scale=1, color=col, label=str(seleccionados[i]))
                             max_val = max(max_val, abs(x_v), abs(y_v))
                         lim = max_val * 1.3
                         ax.set_xlim(-lim, lim)
@@ -336,7 +344,7 @@ with tab_graficas:
                         for i, v in enumerate(vecs):
                             x_v, y_v, z_v = float(v[0]), float(v[1]), float(v[2])
                             col = PALETA_VEC[i % len(PALETA_VEC)]
-                            ax.quiver(0, 0, 0, x_v, y_v, z_v, color=col, lw=2.0, label=seleccionados[i])
+                            ax.quiver(0, 0, 0, x_v, y_v, z_v, color=col, lw=2.0, label=str(seleccionados[i]))
                             max_val = max(max_val, abs(x_v), abs(y_v), abs(z_v))
                         lim = max_val * 1.25
                         ax.set_xlim([-lim, lim])
@@ -365,7 +373,7 @@ with tab_sistemas:
         with c_n:
             n_vars = int(st.number_input("Número de incógnitas (n):", min_value=1, max_value=8, value=3, step=1))
 
-        st.markdown(f"Ingrese la matriz aumentada $[A \\mid b]$ de tamaño ${m_ecs} \\times {n_vars + 1}$:")
+        st.markdown("Ingrese la matriz aumentada **[A | b]** de tamaño " + str(m_ecs) + " × " + str(n_vars + 1) + ":")
 
         with st.form("form_sistema"):
             elementos = []
@@ -374,9 +382,9 @@ with tab_sistemas:
                 fila = []
                 for j in range(n_vars + 1):
                     with cols[j]:
-                        label = f"Ec.{i+1} · x_{j+1}" if j < n_vars else f"Ec.{i+1} · b_{i+1}"
+                        label = "Ec." + str(i + 1) + " · x_" + str(j + 1) if j < n_vars else "Ec." + str(i + 1) + " · b_" + str(i + 1)
                         val_def = "1" if i == j and j < n_vars else "0"
-                        fila.append(st.text_input(label, value=val_def, key=f"sys_{m_ecs}_{n_vars}_{i}_{j}"))
+                        fila.append(st.text_input(label, value=val_def, key="sys_" + str(m_ecs) + "_" + str(n_vars) + "_" + str(i) + "_" + str(j)))
                 elementos.append(fila)
 
             submit_sys = st.form_submit_button("🧮 Analizar y Resolver Sistema", use_container_width=True)
@@ -408,29 +416,29 @@ with tab_sistemas:
                     imprimir_matriz_simbolica(rref_aug)
 
                 st.info(
-                    f"**Teorema de Rouché-Frobenius:** "
-                    f"$\\operatorname{{rg}}(A) = {rg_A}$ | "
-                    f"$\\operatorname{{rg}}(A\\mid b) = {rg_Aug}$ | "
-                    f"Incógnitas $n = {n_vars}$"
+                    "**Teorema de Rouché-Frobenius:** "
+                    "rg(A) = " + str(rg_A) + " | "
+                    "rg(A | b) = " + str(rg_Aug) + " | "
+                    "Incógnitas n = " + str(n_vars)
                 )
 
-                variables = sp.symbols(f"x1:{n_vars+1}")
+                variables = sp.symbols("x1:" + str(n_vars + 1))
                 solucion = sp.linsolve(M_aug, variables)
 
                 if not solucion:
-                    st.error(r"⛔ **Sistema Incompatible (S.I.):** $\operatorname{rg}(A) < \operatorname{rg}(A\mid b)$. No existe solución.")
+                    st.error("⛔ **Sistema Incompatible (S.I.):** rg(A) < rg(A | b). No existe solución.")
                 else:
                     sol_lista = list(solucion)[0]
                     hay_parametros = any(val.free_symbols for val in sol_lista if hasattr(val, "free_symbols"))
 
                     if not hay_parametros:
-                        st.success(r"✅ **Sistema Compatible Determinado (S.C.D.):** $\operatorname{rg}(A) = \operatorname{rg}(A\mid b) = n$. Solución única:")
+                        st.success("✅ **Sistema Compatible Determinado (S.C.D.):** rg(A) = rg(A | b) = n. Solución única:")
                     else:
                         grados_lib = n_vars - rg_A
-                        st.warning(f"⚠️ **Sistema Compatible Indeterminado (S.C.I.):** Infinitas soluciones con **{grados_lib}** grado(s) de libertad:")
+                        st.warning("⚠️ **Sistema Compatible Indeterminado (S.C.I.):** Infinitas soluciones con **" + str(grados_lib) + "** grado(s) de libertad:")
 
                     for i, var in enumerate(variables):
-                        st.latex(rf"{sp.latex(var)} = {sp.latex(sol_lista[i])}")
+                        st.latex(sp.latex(var) + " = " + sp.latex(sol_lista[i]))
 
 # ------------------------------------------------------------------------------
 # TAB 4: ANÁLISIS DE CONJUNTOS
@@ -461,12 +469,12 @@ with tab_analisis_conjunto:
                     imprimir_matriz_simbolica(mat_conjunto)
 
                 with col_c2:
-                    subheader_tarjeta(f"Propiedades en ℝ^{dim}")
+                    subheader_tarjeta("Propiedades en ℝ^" + str(dim))
                     st.markdown(
-                        f"- **Rango del conjunto:** `{rank}`\n"
-                        f"- **¿Es Linealmente Independiente?:** {'✅ Sí' if es_li else '❌ No (Linealmente Dependiente)'}\n"
-                        f"- **¿Genera a todo $\\mathbb{{R}}^{{{dim}}}$?:** {'✅ Sí' if genera_rn else '❌ No'}\n"
-                        f"- **¿Es Base de $\\mathbb{{R}}^{{{dim}}}$?:** {'✅ Sí' if es_base else '❌ No'}"
+                        "- **Rango del conjunto:** `" + str(rank) + "`\n"
+                        "- **¿Es Linealmente Independiente?:** " + ("✅ Sí" if es_li else "❌ No (Linealmente Dependiente)") + "\n"
+                        "- **¿Genera a todo ℝ^" + str(dim) + "?:** " + ("✅ Sí" if genera_rn else "❌ No") + "\n"
+                        "- **¿Es Base de ℝ^" + str(dim) + "?:** " + ("✅ Sí" if es_base else "❌ No")
                     )
 
                 st.divider()
@@ -477,7 +485,7 @@ with tab_analisis_conjunto:
                     if st.button("📤 Enviar como Matriz", use_container_width=True):
                         nombre_mat = "MAT_" + "_".join(seleccion)[:10]
                         st.session_state.mis_matrices[nombre_mat] = mat_conjunto
-                        st.success(f"Guardado como '{nombre_mat}' en el módulo de Matrices.")
+                        st.success("Guardado como '" + str(nombre_mat) + "' en el módulo de Matrices.")
 
                 with col_btn2:
                     ortonormal = st.checkbox("Normalizar vectores (Ortonormal)", value=True)
@@ -493,21 +501,21 @@ with tab_analisis_conjunto:
                                 st.session_state.mis_matrices["GS_MAT"] = mat_ortho
                                 st.success("Guardado como 'GS_MAT' en Matrices.")
                             except Exception as e:
-                                st.error(f"Error al aplicar Gram-Schmidt: {e}")
+                                st.error("Error al aplicar Gram-Schmidt: " + str(e))
 
                 with col_btn3:
                     if st.button("🔄 Calcular Base Dual (V*)", use_container_width=True):
                         if not es_base:
-                            st.error(f"El conjunto debe ser una base de ℝ^{dim} ({dim} vectores L.I.).")
+                            st.error("El conjunto debe ser una base de ℝ^" + str(dim) + " (" + str(dim) + " vectores L.I.).")
                         else:
                             try:
                                 base_dual = sp.simplify(mat_conjunto.inv())
-                                st.write(r"**Matriz de la Base Dual ($\mathcal{B}^*$ por renglones):**")
+                                st.write("**Matriz de la Base Dual (B* por renglones):**")
                                 imprimir_matriz_simbolica(base_dual)
                                 st.session_state.mis_matrices["DUAL_MAT"] = base_dual
                                 st.success("Guardado como 'DUAL_MAT' en Matrices.")
                             except Exception as e:
-                                st.error(f"Error al calcular la base dual: {e}")
+                                st.error("Error al calcular la base dual: " + str(e))
 
         st.divider()
         subheader_tarjeta("Extraer filas o columnas de una Matriz hacia Vectores")
@@ -523,9 +531,9 @@ with tab_analisis_conjunto:
                     M = st.session_state.mis_matrices[mat_nombre]
                     for i in range(M.rows if tipo_ext == "Renglones" else M.cols):
                         vec = M.row(i).T if tipo_ext == "Renglones" else M.col(i)
-                        nombre = f"{mat_nombre}_{tipo_ext[0]}{i+1}"
+                        nombre = str(mat_nombre) + "_" + str(tipo_ext[0]) + str(i + 1)
                         st.session_state.mis_vectores[nombre] = vec
-                    st.success(f"{tipo_ext} extraídos al inventario lateral.")
+                    st.success(str(tipo_ext) + " extraídos al inventario lateral.")
                     st.rerun()
         else:
             st.info("No hay matrices guardadas en el inventario global.")
