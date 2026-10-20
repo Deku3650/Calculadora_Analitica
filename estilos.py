@@ -1,21 +1,76 @@
+# estilos.py
+import html
 import streamlit as st
 
 
 def cargar_estilos_globales():
-    """Aplica el diseño institucional unificado de MATHESIS (Azul/Índigo) a todas las páginas."""
+    """Aplica el diseño institucional unificado de MATHESIS V0.3 a todas las páginas."""
     st.markdown("""
         <style>
-        /* 0. VISIBILIDAD Y VARIABLES GLOBALES DE TEMA EN AZUL */
+        /* 1. VISIBILIDAD DEL MENÚ Y ESPACIADO PRINCIPAL */
         #MainMenu { visibility: visible !important; }
         footer { visibility: hidden; }
         .block-container { padding-top: 1.5rem; }
 
+        /* 2. VARIABLES GLOBALES DE TEMA EN AZUL */
         :root, html, body, [data-testid="stAppViewContainer"] {
             --primary-color: #0284c7 !important;
             --stConfig-primaryColor: #0284c7 !important;
         }
 
-        /* 1. CONTENEDOR/BANNER DEL TÍTULO PRINCIPAL */
+        /* 3. BANNER HERO DE PORTADA (INICIO.PY) */
+        .hero-banner {
+            background: linear-gradient(135deg, rgba(2, 132, 199, 0.08) 0%, rgba(99, 102, 241, 0.08) 100%);
+            padding: 32px 24px;
+            border-radius: 20px;
+            border: 1px solid rgba(2, 132, 199, 0.25);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .hero-badge {
+            background: rgba(56, 189, 248, 0.15);
+            color: #0284c7;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            display: inline-block;
+            margin-bottom: 12px;
+            border: 1px solid rgba(2, 132, 199, 0.3);
+        }
+
+        .hero-title {
+            font-size: 50px;
+            font-weight: 900;
+            margin: 0;
+            letter-spacing: 4px;
+            background: linear-gradient(90deg, #0284c7, #6366f1, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1.1;
+        }
+
+        .hero-subtitle {
+            font-size: 17px;
+            font-weight: 600;
+            margin-top: 10px;
+            margin-bottom: 0px;
+            opacity: 0.85;
+        }
+
+        .footer-copy {
+            text-align: center;
+            font-size: 12px;
+            opacity: 0.75;
+            padding-top: 20px;
+            border-top: 1px solid rgba(2, 132, 199, 0.2);
+        }
+
+        /* 4. BANNER PRINCIPAL DE MÓDULOS */
         .title-container {
             padding: 1.2rem 1.5rem;
             border-radius: 16px;
@@ -35,7 +90,7 @@ def cargar_estilos_globales():
             letter-spacing: -0.5px;
         }
 
-        /* 2. ESTILIZADO GLOBAL PARA SUBTÍTULOS (H2, H3, ST.HEADER, ST.SUBHEADER) */
+        /* 5. ESTILIZADO GLOBAL PARA SUBTÍTULOS (H2, H3) */
         .stMarkdown h2, [data-testid="stHeader"] h2 {
             color: #38bdf8 !important;
             font-size: 1.35rem !important;
@@ -57,10 +112,10 @@ def cargar_estilos_globales():
             margin-bottom: 0.8rem !important;
         }
 
-        /* 3. CONTENEDORES DE TARJETAS NATIVOS */
+        /* 6. CONTENEDORES NATIVOS CON BORDE (TARJETAS) */
         [data-testid="stVerticalBlockBorderWrapper"] {
             background: linear-gradient(135deg, rgba(2, 132, 199, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%) !important;
-            border: 1px solid rgba(56, 189, 248, 0.32) !important;
+            border: 1px solid rgba(56, 189, 248, 0.35) !important;
             border-radius: 16px !important;
             box-shadow: 0 4px 15px rgba(2, 132, 199, 0.08) !important;
             transition: all 0.25s ease-in-out !important;
@@ -68,11 +123,11 @@ def cargar_estilos_globales():
         }
 
         [data-testid="stVerticalBlockBorderWrapper"]:hover {
-            border-color: rgba(56, 189, 248, 0.65) !important;
+            border-color: #0284c7 !important;
             box-shadow: 0 6px 18px rgba(2, 132, 199, 0.16) !important;
         }
 
-        /* 4. TÍTULOS Y SUBTÍTULOS RESALTADOS DENTRO DE TARJETAS */
+        /* 7. TÍTULOS Y SUBTÍTULOS RESALTADOS DENTRO DE LAS TARJETAS */
         .card-header-title {
             background: linear-gradient(135deg, #0284c7 0%, #6366f1 100%);
             color: #ffffff !important;
@@ -95,7 +150,7 @@ def cargar_estilos_globales():
             margin-bottom: 12px;
         }
 
-        /* 5. DISEÑO MODERNO DE PESTAÑAS (ST.TABS) */
+        /* 8. DISEÑO MODERNO DE PESTAÑAS (ST.TABS) */
         [data-baseweb="tab-list"] {
             gap: 10px !important;
             background-color: rgba(2, 132, 199, 0.05) !important;
@@ -103,6 +158,7 @@ def cargar_estilos_globales():
             border-radius: 16px !important;
             border: 1px solid rgba(56, 189, 248, 0.2) !important;
             margin-bottom: 20px !important;
+            flex-wrap: wrap !important;
         }
 
         button[data-baseweb="tab"] {
@@ -139,16 +195,18 @@ def cargar_estilos_globales():
             display: none !important;
         }
 
-        /* 6. BARRA LATERAL UNIFICADA Y RESPONSIVA */
+        /* 9. BARRA LATERAL UNIFICADA Y RESPONSIVA (SIDEBAR) */
         [data-testid="stSidebar"], section[data-testid="stSidebar"] {
             width: 100% !important;
-            max-width: 290px !important;
+            min-width: 270px !important;
+            max-width: 295px !important;
             border-right: 1px solid rgba(2, 132, 199, 0.2) !important;
         }
 
         @media (max-width: 768px) {
             [data-testid="stSidebar"], section[data-testid="stSidebar"] {
-                max-width: 240px !important;
+                min-width: 220px !important;
+                max-width: 250px !important;
             }
         }
 
@@ -169,13 +227,15 @@ def cargar_estilos_globales():
             transform: translateX(4px);
         }
 
-        [data-testid="stSidebarNav"] ul li div a[aria-current="page"], [data-testid="stSidebarNav"] a[aria-current="page"] {
+        [data-testid="stSidebarNav"] ul li div a[aria-current="page"],
+        [data-testid="stSidebarNav"] a[aria-current="page"] {
             background: linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(79, 70, 229, 0.25) 100%) !important;
             border: 1px solid #38bdf8 !important;
             box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25) !important;
         }
 
-        [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span, [data-testid="stSidebarNav"] a[aria-current="page"] span {
+        [data-testid="stSidebarNav"] ul li div a[aria-current="page"] span,
+        [data-testid="stSidebarNav"] a[aria-current="page"] span {
             color: #38bdf8 !important;
             font-weight: 800 !important;
             letter-spacing: 0.3px !important;
@@ -186,7 +246,7 @@ def cargar_estilos_globales():
             font-weight: 600 !important;
         }
 
-        /* 7. ENLACES DE PÁGINA Y TARJETAS DE INICIO */
+        /* 10. ENLACES Y TARJETAS DE PORTADA */
         [data-testid="stPageLink-NavLink"] {
             background-color: transparent !important;
             border: none !important;
@@ -291,21 +351,31 @@ def cargar_estilos_globales():
 
 
 def encabezado_pagina(titulo: str, subtitulo: str = ""):
-    """Renderiza el banner superior institucional y un subtítulo opcional."""
-    st.markdown(f"""
-        <div class="title-container">
-            <h1 class="title-text">{titulo}</h1>
-        </div>
-    """, unsafe_allow_html=True)
+    """Renderiza el banner institucional de la página con texto sanitizado."""
+    seguro = html.escape(str(titulo))
+    st.markdown(
+        '<div class="title-container"><h1 class="title-text">' + seguro + '</h1></div>',
+        unsafe_allow_html=True,
+    )
     if subtitulo:
         st.markdown(subtitulo)
 
 
-def titulo_tarjeta(texto: str):
-    """Renderiza un encabezado resaltado dentro de un st.container(border=True)."""
-    st.markdown(f'<div class="card-header-title">{texto}</div>', unsafe_allow_html=True)
+def header_tarjeta(texto: str):
+    """Encabezado principal de tarjeta con texto sanitizado contra XSS."""
+    seguro = html.escape(str(texto))
+    st.markdown('<div class="card-header-title">' + seguro + '</div>', unsafe_allow_html=True)
 
 
-def subtitulo_tarjeta(texto: str):
-    """Renderiza un subencabezado estilizado dentro de una tarjeta."""
-    st.markdown(f'<div class="card-subheader-title">{texto}</div>', unsafe_allow_html=True)
+def subheader_tarjeta(texto: str):
+    """Subtítulo de tarjeta con texto sanitizado contra XSS."""
+    seguro = html.escape(str(texto))
+    st.markdown('<div class="card-subheader-title">' + seguro + '</div>', unsafe_allow_html=True)
+
+
+def titulo_tarjeta(texto: str, sub: bool = False):
+    """Función compatible con páginas que usan el parámetro opcional sub."""
+    if sub:
+        subheader_tarjeta(texto)
+    else:
+        header_tarjeta(texto)
