@@ -27,7 +27,7 @@ FONDO = "#ffffff"
 # ==============================================================================
 # UTILIDADES DE ESTILO GRÁFICO (LIBRO DE TEXTO)
 # ==============================================================================
-def _crear_fig_2d(w=6.8, h=5.4):
+def _crear_fig_2d(w=6.6, h=5.2):
     fig, ax = plt.subplots(figsize=(w, h), dpi=110, facecolor=FONDO)
     ax.set_facecolor("#fbfdff")
     ax.minorticks_on()
@@ -40,7 +40,7 @@ def _crear_fig_2d(w=6.8, h=5.4):
     for s in ("left", "bottom"):
         ax.spines[s].set_color(OSCURO)
         ax.spines[s].set_linewidth(1.4)
-    ax.tick_params( colors=OSCURO, labelsize=9)
+    ax.tick_params(colors=OSCURO, labelsize=9)
     ax.set_aspect("equal", adjustable="box")
     return fig, ax
 
@@ -60,7 +60,7 @@ def _anotar_pt(ax, x, y, etiqueta, color=ROJO, dx=10, dy=10):
     )
 
 
-def _crear_fig_3d(w=6.8, h=5.6, titulo=""):
+def _crear_fig_3d(w=6.8, h=5.4, titulo=""):
     fig = plt.figure(figsize=(w, h), dpi=110, facecolor=FONDO)
     ax = fig.add_subplot(111, projection="3d")
     ax.set_xlabel("X", fontweight="bold", labelpad=5)
@@ -75,7 +75,7 @@ def _crear_fig_3d(w=6.8, h=5.6, titulo=""):
 
 encabezado_pagina(
     "📐 Módulo de Geometría Euclidiana y Analítica (ℝ² y ℝ³)",
-    "Análisis de triángulos, recta de Euler, rectas, secciones cónicas con rotación de ejes, planos, rectas en ℝ³ y superficies cuádricas.",
+    "Análisis de triángulos, recta de Euler, rectas, secciones cónicas con rotación de ejes, planos, rectas en ℝ³ y superficies cuádricas interactivas.",
 )
 
 tab_2d, tab_analitica_2d, tab_3d = st.tabs([
@@ -95,7 +95,7 @@ with tab_2d:
             "Triángulo Completo (Puntos Notables y Recta de Euler)",
             "Círculo, Corona y Sector Circular",
             "Polígono Regular de n Lados",
-            "Trapecio y Paralelogramo",
+            "Trapecio Simétrico",
         ],
         horizontal=True,
         key="geo_modo_2d",
@@ -182,7 +182,7 @@ with tab_2d:
                         st.error("⛔ Los tres puntos A, B y C son colineales (están sobre la misma recta): no forman un triángulo.")
                         valido_tri = False
 
-                subheader_tarjeta("Capas visuales")
+                subheader_tarjeta("Capas en la gráfica")
                 ver_in = st.checkbox("Mostrar Incentro y Circunferencia Inscrita", value=True, key="tri_chk_in")
                 ver_circ = st.checkbox("Mostrar Circuncentro y Circunscrita", value=True, key="tri_chk_circ")
                 ver_euler = st.checkbox("Mostrar Baricentro, Ortocentro y Recta de Euler", value=True, key="tri_chk_euler")
@@ -199,7 +199,6 @@ with tab_2d:
             beta = math.degrees(math.acos(np.clip((a**2 + c**2 - b**2) / (2 * a * c), -1.0, 1.0)))
             gamma = 180.0 - alpha - beta
 
-            # Alturas, medianas y bisectrices
             ha, hb, hc = 2 * area / a, 2 * area / b, 2 * area / c
             ma = 0.5 * math.sqrt(2 * b**2 + 2 * c**2 - a**2)
             mb = 0.5 * math.sqrt(2 * a**2 + 2 * c**2 - b**2)
@@ -208,13 +207,11 @@ with tab_2d:
             bb = (2 * a * c * math.cos(math.radians(beta / 2))) / (a + c)
             bc = (2 * a * b * math.cos(math.radians(gamma / 2))) / (a + b)
 
-            # Radios y puntos notables
             r_in = area / s
             R_circ = (a * b * c) / (4.0 * area)
             G_pt = (A_pt + B_pt + C_pt) / 3.0
             I_pt = (a * A_pt + b * B_pt + c * C_pt) / perimetro
 
-            # Circuncentro por sistema determinante
             d_det = 2.0 * (A_pt[0] * (B_pt[1] - C_pt[1]) + B_pt[0] * (C_pt[1] - A_pt[1]) + C_pt[0] * (A_pt[1] - B_pt[1]))
             ux = (
                 (np.dot(A_pt, A_pt)) * (B_pt[1] - C_pt[1])
@@ -227,10 +224,8 @@ with tab_2d:
                 + (np.dot(C_pt, C_pt)) * (B_pt[0] - A_pt[0])
             ) / d_det
             O_pt = np.array([ux, uy])
-            # Relación vectorial de Euler: OH = 3*OG - 2*O -> H = A + B + C - 2*O (en coordenadas con origen en O)
             H_pt = 3.0 * G_pt - 2.0 * O_pt
 
-            # Clasificación
             if abs(a - b) < 1e-5 and abs(b - c) < 1e-5:
                 tipo_lados = "Equilátero"
             elif abs(a - b) < 1e-5 or abs(b - c) < 1e-5 or abs(a - c) < 1e-5:
@@ -290,38 +285,70 @@ with tab_2d:
                     ax.legend(loc="upper right", fontsize=8.5, framealpha=0.92)
                     mostrar_figura_segura(fig)
 
-            # Tablas detalladas debajo
+            # Resultados organizados limpiamente en pestañas
             with st.container(border=True):
-                subheader_tarjeta("Análisis Métrico, Cevianas y Puntos Notables")
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Área (A)", f"{area:.4f}")
-                m2.metric("Perímetro (2s)", f"{perimetro:.4f}")
-                m3.metric("Inradio (r = A/s)", f"{r_in:.4f}")
-                m4.metric("Circunradio (R = abc/4A)", f"{R_circ:.4f}")
+                subheader_tarjeta("Resultados Analíticos del Triángulo")
+                t_res, t_cev, t_not, t_cir = st.tabs([
+                    "📋 Resumen y Vértices",
+                    "📐 Lados, Ángulos y Cevianas",
+                    "🎯 Puntos Notables y Recta de Euler",
+                    "⭕ Circunferencias Inscrita y Circunscrita",
+                ])
 
-                t_c1, t_c2 = st.columns(2)
-                with t_c1:
-                    st.markdown("**Lados, Ángulos y Cevianas:**")
+                with t_res:
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.metric("Área (A)", f"{area:.4f}")
+                    m2.metric("Perímetro (2s)", f"{perimetro:.4f}")
+                    m3.metric("Semiperímetro (s)", f"{s:.4f}")
+                    m4.metric("Clasificación", f"{tipo_lados} · {tipo_ang}")
                     st.markdown(
-                        f"| Elemento | Respecto a $A$ ($a$) | Respecto a $B$ ($b$) | Respecto a $C$ ($c$) |\n"
+                        f"| Vértice | Coordenada $x$ | Coordenada $y$ | Ángulo Interior |\n"
                         f"|---|---|---|---|\n"
-                        f"| **Longitud del lado** | $a = {a:.4f}$ | $b = {b:.4f}$ | $c = {c:.4f}$ |\n"
-                        f"| **Ángulo opuesto** | $\\alpha = {alpha:.2f}^\\circ$ | $\\beta = {beta:.2f}^\\circ$ | $\\gamma = {gamma:.2f}^\\circ$ |\n"
-                        f"| **Altura ($h = 2A/\\text{{lado}}$)** | $h_a = {ha:.4f}$ | $h_b = {hb:.4f}$ | $h_c = {hc:.4f}$ |\n"
-                        f"| **Mediana ($m$)** | $m_a = {ma:.4f}$ | $m_b = {mb:.4f}$ | $m_c = {mc:.4f}$ |\n"
-                        f"| **Bisectriz interna ($b$)** | $b_a = {ba:.4f}$ | $b_b = {bb:.4f}$ | $b_c = {bc:.4f}$ |"
+                        f"| **Vértice $A$** | `{A_pt[0]:.4f}` | `{A_pt[1]:.4f}` | $\\alpha = {alpha:.2f}^\\circ$ ({math.radians(alpha):.4f} rad) |\n"
+                        f"| **Vértice $B$** | `{B_pt[0]:.4f}` | `{B_pt[1]:.4f}` | $\\beta = {beta:.2f}^\\circ$ ({math.radians(beta):.4f} rad) |\n"
+                        f"| **Vértice $C$** | `{C_pt[0]:.4f}` | `{C_pt[1]:.4f}` | $\\gamma = {gamma:.2f}^\\circ$ ({math.radians(gamma):.4f} rad) |"
                     )
-                with t_c2:
-                    st.markdown("**Coordenadas de Puntos Notables y Teorema de Euler:**")
+
+                with t_cev:
                     st.markdown(
-                        f"| Punto Notable | Coordenadas $(x, y)$ | Propiedad Geométrica |\n"
-                        f"|---|---|---|\n"
-                        f"| **Baricentro ($G$)** | $({G_pt[0]:.4f},\\, {G_pt[1]:.4f})$ | Intersección de las 3 medianas (centro de masa) |\n"
-                        f"| **Incentro ($I$)** | $({I_pt[0]:.4f},\\, {I_pt[1]:.4f})$ | Intersección de las bisectrices (equidista $r$ de los lados) |\n"
-                        f"| **Circuncentro ($O$)** | $({O_pt[0]:.4f},\\, {O_pt[1]:.4f})$ | Intersección de las mediatrices (equidista $R$ de los vértices) |\n"
-                        f"| **Ortocentro ($H$)** | $({H_pt[0]:.4f},\\, {H_pt[1]:.4f})$ | Intersección de las 3 alturas ($\\overrightarrow{{OH}} = 3\\overrightarrow{{OG}}$) |"
+                        f"| Métrica | Lado $a$ ($BC$) | Lado $b$ ($AC$) | Lado $c$ ($AB$) |\n"
+                        f"|---|---|---|---|\n"
+                        f"| **Longitud del lado** | `{a:.4f}` | `{b:.4f}` | `{c:.4f}` |\n"
+                        f"| **Ángulo opuesto** | `{alpha:.2f}°` | `{beta:.2f}°` | `{gamma:.2f}°` |\n"
+                        f"| **Altura ($h = 2A/\\text{{lado}}$)** | `{ha:.4f}` | `{hb:.4f}` | `{hc:.4f}` |\n"
+                        f"| **Mediana ($m$)** | `{ma:.4f}` | `{mb:.4f}` | `{mc:.4f}` |\n"
+                        f"| **Bisectriz interna ($b$)** | `{ba:.4f}` | `{bb:.4f}` | `{bc:.4f}` |"
                     )
-                    st.info("💡 **Teorema de Euler:** En todo triángulo no equilátero, el Circuncentro ($O$), el Baricentro ($G$) y el Ortocentro ($H$) son colineales sobre la **Recta de Euler** y cumplen $d(G, H) = 2\\,d(O, G)$.")
+
+                with t_not:
+                    d_OG = float(np.linalg.norm(G_pt - O_pt))
+                    d_GH = float(np.linalg.norm(H_pt - G_pt))
+                    d_OH = float(np.linalg.norm(H_pt - O_pt))
+                    st.markdown(
+                        f"| Punto Notable | Coordenadas $(x, y)$ | Definición Geométrica |\n"
+                        f"|---|---|---|\n"
+                        f"| **Baricentro ($G$)** | `({G_pt[0]:.4f}, {G_pt[1]:.4f})` | Intersección de las 3 medianas (centro de gravedad) |\n"
+                        f"| **Incentro ($I$)** | `({I_pt[0]:.4f}, {I_pt[1]:.4f})` | Intersección de las 3 bisectrices internas |\n"
+                        f"| **Circuncentro ($O$)** | `({O_pt[0]:.4f}, {O_pt[1]:.4f})` | Intersección de las 3 mediatrices |\n"
+                        f"| **Ortocentro ($H$)** | `({H_pt[0]:.4f}, {H_pt[1]:.4f})` | Intersección de las 3 alturas |"
+                    )
+                    st.info(
+                        f"**Relación en la Recta de Euler:** $d(O, G) = {d_OG:.4f}$, $d(G, H) = {d_GH:.4f}$ y $d(O, H) = {d_OH:.4f}$ "
+                        "(se verifica exactamente $d(G, H) = 2\\,d(O, G)$)."
+                    )
+
+                with t_cir:
+                    d_OI = float(np.linalg.norm(O_pt - I_pt))
+                    c_cir1, c_cir2 = st.columns(2)
+                    with c_cir1:
+                        st.markdown("**Circunferencia Inscrita (Incentro $I$):**")
+                        st.latex(f"(x - ({I_pt[0]:.3f}))^2 + (y - ({I_pt[1]:.3f}))^2 = {r_in**2:.4f}")
+                        st.caption(f"Radio $r = A/s = {r_in:.4f}$ · Área = ${math.pi * r_in**2:.4f}$")
+                    with c_cir2:
+                        st.markdown("**Circunferencia Circunscrita (Circuncentro $O$):**")
+                        st.latex(f"(x - ({O_pt[0]:.3f}))^2 + (y - ({O_pt[1]:.3f}))^2 = {R_circ**2:.4f}")
+                        st.caption(f"Radio $R = abc/(4A) = {R_circ:.4f}$ · Área = ${math.pi * R_circ**2:.4f}$")
+                    st.info(f"**Teorema de Euler para circunferencias:** $d(O, I) = \\sqrt{{R(R - 2r)}} = {d_OI:.4f}$.")
 
     elif modo_2d.startswith("Círculo"):
         c1, c2 = st.columns([1, 1.3])
@@ -329,7 +356,14 @@ with tab_2d:
             with st.container(border=True):
                 header_tarjeta("Parámetros Circulares")
                 r_ext = st.number_input("Radio exterior (R):", min_value=0.1, value=5.0, step=0.5, key="cir_r")
-                r_int = st.number_input("Radio interior (r, 0 = círculo lleno):", min_value=0.0, max_value=float(r_ext - 0.01) if r_ext > 0.05 else 0.0, value=0.0, step=0.5, key="cir_rint")
+                r_int = st.number_input(
+                    "Radio interior (r, 0 = círculo lleno):",
+                    min_value=0.0,
+                    max_value=float(r_ext - 0.01) if r_ext > 0.05 else 0.0,
+                    value=0.0,
+                    step=0.5,
+                    key="cir_rint",
+                )
                 theta_deg = st.slider("Ángulo del sector θ (grados):", min_value=1.0, max_value=360.0, value=90.0, step=1.0, key="cir_th")
                 theta_rad = math.radians(theta_deg)
 
@@ -340,16 +374,19 @@ with tab_2d:
                 cuerda = 2 * r_ext * math.sin(theta_rad / 2.0)
                 area_segmento = 0.5 * r_ext**2 * (theta_rad - math.sin(theta_rad))
 
-                st.markdown(
-                    f"| Métrica | Fórmula | Valor |\n"
-                    f"|---|---|---|\n"
-                    f"| **Área total** | $\\pi(R^2 - r^2)$ | **{area_total:.4f}** |\n"
-                    f"| **Circunferencia exterior** | $2\\pi R$ | **{perim_total:.4f}** |\n"
-                    f"| **Área del sector ($\\theta$)** | $\\frac{{1}}{{2}}\\theta(R^2 - r^2)$ | **{area_sector:.4f}** |\n"
-                    f"| **Longitud de arco ($s$)** | $R\\theta$ | **{long_arco:.4f}** |\n"
-                    f"| **Longitud de la cuerda** | $2R\\sin(\\theta/2)$ | **{cuerda:.4f}** |\n"
-                    f"| **Área del segmento circular** | $\\frac{{1}}{{2}}R^2(\\theta - \\sin\\theta)$ | **{area_segmento:.4f}** |"
-                )
+                t_c1, t_c2 = st.tabs(["⭕ Círculo / Corona", "🍰 Sector y Segmento"])
+                with t_c1:
+                    st.metric("Área Total", f"{area_total:.4f}")
+                    st.metric("Circunferencia Exterior (2πR)", f"{perim_total:.4f}")
+                with t_c2:
+                    st.markdown(
+                        f"| Elemento ($\\theta = {theta_deg:.0f}^\\circ$) | Valor |\n"
+                        f"|---|---|\n"
+                        f"| **Área del sector** | `{area_sector:.4f}` |\n"
+                        f"| **Longitud de arco ($R\\theta$)** | `{long_arco:.4f}` |\n"
+                        f"| **Longitud de la cuerda** | `{cuerda:.4f}` |\n"
+                        f"| **Área del segmento circular** | `{area_segmento:.4f}` |"
+                    )
         with c2:
             with st.container(border=True):
                 header_tarjeta("Representación Geométrica")
@@ -386,17 +423,25 @@ with tab_2d:
                 area_pol = 0.5 * perim_pol * apotema
                 num_diagonales = n_lados * (n_lados - 3) // 2
 
-                st.markdown(
-                    f"| Propiedad | Valor |\n"
-                    f"|---|---|\n"
-                    f"| **Perímetro ($nL$)** | **{perim_pol:.4f}** |\n"
-                    f"| **Apotema ($a_p$)** | **{apotema:.4f}** |\n"
-                    f"| **Circunradio ($R$)** | **{circunradio:.4f}** |\n"
-                    f"| **Área ($P \\cdot a_p / 2$)** | **{area_pol:.4f}** |\n"
-                    f"| **Ángulo interior / central** | **{ang_interior:.2f}°** / **{ang_central:.2f}°** |\n"
-                    f"| **Suma de ángulos interiores** | **{suma_ang:.1f}°** |\n"
-                    f"| **Total de diagonales ($n(n-3)/2$)** | **{num_diagonales}** |"
-                )
+                t_p1, t_p2 = st.tabs(["📏 Métricas y Radios", "📐 Ángulos y Diagonales"])
+                with t_p1:
+                    st.markdown(
+                        f"| Propiedad | Valor |\n"
+                        f"|---|---|\n"
+                        f"| **Área ($P \\cdot a_p / 2$)** | `{area_pol:.4f}` |\n"
+                        f"| **Perímetro ($nL$)** | `{perim_pol:.4f}` |\n"
+                        f"| **Apotema ($a_p$)** | `{apotema:.4f}` |\n"
+                        f"| **Circunradio ($R$)** | `{circunradio:.4f}` |"
+                    )
+                with t_p2:
+                    st.markdown(
+                        f"| Propiedad | Valor |\n"
+                        f"|---|---|\n"
+                        f"| **Ángulo interior** | `{ang_interior:.2f}°` |\n"
+                        f"| **Ángulo central** | `{ang_central:.2f}°` |\n"
+                        f"| **Suma de ángulos interiores** | `{suma_ang:.1f}°` |\n"
+                        f"| **Total de diagonales** | `{num_diagonales}` |"
+                    )
         with c2:
             with st.container(border=True):
                 header_tarjeta(f"Polígono Regular (n = {n_lados})")
@@ -435,11 +480,11 @@ with tab_2d:
                 st.markdown(
                     f"| Métrica | Valor |\n"
                     f"|---|---|\n"
-                    f"| **Área ($\\frac{{B+b}}{{2}}h$)** | **{area_t:.4f}** |\n"
-                    f"| **Perímetro** | **{perim_t:.4f}** |\n"
-                    f"| **Lado oblicuo ($l$)** | **{lado_lat:.4f}** |\n"
-                    f"| **Paralela media ($m$)** | **{mediana_t:.4f}** |\n"
-                    f"| **Diagonal ($d$)** | **{diag_t:.4f}** |"
+                    f"| **Área ($\\frac{{B+b}}{{2}}h$)** | `{area_t:.4f}` |\n"
+                    f"| **Perímetro** | `{perim_t:.4f}` |\n"
+                    f"| **Lado oblicuo ($l$)** | `{lado_lat:.4f}` |\n"
+                    f"| **Paralela media ($m$)** | `{mediana_t:.4f}` |\n"
+                    f"| **Diagonal ($d$)** | `{diag_t:.4f}` |"
                 )
         with c2:
             with st.container(border=True):
@@ -505,10 +550,8 @@ with tab_analitica_2d:
         if norm1 < 1e-12:
             st.error("⛔ Los coeficientes A₁ y B₁ no pueden ser ambos cero.")
         else:
-            # Cálculos exactos de L1 y P0
             val_eval = A1 * x0_p + B1 * y0_p + C1
             dist_p0 = abs(val_eval) / norm1
-            # Proyección ortogonal (pie de la perpendicular H) y reflejo P'
             factor_proy = val_eval / (norm1**2)
             hx = x0_p - A1 * factor_proy
             hy = y0_p - B1 * factor_proy
@@ -531,7 +574,6 @@ with tab_analitica_2d:
                         x_fijo = -C1 / A1
                         ax.axvline(x_fijo, color=AZUL, lw=2.4, label=f"L₁: x = {x_fijo:.2f}")
 
-                    # Segmento perpendicular P0 -> H y reflejo P'
                     ax.plot([x0_p, rx], [y0_p, ry], color=ROJO, ls="--", lw=1.6, label=f"d(P₀, L₁) = {dist_p0:.3f}")
                     _anotar_pt(ax, x0_p, y0_p, "P₀", ROJO, 10, 10)
                     _anotar_pt(ax, hx, hy, "Pie H", VERDE, 10, -20)
@@ -555,48 +597,48 @@ with tab_analitica_2d:
                     mostrar_figura_segura(fig)
 
             with st.container(border=True):
-                subheader_tarjeta("Formas de la Recta L₁ y Resultados Analíticos")
-                pendiente_str = f"{-A1 / B1:.4f}" if abs(B1) > 1e-9 else "∞ (vertical)"
-                ang_inc = math.degrees(math.atan2(-A1, B1)) % 180.0
-                corte_x = f"({-C1 / A1:.4f}, 0)" if abs(A1) > 1e-9 else "No corta"
-                corte_y = f"(0, {-C1 / B1:.4f})" if abs(B1) > 1e-9 else "No corta"
-
-                st.markdown(
-                    f"| Concepto | Valor / Ecuación |\n"
-                    f"|---|---|\n"
-                    f"| **Pendiente ($m$) y Ángulo de inclinación ($\\alpha$)** | $m = {pendiente_str}$ · $\\alpha = {ang_inc:.2f}^\\circ$ |\n"
-                    f"| **Vector normal $\\mathbf{{n}}$ y Vector director $\\mathbf{{v}}$** | $\\mathbf{{n}} = ({A1:g}, {B1:g})$ · $\\mathbf{{v}} = ({-B1:g}, {A1:g})$ |\n"
-                    f"| **Intersecciones con los ejes** | Eje X: `{corte_x}` · Eje Y: `{corte_y}` |\n"
-                    f"| **Distancia de $P_0({x0_p:g}, {y0_p:g})$ a $L_1$** | $d(P_0, L_1) = \\dfrac{{|A_1x_0 + B_1y_0 + C_1|}}{{\\sqrt{{A_1^2+B_1^2}}}} = \\mathbf{{{dist_p0:.4f}}}$ |\n"
-                    f"| **Pie de la perpendicular (Proyección $H$)** | $H = ({hx:.4f},\\, {hy:.4f})$ |\n"
-                    f"| **Punto simétrico de $P_0$ respecto a $L_1$ ($P'$)** | $P' = ({rx:.4f},\\, {ry:.4f})$ |"
-                )
-
-                if comp_l2 and math.hypot(A2, B2) > 1e-12:
-                    det_l = A1 * B2 - A2 * B1
-                    prod_n = A1 * A2 + B1 * B2
-                    norm2 = math.hypot(A2, B2)
-                    cos_th = min(1.0, abs(prod_n) / (norm1 * norm2))
-                    ang_entre = math.degrees(math.acos(cos_th))
-                    if abs(det_l) < 1e-9:
-                        dist_par = abs(C1 / norm1 - (C2 * (A1 / A2 if abs(A2) > 1e-9 else B1 / B2)) / norm1)
-                        st.info(f"**Relación con $L_2$:** Las rectas son **PARALELAS** ($\\theta = 0^\\circ$). Distancia entre ellas: **{dist_par:.4f}**.")
+                subheader_tarjeta("Análisis de la Recta")
+                t_r1, t_r2, t_r3 = st.tabs(["📏 Elementos de L₁", "📍 Distancia y Proyección de P₀", "🔀 Relación con L₂"])
+                with t_r1:
+                    pendiente_str = f"{-A1 / B1:.4f}" if abs(B1) > 1e-9 else "∞ (vertical)"
+                    ang_inc = math.degrees(math.atan2(-A1, B1)) % 180.0
+                    corte_x = f"({-C1 / A1:.4f}, 0)" if abs(A1) > 1e-9 else "No corta"
+                    corte_y = f"(0, {-C1 / B1:.4f})" if abs(B1) > 1e-9 else "No corta"
+                    st.markdown(
+                        f"| Concepto | Valor |\n"
+                        f"|---|---|\n"
+                        f"| **Pendiente ($m$) y Ángulo ($\\alpha$)** | $m = {pendiente_str}$ · $\\alpha = {ang_inc:.2f}^\\circ$ |\n"
+                        f"| **Vector normal $\\mathbf{{n}}$ y director $\\mathbf{{v}}$** | $\\mathbf{{n}} = ({A1:g}, {B1:g})$ · $\\mathbf{{v}} = ({-B1:g}, {A1:g})$ |\n"
+                        f"| **Intersecciones con los ejes** | Eje X: `{corte_x}` · Eje Y: `{corte_y}` |"
+                    )
+                with t_r2:
+                    m_d1, m_d2, m_d3 = st.columns(3)
+                    m_d1.metric("Distancia d(P₀, L₁)", f"{dist_p0:.4f}")
+                    m_d2.metric("Pie Perpendicular H", f"({hx:.3f}, {hy:.3f})")
+                    m_d3.metric("Punto Simétrico P′", f"({rx:.3f}, {ry:.3f})")
+                with t_r3:
+                    if comp_l2 and math.hypot(A2, B2) > 1e-12:
+                        det_l = A1 * B2 - A2 * B1
+                        prod_n = A1 * A2 + B1 * B2
+                        norm2 = math.hypot(A2, B2)
+                        cos_th = min(1.0, abs(prod_n) / (norm1 * norm2))
+                        ang_entre = math.degrees(math.acos(cos_th))
+                        if abs(det_l) < 1e-9:
+                            st.info("Las rectas $L_1$ y $L_2$ son **PARALELAS** ($\\theta = 0^\\circ$).")
+                        else:
+                            ix = (B1 * C2 - B2 * C1) / det_l
+                            iy = (C1 * A2 - C2 * A1) / det_l
+                            tipo_sec = "**PERPENDICULARES**" if abs(prod_n) < 1e-9 else "**SECANTES**"
+                            st.success(f"Son {tipo_sec}. Se cortan en $I = ({ix:.4f}, {iy:.4f})$ con un ángulo agudo de **{ang_entre:.2f}°**.")
                     else:
-                        ix = (B1 * C2 - B2 * C1) / det_l
-                        iy = (C1 * A2 - C2 * A1) / det_l
-                        tipo_sec = "**PERPENDICULARES (Ortogonales)**" if abs(prod_n) < 1e-9 else "**SECANTES**"
-                        st.success(f"**Relación con $L_2$:** Son {tipo_sec}. Se cortan en $I = ({ix:.4f}, {iy:.4f})$ formando un ángulo agudo de **{ang_entre:.2f}°**.")
+                        st.info("Activa la casilla de segunda recta $L_2$ para comparar.")
 
     elif sub_modo_a2.startswith("🎯"):
         c_izq, c_der = st.columns([1.05, 1.25])
         with c_izq:
             with st.container(border=True):
                 header_tarjeta("Parámetros de la Sección Cónica")
-                tipo_con = st.selectbox(
-                    "Seleccione la cónica:",
-                    ["Elipse", "Hipérbola", "Parábola"],
-                    key="con_tipo",
-                )
+                tipo_con = st.selectbox("Seleccione la cónica:", ["Elipse", "Hipérbola", "Parábola"], key="con_tipo")
                 orient = st.radio("Eje focal:", ["Horizontal (paralelo a X)", "Vertical (paralelo a Y)"], horizontal=True, key="con_ori")
                 ch1, ch2 = st.columns(2)
                 h_c = ch1.number_input("Centro / Vértice h (en X):", value=1.0, step=0.5, key="con_h")
@@ -608,7 +650,7 @@ with tab_analitica_2d:
                     b_c = cb.number_input("Semieje secundario (b):", min_value=0.2, value=2.5, step=0.5, key="con_b")
                     if tipo_con == "Elipse" and b_c > a_c:
                         a_c, b_c = b_c, a_c
-                        st.caption("ℹ️ Se intercambió $a$ y $b$ para mantener $a \\ge b$ en la elipse.")
+                        st.caption("ℹ️ Se ajustó $a \\ge b$ para el semieje mayor de la elipse.")
                 else:
                     p_par = st.number_input("Parámetro focal p (distancia Vértice-Foco, ≠ 0):", value=2.0, step=0.5, key="con_p")
                     if abs(p_par) < 1e-6:
@@ -616,7 +658,7 @@ with tab_analitica_2d:
 
         with c_der:
             with st.container(border=True):
-                header_tarjeta(f"Gráfica de la {tipo_con} y Elementos Notables")
+                header_tarjeta(f"Gráfica de la {tipo_con}")
                 fig, ax = _crear_fig_2d()
                 es_horiz = orient.startswith("Horizontal")
 
@@ -636,10 +678,15 @@ with tab_analitica_2d:
                     m_v = max(rx, ry) * 1.4
                     ax.set_xlim(h_c - m_v, h_c + m_v)
                     ax.set_ylim(k_c - m_v, k_c + m_v)
-                    resumen_con = (
-                        f"* **Centro:** $C({h_c:g}, {k_c:g})$ · **Semiejes:** $a={a_c:g},\\, b={b_c:g}$ · **Distancia focal:** $c = \\sqrt{{a^2-b^2}} = {c_foc:.4f}$\n"
-                        f"* **Focos:** $F_1({f1[0]:.3f}, {f1[1]:.3f})$ y $F_2({f2[0]:.3f}, {f2[1]:.3f})$\n"
-                        f"* **Excentricidad:** $e = c/a = {exc:.4f}$ · **Lado Recto:** $LR = 2b^2/a = {lr:.4f}$ · **Área:** $\\pi a b = {math.pi * a_c * b_c:.4f}$"
+                    eq_ltx = (
+                        f"\\frac{{(x - ({h_c:g}))^2}}{{{rx**2:.3g}}} + \\frac{{(y - ({k_c:g}))^2}}{{{ry**2:.3g}}} = 1"
+                    )
+                    tabla_con = (
+                        f"| Elemento | Valor |\n|---|---|\n"
+                        f"| **Centro $C(h, k)$** | `({h_c:g}, {k_c:g})` |\n"
+                        f"| **Focos $F_1, F_2$** | `({f1[0]:.3f}, {f1[1]:.3f})` y `({f2[0]:.3f}, {f2[1]:.3f})` |\n"
+                        f"| **Distancia focal ($c$) y Excentricidad ($e$)** | $c = {c_foc:.4f}$ · $e = {exc:.4f}$ |\n"
+                        f"| **Lado Recto ($2b^2/a$) y Área ($\\pi ab$)** | $LR = {lr:.4f}$ · $\\text{{Área}} = {math.pi * a_c * b_c:.4f}$ |"
                     )
 
                 elif tipo_con == "Hipérbola":
@@ -654,6 +701,7 @@ with tab_analitica_2d:
                         ax.plot(xs_as, k_c + (b_c / a_c) * (xs_as - h_c), color=ROJO, ls="--", lw=1.4, label="Asíntotas")
                         ax.plot(xs_as, k_c - (b_c / a_c) * (xs_as - h_c), color=ROJO, ls="--", lw=1.4)
                         f1, f2 = (h_c - c_foc, k_c), (h_c + c_foc, k_c)
+                        eq_ltx = f"\\frac{{(x - ({h_c:g}))^2}}{{{a_c**2:.3g}}} - \\frac{{(y - ({k_c:g}))^2}}{{{b_c**2:.3g}}} = 1"
                     else:
                         ax.plot(h_c + b_c * np.sinh(u_p), k_c + a_c * np.cosh(u_p), color=AZUL, lw=2.5, label="Hipérbola")
                         ax.plot(h_c + b_c * np.sinh(u_p), k_c - a_c * np.cosh(u_p), color=AZUL, lw=2.5)
@@ -661,17 +709,19 @@ with tab_analitica_2d:
                         ax.plot(xs_as, k_c + (a_c / b_c) * (xs_as - h_c), color=ROJO, ls="--", lw=1.4, label="Asíntotas")
                         ax.plot(xs_as, k_c - (a_c / b_c) * (xs_as - h_c), color=ROJO, ls="--", lw=1.4)
                         f1, f2 = (h_c, k_c - c_foc), (h_c, k_c + c_foc)
+                        eq_ltx = f"\\frac{{(y - ({k_c:g}))^2}}{{{a_c**2:.3g}}} - \\frac{{(x - ({h_c:g}))^2}}{{{b_c**2:.3g}}} = 1"
                     _anotar_pt(ax, h_c, k_c, "C", OSCURO, 6, 8)
                     _anotar_pt(ax, f1[0], f1[1], "F₁", ROJO, -22, -16)
                     _anotar_pt(ax, f2[0], f2[1], "F₂", ROJO, 8, 8)
                     m_v = c_foc * 1.8
                     ax.set_xlim(h_c - m_v, h_c + m_v)
                     ax.set_ylim(k_c - m_v, k_c + m_v)
-                    pend_as = f"\\pm {b_c / a_c:.4f}" if es_horiz else f"\\pm {a_c / b_c:.4f}"
-                    resumen_con = (
-                        f"* **Centro:** $C({h_c:g}, {k_c:g})$ · **Semiejes:** $a={a_c:g},\\, b={b_c:g}$ · **Distancia focal:** $c = \\sqrt{{a^2+b^2}} = {c_foc:.4f}$\n"
-                        f"* **Focos:** $F_1({f1[0]:.3f}, {f1[1]:.3f})$ y $F_2({f2[0]:.3f}, {f2[1]:.3f})$\n"
-                        f"* **Excentricidad:** $e = c/a = {exc:.4f}$ · **Lado Recto:** $LR = 2b^2/a = {lr:.4f}$ · **Pendiente de asíntotas:** ${pend_as}$"
+                    tabla_con = (
+                        f"| Elemento | Valor |\n|---|---|\n"
+                        f"| **Centro $C(h, k)$** | `({h_c:g}, {k_c:g})` |\n"
+                        f"| **Focos $F_1, F_2$** | `({f1[0]:.3f}, {f1[1]:.3f})` y `({f2[0]:.3f}, {f2[1]:.3f})` |\n"
+                        f"| **Distancia focal ($c$) y Excentricidad ($e$)** | $c = {c_foc:.4f}$ · $e = {exc:.4f}$ |\n"
+                        f"| **Lado Recto ($2b^2/a$)** | $LR = {lr:.4f}$ |"
                     )
 
                 else:
@@ -684,6 +734,7 @@ with tab_analitica_2d:
                         dir_val = h_c - p_par
                         ax.plot(xs_p, ys_p, color=AZUL, lw=2.5, label="Parábola")
                         ax.axvline(dir_val, color=VERDE, ls="--", lw=1.8, label=f"Directriz x = {dir_val:.2f}")
+                        eq_ltx = f"(y - ({k_c:g}))^2 = {4*p_par:g}(x - ({h_c:g}))"
                     else:
                         xs_p = h_c + s_p
                         ys_p = k_c + (s_p**2) / (4.0 * p_par)
@@ -691,25 +742,30 @@ with tab_analitica_2d:
                         dir_val = k_c - p_par
                         ax.plot(xs_p, ys_p, color=AZUL, lw=2.5, label="Parábola")
                         ax.axhline(dir_val, color=VERDE, ls="--", lw=1.8, label=f"Directriz y = {dir_val:.2f}")
+                        eq_ltx = f"(x - ({h_c:g}))^2 = {4*p_par:g}(y - ({k_c:g}))"
                     _anotar_pt(ax, h_c, k_c, "V", OSCURO, 8, -18)
                     _anotar_pt(ax, foco[0], foco[1], "Foco", ROJO, 8, 10)
                     m_v = max(abs(p_par) * 4.5, 5.0)
                     ax.set_xlim(h_c - m_v, h_c + m_v)
                     ax.set_ylim(k_c - m_v, k_c + m_v)
-                    resumen_con = (
-                        f"* **Vértice:** $V({h_c:g}, {k_c:g})$ · **Parámetro:** $p = {p_par:g}$ · **Foco:** $F({foco[0]:.3f}, {foco[1]:.3f})$\n"
-                        f"* **Directriz:** `{'x' if es_horiz else 'y'} = {dir_val:.4f}` · **Excentricidad:** $e = 1$ · **Lado Recto:** $|4p| = {lr:.4f}$"
+                    tabla_con = (
+                        f"| Elemento | Valor |\n|---|---|\n"
+                        f"| **Vértice $V(h, k)$** | `({h_c:g}, {k_c:g})` |\n"
+                        f"| **Foco $F$** | `({foco[0]:.3f}, {foco[1]:.3f})` |\n"
+                        f"| **Recta Directriz** | `{'x' if es_horiz else 'y'} = {dir_val:.4f}` |\n"
+                        f"| **Lado Recto ($\vert{}4p\vert{}$)** | `{lr:.4f}` |"
                     )
 
                 ax.legend(loc="upper right", fontsize=8.5)
                 mostrar_figura_segura(fig)
 
-        with st.container(border=True):
-            subheader_tarjeta("Propiedades Analíticas de la Cónica")
-            st.markdown(resumen_con)
+        with c_izq:
+            with st.container(border=True):
+                subheader_tarjeta("Ecuación Canónica y Elementos")
+                st.latex(eq_ltx)
+                st.markdown(tabla_con)
 
     else:
-        # Ecuación general Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0
         c_izq, c_der = st.columns([1.05, 1.25])
         with c_izq:
             with st.container(border=True):
@@ -744,21 +800,24 @@ with tab_analitica_2d:
                 Ep = -Dg * s_t + Eg * c_t
 
                 if disc_2 < -1e-9:
-                    genero = "Tipo Elíptico (Elipse, Circunferencia o Punto/Vacío)"
+                    genero = "Elíptico"
                 elif disc_2 > 1e-9:
-                    genero = "Tipo Hiperbólico (Hipérbola o Par de Rectas Secantes)"
+                    genero = "Hiperbólico"
                 else:
-                    genero = "Tipo Parabólico (Parábola o Rectas Paralelas)"
+                    genero = "Parabólico"
 
-                st.markdown(
-                    f"| Invariante / Parámetro | Valor |\n"
-                    f"|---|---|\n"
-                    f"| **Traza cuadrática ($I = A + C$)** | `{inv_I:.4f}` |\n"
-                    f"| **Discriminante ($\\Delta_2 = B^2 - 4AC$)** | `{disc_2:.4f}` ({genero}) |\n"
-                    f"| **Determinante cúbico ($\\Delta_3$)** | `{det_3:.4f}` ({'No degenerada' if abs(det_3) > 1e-7 else 'Degenerada'}) |\n"
-                    f"| **Ángulo de rotación ($\\theta$)** | **{theta_deg:.2f}°** ($\\theta = \\frac{{1}}{{2}}\\operatorname{{atan2}}(B, A-C)$) |\n"
-                    f"| **Nuevos coeficientes sin término $x'y'$** | $A' = {Ap:.4f},\\; C' = {Cp:.4f},\\; D' = {Dp:.4f},\\; E' = {Ep:.4f}$ |"
-                )
+                t_g1, t_g2 = st.tabs(["🔍 Invariantes Ortogonales", "🔄 Ecuación Rotada (x′, y′)"])
+                with t_g1:
+                    st.markdown(
+                        f"| Invariante | Valor |\n"
+                        f"|---|---|\n"
+                        f"| **Traza ($I = A + C$)** | `{inv_I:.4f}` |\n"
+                        f"| **Discriminante ($\\Delta_2 = B^2 - 4AC$)** | `{disc_2:.4f}` (Género **{genero}**) |\n"
+                        f"| **Determinante cúbico ($\\Delta_3$)** | `{det_3:.4f}` ({'No degenerada' if abs(det_3) > 1e-7 else 'Degenerada'}) |"
+                    )
+                with t_g2:
+                    st.metric("Ángulo de rotación θ", f"{theta_deg:.2f}°")
+                    st.latex(f"{Ap:.3f}(x')^2 + ({Cp:.3f})(y')^2 + ({Dp:.3f})x' + ({Ep:.3f})y' + ({Fg:g}) = 0")
 
         with c_der:
             with st.container(border=True):
@@ -769,11 +828,10 @@ with tab_analitica_2d:
                 Z = Ag * X**2 + Bg * X * Y + Cg * Y**2 + Dg * X + Eg * Y + Fg
                 if np.nanmin(Z) <= 0 <= np.nanmax(Z):
                     ax.contour(X, Y, Z, levels=[0], colors=[AZUL], linewidths=2.5)
-                    ax.plot([], [], color=AZUL, lw=2.5, label="Cónica (lugar geométrico)")
+                    ax.plot([], [], color=AZUL, lw=2.5, label="Lugar geométrico")
                 else:
                     ax.text(0, 0, "Lugar geométrico vacío en [-6, 6]²", ha="center", color=ROJO)
 
-                # Dibujar ejes rotados x' y y'
                 L_eje = 5.5
                 ax.plot([-L_eje * c_t, L_eje * c_t], [-L_eje * s_t, L_eje * s_t], color=ROJO, ls="--", lw=1.4, label=f"Eje x′ (θ = {theta_deg:.1f}°)")
                 ax.plot([L_eje * s_t, -L_eje * s_t], [-L_eje * c_t, L_eje * c_t], color=VERDE, ls=":", lw=1.4, label="Eje y′")
@@ -784,15 +842,16 @@ with tab_analitica_2d:
 
 
 # ==============================================================================
-# PESTAÑA 3: SÓLIDOS, PLANOS, RECTAS ALABEADAS Y CUÁDRICAS EN R^3
+# PESTAÑA 3: SÓLIDOS, PLANOS, RECTAS ALABEADAS Y CUÁDRICAS INTERACTIVAS EN R^3
 # ==============================================================================
 with tab_3d:
     modo_3d = st.radio(
         "Seleccione la herramienta de Geometría en el Espacio (ℝ³):",
         [
-            "🧊 1. Sólidos Geométricos (con Tapas y Áreas/Volúmenes)",
-            "🛩️ 2. Planos y Distancia entre Rectas en ℝ³ (Secantes, Paralelas, Alabeadas)",
-            "🌐 3. Conversor Cartesiano ↔ Cilíndrico ↔ Esférico y Superficies Cuádricas",
+            "🏔️ 1. Superficies Cuádricas Interactivas (Parámetros y Cortes z = k)",
+            "🧊 2. Sólidos Geométricos (Esfera, Cilindro, Cono, Toroide, Ortoedro)",
+            "🛩️ 3. Planos y Distancia entre Rectas en ℝ³ (Secantes, Paralelas, Alabeadas)",
+            "🌐 4. Conversor de Coordenadas 3D (Cartesianas ↔ Cilíndricas ↔ Esféricas)",
         ],
         horizontal=True,
         key="geo_3d_modo",
@@ -800,7 +859,170 @@ with tab_3d:
 
     st.divider()
 
-    if modo_3d.startswith("🧊"):
+    if modo_3d.startswith("🏔️"):
+        col_c_in, col_c_out = st.columns([1.05, 1.3])
+        with col_c_in:
+            with st.container(border=True):
+                header_tarjeta("Configuración de la Superficie Cuádrica")
+                cuadrica = st.selectbox(
+                    "Tipo de superficie cuádrica:",
+                    [
+                        "1. Elipsoide",
+                        "2. Paraboloide Elíptico",
+                        "3. Paraboloide Hiperbólico (Silla de montar)",
+                        "4. Hiperboloide de Una Hoja",
+                        "5. Hiperboloide de Dos Hojas",
+                        "6. Cono Elíptico",
+                    ],
+                    key="cuad_tipo_sel",
+                )
+
+                subheader_tarjeta("Semiejes / Parámetros de Escala (a, b, c)")
+                s1, s2, s3 = st.columns(3)
+                a_q = s1.number_input("Semieje a (en X):", min_value=0.2, max_value=15.0, value=2.0, step=0.5, key="q_a")
+                b_q = s2.number_input("Semieje b (en Y):", min_value=0.2, max_value=15.0, value=1.5, step=0.5, key="q_b")
+                c_q = s3.number_input("Parámetro c (en Z):", min_value=0.2, max_value=15.0, value=1.5, step=0.5, key="q_c")
+
+                subheader_tarjeta("Centro / Vértice (x₀, y₀, z₀)")
+                o1, o2, o3 = st.columns(3)
+                x0_q = o1.number_input("x₀:", value=0.0, step=0.5, key="q_x0")
+                y0_q = o2.number_input("y₀:", value=0.0, step=0.5, key="q_y0")
+                z0_q = o3.number_input("z₀:", value=0.0, step=0.5, key="q_z0")
+
+                subheader_tarjeta("Plano de corte horizontal (Traza z = k)")
+                mostrar_corte = st.checkbox("Mostrar plano de corte z = k en 3D y traza 2D", value=True, key="q_chk_corte")
+                k_corte = st.slider("Altura del corte k (en Z):", min_value=float(z0_q - 3 * c_q), max_value=float(z0_q + 3 * c_q), value=float(z0_q + 0.8 * c_q), step=0.2, key="q_k_val")
+
+        with col_c_out:
+            with st.container(border=True):
+                tab_v3d, tab_v2d, tab_prop = st.tabs([
+                    "🧊 Superficie 3D",
+                    "🔪 Traza en el Plano z = k (2D)",
+                    "📐 Ecuación y Propiedades",
+                ])
+
+                with tab_v3d:
+                    fig3, ax3 = _crear_fig_3d(titulo=cuadrica.split(".")[1].strip())
+                    u_ang = np.linspace(0, 2 * np.pi, 48)
+                    r_max = max(a_q, b_q, c_q) * 2.2
+
+                    if cuadrica.startswith("1."):
+                        v_ang = np.linspace(0, np.pi, 32)
+                        U, V = np.meshgrid(u_ang, v_ang)
+                        X_s = x0_q + a_q * np.cos(U) * np.sin(V)
+                        Y_s = y0_q + b_q * np.sin(U) * np.sin(V)
+                        Z_s = z0_q + c_q * np.cos(V)
+                        ax3.plot_surface(X_s, Y_s, Z_s, cmap="viridis", alpha=0.82)
+                        eq_cuad = f"\\frac{{(x - ({x0_q:g}))^2}}{{{a_q**2:.3g}}} + \\frac{{(y - ({y0_q:g}))^2}}{{{b_q**2:.3g}}} + \\frac{{(z - ({z0_q:g}))^2}}{{{c_q**2:.3g}}} = 1"
+                    elif cuadrica.startswith("2."):
+                        r_m = np.linspace(0, 1.8, 30)
+                        U, R = np.meshgrid(u_ang, r_m)
+                        X_s = x0_q + a_q * R * np.cos(U)
+                        Y_s = y0_q + b_q * R * np.sin(U)
+                        Z_s = z0_q + c_q * (R**2)
+                        ax3.plot_surface(X_s, Y_s, Z_s, cmap="viridis", alpha=0.82)
+                        eq_cuad = f"\\frac{{z - ({z0_q:g})}}{{{c_q:g}}} = \\frac{{(x - ({x0_q:g}))^2}}{{{a_q**2:.3g}}} + \\frac{{(y - ({y0_q:g}))^2}}{{{b_q**2:.3g}}}"
+                    elif cuadrica.startswith("3."):
+                        s_m = np.linspace(-2.0, 2.0, 42)
+                        U_m, V_m = np.meshgrid(s_m, s_m)
+                        X_s = x0_q + a_q * U_m
+                        Y_s = y0_q + b_q * V_m
+                        Z_s = z0_q + c_q * (U_m**2 - V_m**2)
+                        ax3.plot_surface(X_s, Y_s, Z_s, cmap="coolwarm", alpha=0.85)
+                        eq_cuad = f"\\frac{{z - ({z0_q:g})}}{{{c_q:g}}} = \\frac{{(x - ({x0_q:g}))^2}}{{{a_q**2:.3g}}} - \\frac{{(y - ({y0_q:g}))^2}}{{{b_q**2:.3g}}}"
+                    elif cuadrica.startswith("4."):
+                        w_m = np.linspace(-1.4, 1.4, 34)
+                        U, W = np.meshgrid(u_ang, w_m)
+                        X_s = x0_q + a_q * np.cosh(W) * np.cos(U)
+                        Y_s = y0_q + b_q * np.cosh(W) * np.sin(U)
+                        Z_s = z0_q + c_q * np.sinh(W)
+                        ax3.plot_surface(X_s, Y_s, Z_s, cmap="plasma", alpha=0.82)
+                        eq_cuad = f"\\frac{{(x - ({x0_q:g}))^2}}{{{a_q**2:.3g}}} + \\frac{{(y - ({y0_q:g}))^2}}{{{b_q**2:.3g}}} - \\frac{{(z - ({z0_q:g}))^2}}{{{c_q**2:.3g}}} = 1"
+                    elif cuadrica.startswith("5."):
+                        w_m = np.linspace(0, 1.35, 26)
+                        U, W = np.meshgrid(u_ang, w_m)
+                        X_s = x0_q + a_q * np.sinh(W) * np.cos(U)
+                        Y_s = y0_q + b_q * np.sinh(W) * np.sin(U)
+                        Z_sup = z0_q + c_q * np.cosh(W)
+                        Z_inf = z0_q - c_q * np.cosh(W)
+                        ax3.plot_surface(X_s, Y_s, Z_sup, cmap="magma", alpha=0.82)
+                        ax3.plot_surface(X_s, Y_s, Z_inf, cmap="magma", alpha=0.82)
+                        eq_cuad = f"\\frac{{(z - ({z0_q:g}))^2}}{{{c_q**2:.3g}}} - \\frac{{(x - ({x0_q:g}))^2}}{{{a_q**2:.3g}}} - \\frac{{(y - ({y0_q:g}))^2}}{{{b_q**2:.3g}}} = 1"
+                    else:
+                        w_m = np.linspace(-1.8, 1.8, 34)
+                        U, W = np.meshgrid(u_ang, w_m)
+                        X_s = x0_q + a_q * np.abs(W) * np.cos(U)
+                        Y_s = y0_q + b_q * np.abs(W) * np.sin(U)
+                        Z_s = z0_q + c_q * W
+                        ax3.plot_surface(X_s, Y_s, Z_s, cmap="viridis", alpha=0.82)
+                        eq_cuad = f"\\frac{{(z - ({z0_q:g}))^2}}{{{c_q**2:.3g}}} = \\frac{{(x - ({x0_q:g}))^2}}{{{a_q**2:.3g}}} + \\frac{{(y - ({y0_q:g}))^2}}{{{b_q**2:.3g}}}"
+
+                    if mostrar_corte:
+                        xp_m, yp_m = np.meshgrid(
+                            [x0_q - r_max, x0_q + r_max],
+                            [y0_q - r_max, y0_q + r_max],
+                        )
+                        ax3.plot_surface(xp_m, yp_m, np.full_like(xp_m, k_corte), color=ROJO, alpha=0.25)
+
+                    mostrar_figura_segura(fig3)
+
+                with tab_v2d:
+                    fig2, ax2 = _crear_fig_2d()
+                    span2 = max(a_q, b_q) * 2.5
+                    xm2 = np.linspace(x0_q - span2, x0_q + span2, 300)
+                    ym2 = np.linspace(y0_q - span2, y0_q + span2, 300)
+                    X2, Y2 = np.meshgrid(xm2, ym2)
+                    u_x = (X2 - x0_q) / a_q
+                    u_y = (Y2 - y0_q) / b_q
+                    u_z = (k_corte - z0_q) / c_q
+
+                    if cuadrica.startswith("1."):
+                        F_corte = u_x**2 + u_y**2 - (1.0 - u_z**2)
+                    elif cuadrica.startswith("2."):
+                        F_corte = u_x**2 + u_y**2 - u_z
+                    elif cuadrica.startswith("3."):
+                        F_corte = u_x**2 - u_y**2 - u_z
+                    elif cuadrica.startswith("4."):
+                        F_corte = u_x**2 + u_y**2 - (1.0 + u_z**2)
+                    elif cuadrica.startswith("5."):
+                        F_corte = u_x**2 + u_y**2 - (u_z**2 - 1.0)
+                    else:
+                        F_corte = u_x**2 + u_y**2 - u_z**2
+
+                    if np.nanmin(F_corte) <= 0 <= np.nanmax(F_corte):
+                        ax2.contour(X2, Y2, F_corte, levels=[0], colors=[ROJO], linewidths=2.5)
+                        ax2.plot([], [], color=ROJO, lw=2.5, label=f"Traza en z = {k_corte:.2f}")
+                    else:
+                        ax2.text(x0_q, y0_q, f"El plano z = {k_corte:.2f} no corta a la superficie\n(intersección vacía en los reales)", ha="center", color=ROJO)
+
+                    _anotar_pt(ax2, x0_q, y0_q, "Centro", OSCURO, 8, 8)
+                    ax2.set_xlim(x0_q - span2, x0_q + span2)
+                    ax2.set_ylim(y0_q - span2, y0_q + span2)
+                    ax2.legend(loc="upper right", fontsize=8.5)
+                    mostrar_figura_segura(fig2)
+
+                with tab_prop:
+                    st.markdown("**Ecuación Canónica con tus parámetros:**")
+                    st.latex(eq_cuad)
+                    if cuadrica.startswith("1."):
+                        vol_elip = (4.0 / 3.0) * math.pi * a_q * b_q * c_q
+                        p_th = 1.6075
+                        area_elip = 4.0 * math.pi * (((a_q**p_th * b_q**p_th + a_q**p_th * c_q**p_th + b_q**p_th * c_q**p_th) / 3.0) ** (1.0 / p_th))
+                        st.markdown(
+                            f"| Propiedad del Elipsoide | Valor |\n|---|---|\n"
+                            f"| **Volumen exacto ($\\frac{{4}}{{3}}\\pi abc$)** | `{vol_elip:.4f}` |\n"
+                            f"| **Área superficial (Knud Thomsen)** | `{area_elip:.4f}` |\n"
+                            f"| **Trazas coordenadas** | Elipses en los 3 planos coordenados |"
+                        )
+                    else:
+                        st.markdown(
+                            f"| Plano de Corte | Tipo de Curva (Traza) |\n|---|---|\n"
+                            f"| **Paralelo a XY ($z = k$)** | {'Elipse' if not cuadrica.startswith('3.') else 'Hipérbola (o 2 rectas si k = z₀)'} |\n"
+                            f"| **Paralelo a XZ ($y = y_0$)** | {'Parábola' if 'Paraboloide' in cuadrica else 'Hipérbola / Rectas'} |\n"
+                            f"| **Paralelo a YZ ($x = x_0$)** | {'Parábola' if 'Paraboloide' in cuadrica else 'Hipérbola / Rectas'} |"
+                        )
+
+    elif modo_3d.startswith("🧊"):
         c1, c2 = st.columns([1, 1.3])
         with c1:
             with st.container(border=True):
@@ -820,10 +1042,11 @@ with tab_3d:
                         a_tot = 2 * a_base + a_lat
                         vol = a_base * h_s
                         st.markdown(
-                            f"* **Área de una base:** $\\pi r^2 = {a_base:.4f}$\n"
-                            f"* **Área lateral:** $2\\pi r h = {a_lat:.4f}$\n"
-                            f"* **Área total (con 2 tapas):** $2\\pi r(r + h) = \\mathbf{{{a_tot:.4f}}}$\n"
-                            f"* **Volumen:** $\\pi r^2 h = \\mathbf{{{vol:.4f}}}$"
+                            f"| Métrica | Fórmula | Valor |\n|---|---|---|\n"
+                            f"| **Área de una base** | $\\pi r^2$ | `{a_base:.4f}` |\n"
+                            f"| **Área lateral** | $2\\pi r h$ | `{a_lat:.4f}` |\n"
+                            f"| **Área total (con 2 tapas)** | $2\\pi r(r + h)$ | `{a_tot:.4f}` |\n"
+                            f"| **Volumen** | $\\pi r^2 h$ | `{vol:.4f}` |"
                         )
                     else:
                         gen = math.hypot(r_s, h_s)
@@ -832,29 +1055,25 @@ with tab_3d:
                         a_tot = a_base + a_lat
                         vol = (a_base * h_s) / 3.0
                         st.markdown(
-                            f"* **Generatriz ($g = \\sqrt{{r^2+h^2}}$):** `{gen:.4f}`\n"
-                            f"* **Área de la base:** $\\pi r^2 = {a_base:.4f}$\n"
-                            f"* **Área lateral:** $\\pi r g = {a_lat:.4f}$\n"
-                            f"* **Área total:** $\\pi r(r + g) = \\mathbf{{{a_tot:.4f}}}$\n"
-                            f"* **Volumen:** $\\frac{{1}}{{3}}\\pi r^2 h = \\mathbf{{{vol:.4f}}}$"
+                            f"| Métrica | Fórmula | Valor |\n|---|---|---|\n"
+                            f"| **Generatriz ($g$)** | $\\sqrt{{r^2+h^2}}$ | `{gen:.4f}` |\n"
+                            f"| **Área lateral** | $\\pi r g$ | `{a_lat:.4f}` |\n"
+                            f"| **Área total** | $\\pi r(r + g)$ | `{a_tot:.4f}` |\n"
+                            f"| **Volumen** | $\\frac{{1}}{{3}}\\pi r^2 h$ | `{vol:.4f}` |"
                         )
                 elif solido == "Esfera":
                     r_s = st.number_input("Radio (r):", min_value=0.2, value=3.5, step=0.5, key="esf_r")
                     a_tot = 4 * math.pi * r_s**2
                     vol = (4.0 / 3.0) * math.pi * r_s**3
-                    st.markdown(
-                        f"* **Área superficial:** $4\\pi r^2 = \\mathbf{{{a_tot:.4f}}}$\n"
-                        f"* **Volumen:** $\\frac{{4}}{{3}}\\pi r^3 = \\mathbf{{{vol:.4f}}}$"
-                    )
+                    st.metric("Área Superficial (4πr²)", f"{a_tot:.4f}")
+                    st.metric("Volumen (4/3 πr³)", f"{vol:.4f}")
                 elif solido.startswith("Toroide"):
                     R_may = st.number_input("Radio mayor (R):", min_value=1.0, value=4.0, step=0.5, key="tor_R")
                     r_men = st.number_input("Radio del tubo (r < R):", min_value=0.2, max_value=float(R_may - 0.1), value=1.2, step=0.2, key="tor_r")
                     a_tot = 4 * (math.pi**2) * R_may * r_men
                     vol = 2 * (math.pi**2) * R_may * (r_men**2)
-                    st.markdown(
-                        f"* **Área superficial (Pappus):** $4\\pi^2 R r = \\mathbf{{{a_tot:.4f}}}$\n"
-                        f"* **Volumen (Pappus):** $2\\pi^2 R r^2 = \\mathbf{{{vol:.4f}}}$"
-                    )
+                    st.metric("Área Superficial (4π²Rr)", f"{a_tot:.4f}")
+                    st.metric("Volumen (2π²Rr²)", f"{vol:.4f}")
                 else:
                     lx_o = st.number_input("Largo (a):", min_value=0.2, value=4.0, step=0.5, key="ort_a")
                     ly_o = st.number_input("Ancho (b):", min_value=0.2, value=3.0, step=0.5, key="ort_b")
@@ -862,11 +1081,9 @@ with tab_3d:
                     a_tot = 2 * (lx_o * ly_o + lx_o * lz_o + ly_o * lz_o)
                     vol = lx_o * ly_o * lz_o
                     diag_esp = math.sqrt(lx_o**2 + ly_o**2 + lz_o**2)
-                    st.markdown(
-                        f"* **Área total (6 caras):** $2(ab+ac+bc) = \\mathbf{{{a_tot:.4f}}}$\n"
-                        f"* **Volumen:** $abc = \\mathbf{{{vol:.4f}}}$\n"
-                        f"* **Diagonal espacial:** $\\sqrt{{a^2+b^2+c^2}} = \\mathbf{{{diag_esp:.4f}}}$"
-                    )
+                    st.metric("Área Total (6 caras)", f"{a_tot:.4f}")
+                    st.metric("Volumen (abc)", f"{vol:.4f}")
+                    st.metric("Diagonal Espacial", f"{diag_esp:.4f}")
 
         with c2:
             with st.container(border=True):
@@ -877,7 +1094,6 @@ with tab_3d:
                     z_v = np.linspace(0, h_s, 25)
                     U, Z = np.meshgrid(u, z_v)
                     ax.plot_surface(r_s * np.cos(U), r_s * np.sin(U), Z, color=AZUL, alpha=0.65)
-                    # Tapas inferior y superior
                     rad_m, ang_m = np.meshgrid(np.linspace(0, r_s, 12), u)
                     X_t = rad_m * np.cos(ang_m)
                     Y_t = rad_m * np.sin(ang_m)
@@ -891,7 +1107,6 @@ with tab_3d:
                     v_c = np.linspace(0, 1, 25)
                     U, V = np.meshgrid(u, v_c)
                     ax.plot_surface(r_s * (1 - V) * np.cos(U), r_s * (1 - V) * np.sin(U), h_s * V, color=AZUL, alpha=0.68)
-                    # Tapa de la base en z = 0
                     rad_m, ang_m = np.meshgrid(np.linspace(0, r_s, 12), u)
                     ax.plot_surface(rad_m * np.cos(ang_m), rad_m * np.sin(ang_m), np.zeros_like(rad_m), color=NARANJA, alpha=0.75)
                     m_lim = max(r_s, h_s / 2) * 1.2
@@ -908,13 +1123,12 @@ with tab_3d:
                     X = (R_may + r_men * np.cos(V)) * np.cos(U)
                     Y = (R_may + r_men * np.cos(V)) * np.sin(U)
                     Z = r_men * np.sin(V)
-                    ax.plot_surface(X, Y, Z, color=AZUL, alpha=0.75, cmap="viridis")
+                    ax.plot_surface(X, Y, Z, cmap="viridis", alpha=0.8)
                     lim_t = R_may + r_men
                     ax.set_xlim(-lim_t, lim_t)
                     ax.set_ylim(-lim_t, lim_t)
                     ax.set_zlim(-lim_t, lim_t)
                 else:
-                    # Ortoedro por caras
                     X_c, Y_c = np.meshgrid([0, lx_o], [0, ly_o])
                     ax.plot_surface(X_c, Y_c, np.zeros_like(X_c), color=AZUL, alpha=0.55)
                     ax.plot_surface(X_c, Y_c, np.full_like(X_c, lz_o), color=AZUL, alpha=0.55)
@@ -954,15 +1168,13 @@ with tab_3d:
             ang_rectas = math.degrees(math.acos(cos_ang))
 
             if norm_cruz < 1e-9:
-                # Paralelas o coincidentes
                 dist_min = float(np.linalg.norm(np.cross(dif_p, V1)) / np.linalg.norm(V1))
                 pos_rel = "COINCIDENTES" if dist_min < 1e-9 else "PARALELAS"
                 Q1, Q2 = P1, P2 - (np.dot(dif_p, V1) / np.dot(V1, V1)) * V1
             else:
                 prod_mixto = float(np.dot(dif_p, cruz_v))
                 dist_min = abs(prod_mixto) / norm_cruz
-                pos_rel = "SECANTES (se cortan en un punto)" if dist_min < 1e-8 else "ALABEADAS (se cruzan en el espacio sin cortarse)"
-                # Puntos más cercanos Q1 en L1 y Q2 en L2
+                pos_rel = "SECANTES (se cortan)" if dist_min < 1e-8 else "ALABEADAS (se cruzan sin cortarse)"
                 n1 = np.cross(V1, cruz_v)
                 n2 = np.cross(V2, cruz_v)
                 t_opt = np.dot(dif_p, n2) / np.dot(V1, n2)
@@ -975,15 +1187,16 @@ with tab_3d:
                     subheader_tarjeta("Diagnóstico Espacial")
                     st.success(f"**Posición relativa:** {pos_rel}")
                     st.markdown(
-                        f"* **Distancia mínima $d(L_1, L_2)$:** `{dist_min:.4f}`\n"
-                        f"* **Ángulo entre directores:** `{ang_rectas:.2f}°`\n"
-                        f"* **Punto más cercano en $L_1$ ($Q_1$):** `({Q1[0]:.3f}, {Q1[1]:.3f}, {Q1[2]:.3f})`\n"
-                        f"* **Punto más cercano en $L_2$ ($Q_2$):** `({Q2[0]:.3f}, {Q2[1]:.3f}, {Q2[2]:.3f})`"
+                        f"| Métrica | Valor |\n|---|---|\n"
+                        f"| **Distancia mínima $d(L_1, L_2)$** | `{dist_min:.4f}` |\n"
+                        f"| **Ángulo entre directores** | `{ang_rectas:.2f}°` |\n"
+                        f"| **Punto más cercano en $L_1$ ($Q_1$)** | `({Q1[0]:.3f}, {Q1[1]:.3f}, {Q1[2]:.3f})` |\n"
+                        f"| **Punto más cercano en $L_2$ ($Q_2$)** | `({Q2[0]:.3f}, {Q2[1]:.3f}, {Q2[2]:.3f})` |"
                     )
 
             with c_der:
                 with st.container(border=True):
-                    header_tarjeta("Gráfica 3D de L₁, L₂ y Segmento Perpendicular Mínimo")
+                    header_tarjeta("Gráfica 3D de L₁, L₂ y Perpendicular Común")
                     fig, ax = _crear_fig_3d(titulo=f"Rectas {pos_rel.split()[0]}")
                     ts = np.linspace(-3.5, 3.5, 100)
                     l1_pts = Q1[:, None] + V1[:, None] * ts
@@ -998,8 +1211,8 @@ with tab_3d:
             st.error(f"Error en los datos: {err_l3}")
 
     else:
-        c_conv, c_cuad = st.columns(2)
-        with c_conv:
+        c_conv1, c_conv2 = st.columns([1.05, 1.25])
+        with c_conv1:
             with st.container(border=True):
                 header_tarjeta("Conversor de Coordenadas en ℝ³")
                 sis_origen = st.selectbox(
@@ -1035,41 +1248,20 @@ with tab_3d:
                     f"| Sistema | Coordenadas Equivalentes |\n"
                     f"|---|---|\n"
                     f"| **Cartesianas $(x, y, z)$** | `({x_c:.4f}, {y_c:.4f}, {z_c:.4f})` |\n"
-                    f"| **Cilíndricas $(\\rho, \\theta, z)$** | `$\\rho = {rho_f:.4f}$, $\\theta = {theta_f:.2f}^\\circ$, $z = {z_c:.4f}$` |\n"
-                    f"| **Esféricas $(r, \\theta, \\varphi)$** | `$r = {r_f:.4f}$, $\\theta = {theta_f:.2f}^\\circ$, $\\varphi = {phi_f:.2f}^\\circ$` |"
+                    f"| **Cilíndricas $(\\rho, \\theta, z)$** | `ρ = {rho_f:.4f}`, `θ = {theta_f:.2f}°`, `z = {z_c:.4f}` |\n"
+                    f"| **Esféricas $(r, \\theta, \\varphi)$** | `r = {r_f:.4f}`, `θ = {theta_f:.2f}°`, `φ = {phi_f:.2f}°` |"
                 )
-
-        with c_cuad:
+        with c_conv2:
             with st.container(border=True):
-                header_tarjeta("Explorador de Superficies Cuádricas en ℝ³")
-                cuadrica = st.selectbox(
-                    "Superficie cuádrica:",
-                    [
-                        "Paraboloide Hiperbólico (Silla de montar: z = x²/a² − y²/b²)",
-                        "Paraboloide Elíptico (z = x²/a² + y²/b²)",
-                        "Hiperboloide de Una Hoja (x²/a² + y²/b² − z²/c² = 1)",
-                        "Cono Elíptico (z² = x²/a² + y²/b²)",
-                    ],
-                    key="cuad_sel",
-                )
-                fig, ax = _crear_fig_3d(titulo=cuadrica.split("(")[0].strip())
-                u_m = np.linspace(-2.5, 2.5, 45)
-                X_q, Y_q = np.meshgrid(u_m, u_m)
-                if cuadrica.startswith("Paraboloide Hiperbólico"):
-                    Z_q = X_q**2 - Y_q**2
-                    ax.plot_surface(X_q, Y_q, Z_q, cmap="coolwarm", alpha=0.85)
-                elif cuadrica.startswith("Paraboloide Elíptico"):
-                    Z_q = X_q**2 + Y_q**2
-                    ax.plot_surface(X_q, Y_q, Z_q, cmap="viridis", alpha=0.85)
-                elif cuadrica.startswith("Hiperboloide"):
-                    th_q = np.linspace(0, 2 * np.pi, 45)
-                    z_q = np.linspace(-2.0, 2.0, 30)
-                    TH, Z_m = np.meshgrid(th_q, z_q)
-                    R_m = np.sqrt(1.0 + Z_m**2)
-                    ax.plot_surface(R_m * np.cos(TH), R_m * np.sin(TH), Z_m, cmap="plasma", alpha=0.82)
-                else:
-                    th_q = np.linspace(0, 2 * np.pi, 45)
-                    z_q = np.linspace(-2.5, 2.5, 35)
-                    TH, Z_m = np.meshgrid(th_q, z_q)
-                    ax.plot_surface(np.abs(Z_m) * np.cos(TH), np.abs(Z_m) * np.sin(TH), Z_m, cmap="viridis", alpha=0.82)
+                header_tarjeta("Ubicación del Punto P en ℝ³")
+                fig, ax = _crear_fig_3d(titulo=f"P({x_c:.2f}, {y_c:.2f}, {z_c:.2f})")
+                ax.quiver(0, 0, 0, x_c, y_c, z_c, color=AZUL, lw=2.5, arrow_length_ratio=0.12, label=f"r = {r_f:.2f}")
+                ax.plot([0, x_c], [0, y_c], [0, 0], color=NARANJA, ls="--", lw=1.8, label=f"ρ = {rho_f:.2f}")
+                ax.plot([x_c, x_c], [y_c, y_c], [0, z_c], color=VERDE, ls=":", lw=1.8, label=f"z = {z_c:.2f}")
+                ax.scatter([x_c], [y_c], [z_c], color=ROJO, s=60)
+                lim_p = max(abs(x_c), abs(y_c), abs(z_c), 2.0) * 1.3
+                ax.set_xlim(-lim_p, lim_p)
+                ax.set_ylim(-lim_p, lim_p)
+                ax.set_zlim(-lim_p, lim_p)
+                ax.legend(loc="upper left", fontsize=8.5)
                 mostrar_figura_segura(fig)
