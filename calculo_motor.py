@@ -7,30 +7,16 @@ Motor matemático del módulo de Cálculo (sin Streamlit, sin matplotlib).
 Cada operación recibe objetos de SymPy (los que produce interprete_latex.py) y devuelve:
 
     {"bloques": [...], "datos": {...}}
-
-  bloques  lista de piezas para mostrar, en orden:
-             ("h", titulo)            encabezado
-             ("md", texto)            texto en Markdown (admite $...$ para fórmulas)
-             ("latex", formula)       fórmula en pantalla
-             ("ok"|"aviso"|"error"|"info", texto)
-             ("tabla", columnas, filas)   filas = listas de textos Markdown
-  datos    información para las gráficas (expresiones, puntos, valores…)
-
-Ejecución segura
-----------------
-SymPy puede tardar horas con ciertas expresiones. `ejecutar_seguro(nombre, *args)` corre la
-operación en un proceso aparte con tiempo límite: si se pasa, lo mata y avisa, sin congelar la
-app. Las operaciones están registradas en OPERACIONES.
-
-Secciones: 0 utilidades · 1 funciones de una variable · 2 límites y continuidad ·
-           3 derivadas y aproximaciones · 4 varias variables · 5 integrales ·
-           6 sucesiones y series · 7 niveles, relaciones y operaciones · 8 ejecución segura
 """
 from __future__ import annotations
 
+import atexit as _atexit
 import functools
 import itertools
 import math
+import multiprocessing as _mp
+import os as _os
+import queue as _queue
 import random
 
 import mpmath as mp
@@ -65,8 +51,7 @@ def _op(f):
         except MemoryError:
             return res([ER("Se agotó la memoria disponible calculando esto. Prueba con una expresión más sencilla.")])
         except Exception as e:  # noqa: BLE001
-            return res([ER(f"No pude completar este cálculo ({type(e).__name__}: {str(e)[:120]}). "
-                           "Prueba con una expresión más sencilla.")])
+            return res([ER("No pude completar este cálculo (" + type(e).__name__ + ": " + str(e)[:120] + "). Prueba con una expresión más sencilla.")])
     OPERACIONES[f.__name__] = envuelto
     return envuelto
 
@@ -95,7 +80,7 @@ def lx(e) -> str:
 
 def m(e) -> str:
     """Fórmula en línea para Markdown."""
-    return f"${lx(e)}$"
+    return "$" + lx(e) + "$"
 
 
 def _vars(e) -> list:
@@ -144,8 +129,7 @@ def _igual(a, b, tol=1e-9) -> bool:
 
 
 def _resolver_trozos(expr, x, a, signo):
-    """Reemplaza cada Piecewise por el trozo que aplica justo a la derecha (signo=+1) o a la
-    izquierda (-1) de a. (El limit de SymPy sobre Piecewise puede dar un valor incorrecto.)"""
+    """Reemplaza cada Piecewise por el trozo que aplica justo a la derecha (+1) o izquierda (-1) de a."""
     if a == sp.oo:
         punto = sp.Integer(10 ** 8)
     elif a == -sp.oo:
@@ -166,8 +150,8 @@ def _resolver_trozos(expr, x, a, signo):
 
 
 def lim(expr, x, a, direccion="+-"):
-    """Límite de SymPy o None si no pudo (o devolvió un Limit sin evaluar)."""
-    if expr is None:                       # p. ej. un límite iterado cuyo límite interior no se pudo calcular
+    """Límite de SymPy o None si no pudo."""
+    if expr is None:
         return None
     if expr.has(sp.Piecewise):
         if direccion == "+-" and a not in (sp.oo, -sp.oo):
@@ -190,14 +174,17 @@ def _desc_lim(v) -> str:
     c = _clase(v)
     if c == "fin":
         return m(v)
-    return {"+oo": "$+\\infty$ (crece sin cota)", "-oo": "$-\\infty$ (decrece sin cota)",
-            "zoo": "infinito (sin signo definido)", "osc": "no existe (oscila)", "nd": "no pude calcularlo"}[c]
+    return {
+        "+oo": r"$+\infty$ (crece sin cota)",
+        "-oo": r"$-\infty$ (decrece sin cota)",
+        "zoo": "infinito (sin signo definido)",
+        "osc": "no existe (oscila)",
+        "nd": "no pude calcularlo",
+    }[c]
 
 
 def _valor_en(expr, sub: dict):
-    """Valor de expr sustituyendo TODAS las variables A LA VEZ (simultaneous=True).
-    Importante: sustituir en secuencia daría 0 para xy/(x²+y²) en el origen (0·y/y² = 0), cuando en
-    realidad es 0/0."""
+    """Valor de expr sustituyendo todas las variables a la vez."""
     try:
         v = expr.subs(sub, simultaneous=True) if len(sub) > 1 else expr.subs(sub)
         return v
@@ -231,7 +218,7 @@ def _signo(expr, x, v):
 
 
 def sol_reales(expr, x):
-    """Ceros reales de expr: (lista ordenada, nota) con nota en {None, 'ventana', 'todos', 'no_resuelto'}."""
+    """Ceros reales de expr: (lista ordenada, nota)."""
     try:
         s = sp.solveset(expr, x, sp.S.Reals)
     except Exception:  # noqa: BLE001
@@ -281,8 +268,8 @@ def _cortes_piecewise(expr, x) -> set:
                 sol = sp.solveset(nodo.args[0], x, sp.S.Reals)
                 if isinstance(sol, sp.FiniteSet):
                     pts |= set(sol)
-                except Exception:  # noqa: BLE001
-                    pass
+            except Exception:  # noqa: BLE001
+                pass
     return pts
 
 
@@ -327,14 +314,16 @@ def condiciones_dominio(expr) -> list[tuple]:
         elif isinstance(n, (sp.coth, sp.csch)):
             add(sp.Ne(n.args[0], 0), "la cotangente/cosecante hiperbólica no existe en 0")
         elif isinstance(n, sp.factorial):
-            # x! = Γ(x+1): existe para todo real MENOS los enteros negativos (polos de la función gamma)
             a_ = n.args[0]
-            add(sp.Or(sp.Ge(a_, 0), sp.Ne(sp.sin(sp.pi * a_), 0)),
-                "el factorial x! = Γ(x+1) existe para todo real excepto los enteros negativos (−1, −2, −3, …)")
-    # una condición «≠ 0» sobra si ya hay «> 0» sobre la misma expresión (la implica)
+            add(
+                sp.Or(sp.Ge(a_, 0), sp.Ne(sp.sin(sp.pi * a_), 0)),
+                "el factorial x! = Γ(x+1) existe para todo real excepto los enteros negativos (−1, −2, −3, …)",
+            )
     estrictas = {sp.srepr(r.lhs) for r, _ in conds if isinstance(r, sp.StrictGreaterThan) and r.rhs == 0}
-    conds = [(r, t) for r, t in conds
-             if not (isinstance(r, sp.Ne) and r.rhs == 0 and sp.srepr(r.lhs) in estrictas)]
+    conds = [
+        (r, t) for r, t in conds
+        if not (isinstance(r, sp.Ne) and r.rhs == 0 and sp.srepr(r.lhs) in estrictas)
+    ]
     return conds
 
 
@@ -345,11 +334,13 @@ def dominio(expr, x=None):
     b = [H("Condiciones para que la expresión exista (en los reales)")]
     conds = condiciones_dominio(expr)
     if expr.has(sp.Piecewise):
-        b.append(IN("Es una función por trozos: cada trozo tiene su propia condición; el dominio es la unión de los "
-                    "intervalos donde algún trozo aplica."))
+        b.append(IN(
+            "Es una función por trozos: cada trozo tiene su propia condición; el dominio es la unión de los "
+            "intervalos donde algún trozo aplica."
+        ))
     if conds:
         for rel, txt in conds:
-            b.append(T(f"- ${sp.latex(rel)}$ — {txt}."))
+            b.append(T("- $" + sp.latex(rel) + "$ — " + txt + "."))
     else:
         b.append(T("No hay restricciones (denominadores, raíces pares, logaritmos…): se puede evaluar en cualquier valor real."))
     datos = {"condiciones": [rel for rel, _ in conds]}
@@ -358,14 +349,18 @@ def dominio(expr, x=None):
         try:
             dom = continuous_domain(expr, x, sp.S.Reals)
             datos["dominio"] = dom
-            b += [H("Dominio"), L(f"\\operatorname{{Dom}}(f)={sp.latex(dom)}")]
+            b += [H("Dominio"), L(r"\operatorname{Dom}(f)=" + sp.latex(dom))]
             if dom == sp.S.EmptySet:
                 b.append(ER("La función no está definida para NINGÚN número real: revisa la expresión."))
         except Exception:  # noqa: BLE001
-            # x! = Γ(x+1): si lo único que restringe son los factoriales de x, el dominio es ℝ sin los enteros negativos
-            solo_factorial = (expr.has(sp.factorial) and all(f_.args[0] == x for f_ in expr.atoms(sp.factorial))
-                              and all(("factorial" in txt_) or any(isinstance(t, sp.factorial) for t in sp.preorder_traversal(rel))
-                                      for rel, txt_ in conds))
+            solo_factorial = (
+                expr.has(sp.factorial)
+                and all(f_.args[0] == x for f_ in expr.atoms(sp.factorial))
+                and all(
+                    ("factorial" in txt_) or any(isinstance(t, sp.factorial) for t in sp.preorder_traversal(rel))
+                    for rel, txt_ in conds
+                )
+            )
             if solo_factorial:
                 dom = sp.Complement(sp.S.Reals, sp.Range(-sp.oo, 0))
                 datos["dominio"] = dom
@@ -377,12 +372,14 @@ def dominio(expr, x=None):
             if rango.has(sp.Intersection) or rango.has(sp.ImageSet):
                 raise ValueError
             datos["rango"] = rango
-            b += [H("Rango"), L(f"\\operatorname{{Rango}}(f)={sp.latex(rango)}")]
+            b += [H("Rango"), L(r"\operatorname{Rango}(f)=" + sp.latex(rango))]
         except Exception:  # noqa: BLE001
             b.append(IN("No pude determinar el rango de forma exacta; mira la gráfica para estimarlo."))
     elif len(vs) >= 2:
-        b.append(IN(f"Con {len(vs)} variables el dominio es una región de ℝ^{len(vs)}: es el conjunto de puntos que cumplen "
-                    "TODAS las condiciones de arriba a la vez. En «Niveles y gráficas» puedes verlo dibujado (n = 2)."))
+        b.append(IN(
+            "Con " + str(len(vs)) + " variables el dominio es una región de ℝ^" + str(len(vs))
+            + ": es el conjunto de puntos que cumplen TODAS las condiciones de arriba a la vez. En «Niveles y gráficas» puedes verlo dibujado (n = 2)."
+        ))
     return res(b, **datos)
 
 
@@ -392,7 +389,7 @@ def ceros_cortes(expr, x):
     b = [H("Cortes con los ejes")]
     f0 = _valor_en(expr, {x: 0})
     if f0 is not None and _clase(f0) == "fin":
-        b.append(T(f"**Corte con el eje y:** $f(0)={lx(f0)}$ → el punto $(0,\\,{lx(f0)})$."))
+        b.append(T("**Corte con el eje y:** $f(0)=" + lx(f0) + r"$ → el punto $(0,\," + lx(f0) + ")$."))
     else:
         b.append(T("**Corte con el eje y:** la función no está definida en $x=0$ (no corta al eje y)."))
     pts, nota = sol_reales(expr, x)
@@ -403,9 +400,9 @@ def ceros_cortes(expr, x):
     elif not pts:
         b.append(T("**Ceros:** $f(x)=0$ no tiene solución real: la gráfica no corta al eje x."))
     else:
-        etiqueta = " (solo los de la ventana $[-2\\pi,2\\pi]$; la función es periódica y hay más)" if nota == "ventana" else ""
-        b.append(T(f"**Ceros** (donde $f(x)=0$){etiqueta}:"))
-        b.append(L(r",\quad ".join(f"x={sp.latex(p)}" for p in pts)))
+        etiqueta = r" (solo los de la ventana $[-2\pi,2\pi]$; la función es periódica y hay más)" if nota == "ventana" else ""
+        b.append(T("**Ceros** (donde $f(x)=0$)" + etiqueta + ":"))
+        b.append(L(r",\quad ".join("x=" + sp.latex(p) for p in pts)))
     return res(b, ceros=pts, f0=f0)
 
 
@@ -436,7 +433,7 @@ def simetria_periodo(expr, x):
     except Exception:  # noqa: BLE001
         per = None
     if per is not None and per != 0:
-        b.append(OK(f"**Periódica** con período $T={lx(per)}$: $f(x+T)=f(x)$."))
+        b.append(OK("**Periódica** con período $T=" + lx(per) + "$: $f(x+T)=f(x)$."))
     else:
         b.append(T("**No periódica** (o no pude detectar un período)."))
     return res(b, par=par, impar=impar, periodo=per)
@@ -464,7 +461,7 @@ def _candidatos(expr, x, dom=None):
         pass
     try:
         sing = singularities(expr, x)
-        if isinstance(sing, sp.FiniteSet):          # los conjuntos infinitos NO se recorren (no terminaría)
+        if isinstance(sing, sp.FiniteSet):
             cand |= set(sing)
     except Exception:  # noqa: BLE001
         pass
@@ -474,7 +471,7 @@ def _candidatos(expr, x, dom=None):
 
 
 def _familias(dom) -> list:
-    """Conjuntos infinitos numerables fuera del dominio (p. ej. π/2 + kπ para la tangente)."""
+    """Conjuntos infinitos numerables fuera del dominio."""
     fams = []
     try:
         comp = sp.Complement(sp.S.Reals, dom)
@@ -487,7 +484,7 @@ def _familias(dom) -> list:
 
 
 def _representantes(familia, n=2) -> list:
-    """Primeros elementos de una familia infinita (sin iterar de más)."""
+    """Primeros elementos de una familia infinita."""
     out = []
     try:
         for e in itertools.islice(iter(familia), n):
@@ -526,12 +523,12 @@ def asintotas(expr, x):
         for a, izq, der in verticales:
             lados = []
             if _clase(izq) != "nd":
-                lados.append(f"por la izquierda tiende a {_desc_lim(izq)}")
+                lados.append("por la izquierda tiende a " + _desc_lim(izq))
             if _clase(der) != "nd":
-                lados.append(f"por la derecha tiende a {_desc_lim(der)}")
-            b.append(T(f"- $x={lx(a)}$: " + "; ".join(lados) + "."))
+                lados.append("por la derecha tiende a " + _desc_lim(der))
+            b.append(T("- $x=" + lx(a) + "$: " + "; ".join(lados) + "."))
         for fam, a in familias_v:
-            b.append(T(f"- **Infinitas (periódicas):** en todos los puntos de ${sp.latex(fam)}$ (por ejemplo $x={lx(a)}$)."))
+            b.append(T("- **Infinitas (periódicas):** en todos los puntos de $" + sp.latex(fam) + "$ (por ejemplo $x=" + lx(a) + "$)."))
     else:
         b.append(T("**Verticales:** ninguna."))
 
@@ -550,17 +547,22 @@ def asintotas(expr, x):
     if horiz:
         b.append(T("**Horizontales:**"))
         for nombre, v in horiz:
-            b.append(T(f"- Hacia {nombre}: $y={lx(v)}$."))
+            b.append(T("- Hacia " + nombre + ": $y=" + lx(v) + "$."))
     else:
-        b.append(T("**Horizontales:** ninguna (los límites en $\\pm\\infty$ no son finitos)."))
+        b.append(T(r"**Horizontales:** ninguna (los límites en $\pm\infty$ no son finitos)."))
     if obl:
         b.append(T("**Oblicuas** $y=mx+b$:"))
         for nombre, mm, bb in obl:
-            b.append(T(f"- Hacia {nombre}: $y={lx(mm)}\\,x{'+' if (_flt(bb) or 0) >= 0 else ''}{lx(bb)}$."))
+            signo_b = "+" if (_flt(bb) or 0) >= 0 else ""
+            b.append(T("- Hacia " + nombre + ": $y=" + lx(mm) + r"\,x" + signo_b + lx(bb) + "$."))
     else:
         b.append(T("**Oblicuas:** ninguna."))
-    return res(b, verticales=[a for a, _, _ in verticales] + [a for _, a in familias_v],
-               horizontales=[v for _, v in horiz], oblicuas=[(mm, bb) for _, mm, bb in obl])
+    return res(
+        b,
+        verticales=[a for a, _, _ in verticales] + [a for _, a in familias_v],
+        horizontales=[v for _, v in horiz],
+        oblicuas=[(mm, bb) for _, mm, bb in obl],
+    )
 
 
 def _intervalos(puntos, dom=None):
@@ -591,10 +593,9 @@ def monotonia_extremos(expr, x):
         f1 = f1s if sp.count_ops(f1s) <= sp.count_ops(f1) else f1
     except Exception:  # noqa: BLE001
         pass
-    b.append(L(f"f'(x)={sp.latex(f1)}"))
+    b.append(L("f'(x)=" + sp.latex(f1)))
     huecos_dom, dom = _candidatos(expr, x)
     crit, nota = sol_reales(f1, x)
-    # puntos donde f' no existe pero f sí (picos, tangentes verticales)
     sing = []
     try:
         sing = [s for s in singularities(f1, x) if s.is_real and _flt(s) is not None and dom.contains(s) == True]  # noqa: E712
@@ -606,16 +607,15 @@ def monotonia_extremos(expr, x):
     if nota == "no_resuelto":
         b.append(AV("No pude resolver $f'(x)=0$ de forma exacta; los puntos críticos pueden estar incompletos."))
     if nota == "ventana":
-        b.append(IN("Hay infinitos puntos críticos (función periódica): se muestran los de la ventana $[-2\\pi,2\\pi]$."))
+        b.append(IN(r"Hay infinitos puntos críticos (función periódica): se muestran los de la ventana $[-2\pi,2\pi]$."))
     b.append(H("Puntos críticos"))
     if crit:
-        b.append(T("Donde $f'(x)=0$:  " + ", ".join(f"$x={sp.latex(c)}$" for c in crit)))
+        b.append(T("Donde $f'(x)=0$:  " + ", ".join("$x=" + sp.latex(c) + "$" for c in crit)))
     else:
         b.append(T("No hay puntos donde $f'(x)=0$."))
     if sing:
-        b.append(T("Donde $f'$ no existe pero $f$ sí:  " + ", ".join(f"$x={sp.latex(c)}$" for c in sing)))
+        b.append(T("Donde $f'$ no existe pero $f$ sí:  " + ", ".join("$x=" + sp.latex(c) + "$" for c in sing)))
 
-    # Cortar también por huecos del dominio para que cada intervalo sea continuo
     cortes_totales = sorted(set(puntos) | set(huecos_dom), key=lambda p: _flt(p))
     rangos = _intervalos(cortes_totales)
     filas = []
@@ -624,7 +624,12 @@ def monotonia_extremos(expr, x):
         if s is None:
             continue
         txt = "creciente ↑" if s > 0 else "decreciente ↓" if s < 0 else "constante →"
-        filas.append([f"${_intervalo_txt(a, bb)}$", f"${lx(sp.N(prueba, 4))}$", "+" if s > 0 else "−" if s < 0 else "0", txt])
+        filas.append([
+            "$" + _intervalo_txt(a, bb) + "$",
+            "$" + lx(sp.N(prueba, 4)) + "$",
+            "+" if s > 0 else "−" if s < 0 else "0",
+            txt,
+        ])
     if filas:
         b += [H("Crecimiento y decrecimiento"), TAB(["Intervalo", "x de prueba", "signo de f′", "f es…"], filas)]
 
@@ -639,7 +644,7 @@ def monotonia_extremos(expr, x):
             f2c = _valor_en(f2, {x: c})
             sg = None
             if f2c is not None and _clase(f2c) == "fin":
-                sg = (_flt(f2c) or 0)
+                sg = _flt(f2c) or 0
                 sg = None if abs(sg) < 1e-12 else (1 if sg > 0 else -1)
             if sg is not None:
                 tipo = "mínimo local" if sg > 0 else "máximo local"
@@ -649,15 +654,22 @@ def monotonia_extremos(expr, x):
             sl = _signo(f1, x, c - sp.Float(d, 15))
             sr = _signo(f1, x, c + sp.Float(d, 15))
             if sl is not None and sr is not None:
-                tipo = ("máximo local" if (sl > 0 and sr < 0) else "mínimo local" if (sl < 0 and sr > 0)
-                        else "ni máximo ni mínimo (f′ no cambia de signo)")
+                tipo = (
+                    "máximo local" if (sl > 0 and sr < 0)
+                    else "mínimo local" if (sl < 0 and sr > 0)
+                    else "ni máximo ni mínimo (f′ no cambia de signo)"
+                )
         if tipo:
             extremos.append((c, fc, tipo))
     if extremos:
-        b += [H("Extremos locales"),
-              TAB(["x", "f(x)", "tipo"], [[m(c), m(fc), t] for c, fc, t in extremos])]
-        b.append(IN("Criterio de la segunda derivada ($f''(c)>0$: mínimo, $f''(c)<0$: máximo); si $f''(c)=0$ o $f'$ no existe, "
-                    "se usa el cambio de signo de $f'$."))
+        b += [
+            H("Extremos locales"),
+            TAB(["x", "f(x)", "tipo"], [[m(c), m(fc), t] for c, fc, t in extremos]),
+        ]
+        b.append(IN(
+            "Criterio de la segunda derivada ($f''(c)>0$: mínimo, $f''(c)<0$: máximo); si $f''(c)=0$ o $f'$ no existe, "
+            "se usa el cambio de signo de $f'$."
+        ))
     elif puntos:
         b.append(T("Ningún punto crítico es un extremo local."))
     return res(b, derivada=f1, criticos=puntos, extremos=[(c, fc, t) for c, fc, t in extremos])
@@ -673,7 +685,7 @@ def concavidad(expr, x):
         f2 = f2s if sp.count_ops(f2s) <= sp.count_ops(f2) else f2
     except Exception:  # noqa: BLE001
         pass
-    b.append(L(f"f''(x)={sp.latex(f2)}"))
+    b.append(L("f''(x)=" + sp.latex(f2)))
     huecos_dom, dom = _candidatos(expr, x)
     cand, nota = sol_reales(f2, x)
     cand = [c for c in cand if dom.contains(c) == True]  # noqa: E712
@@ -686,8 +698,11 @@ def concavidad(expr, x):
         if s is None:
             continue
         signos.append((a, bb, s))
-        filas.append([f"${_intervalo_txt(a, bb)}$", "+" if s > 0 else "−" if s < 0 else "0",
-                      "cóncava hacia arriba ∪" if s > 0 else "cóncava hacia abajo ∩" if s < 0 else "recta"])
+        filas.append([
+            "$" + _intervalo_txt(a, bb) + "$",
+            "+" if s > 0 else "−" if s < 0 else "0",
+            "cóncava hacia arriba ∪" if s > 0 else "cóncava hacia abajo ∩" if s < 0 else "recta",
+        ])
     if filas:
         b += [H("Concavidad"), TAB(["Intervalo", "signo de f″", "forma"], filas)]
     infl = []
@@ -715,9 +730,13 @@ def extremos_absolutos(expr, x, a, bb):
         raise ErrorCalculo("Los extremos del intervalo deben ser números reales finitos.")
     if fa_ >= fb_:
         raise ErrorCalculo("El extremo izquierdo debe ser menor que el derecho.")
-    b = [H("Método del intervalo cerrado"),
-         T(f"Si $f$ es **continua** en $[{lx(a)},{lx(bb)}]$, el teorema de **Weierstrass** garantiza que alcanza un máximo y un mínimo "
-           "absolutos. Se buscan entre: los **extremos** del intervalo y los **puntos críticos** interiores.")]
+    b = [
+        H("Método del intervalo cerrado"),
+        T(
+            "Si $f$ es **continua** en $[" + lx(a) + "," + lx(bb) + "]$, el teorema de **Weierstrass** garantiza que alcanza un máximo y un mínimo "
+            "absolutos. Se buscan entre: los **extremos** del intervalo y los **puntos críticos** interiores."
+        ),
+    ]
     dom = _dom_1d(expr, x)
     cerrado = sp.Interval(a, bb)
     try:
@@ -726,13 +745,15 @@ def extremos_absolutos(expr, x, a, bb):
         dentro = None
     cand_disc = [c for c in _candidatos(expr, x, dom)[0] if fa_ <= _flt(c) <= fb_]
     if dentro is False or cand_disc:
-        b.append(AV("La función **no es continua (o no está definida) en todo el intervalo**: el teorema no aplica y los resultados "
-                    "de abajo podrían no ser los extremos absolutos." + (
-                        " Puntos problemáticos: " + ", ".join(f"$x={lx(c)}$" for c in cand_disc) + "." if cand_disc else "")))
+        extra_prob = (" Puntos problemáticos: " + ", ".join("$x=" + lx(c) + "$" for c in cand_disc) + ".") if cand_disc else ""
+        b.append(AV(
+            "La función **no es continua (o no está definida) en todo el intervalo**: el teorema no aplica y los resultados "
+            "de abajo podrían no ser los extremos absolutos." + extra_prob
+        ))
     f1 = sp.diff(expr, x)
     crit, nota = sol_reales(f1, x)
     sing = [s_ for s_ in _cortes_piecewise(expr, x)]
-    if nota == "ventana":                       # función periódica: buscar solo dentro del intervalo
+    if nota == "ventana":
         try:
             sol = sp.solveset(f1, x, sp.Interval(a, bb))
             crit = sorted(list(sol), key=lambda p: _flt(p)) if isinstance(sol, sp.FiniteSet) else crit
@@ -745,10 +766,10 @@ def extremos_absolutos(expr, x, a, bb):
     for et, c in cands:
         v = _valor_en(expr, {x: c})
         if v is None or _clase(v) != "fin":
-            filas.append([f"${lx(c)}$", et, "no definida"])
+            filas.append(["$" + lx(c) + "$", et, "no definida"])
             continue
         v = sp.simplify(v)
-        filas.append([f"${lx(c)}$", et, m(v)])
+        filas.append(["$" + lx(c) + "$", et, m(v)])
         vals.append((c, v))
     b.append(TAB(["x", "tipo de candidato", "f(x)"], filas))
     if not vals:
@@ -758,8 +779,8 @@ def extremos_absolutos(expr, x, a, bb):
     donde_min = [c for c, v in vals if _igual(v, vmin)]
     donde_max = [c for c, v in vals if _igual(v, vmax)]
     b.append(H("Conclusión"))
-    b.append(OK(f"**Máximo absoluto:** ${lx(vmax)}$ en " + ", ".join(f"$x={lx(c)}$" for c in donde_max) + "."))
-    b.append(OK(f"**Mínimo absoluto:** ${lx(vmin)}$ en " + ", ".join(f"$x={lx(c)}$" for c in donde_min) + "."))
+    b.append(OK("**Máximo absoluto:** $" + lx(vmax) + "$ en " + ", ".join("$x=" + lx(c) + "$" for c in donde_max) + "."))
+    b.append(OK("**Mínimo absoluto:** $" + lx(vmin) + "$ en " + ", ".join("$x=" + lx(c) + "$" for c in donde_min) + "."))
     if _igual(vmin, vmax):
         b.append(IN("El máximo y el mínimo coinciden: la función es constante en los candidatos."))
     return res(b, maximo=(donde_max[0], vmax), minimo=(donde_min[0], vmin), candidatos=vals)
@@ -823,7 +844,7 @@ def _tabla_aproximacion(expr, x, a, direccion):
     filas = []
     for nombre, xs in etiquetas:
         for xv in xs:
-            val = _valor_en(expr, {x: sp.Float(xv, 40)})      # Float: nunca potencias exactas gigantes
+            val = _valor_en(expr, {x: sp.Float(xv, 40)})
             filas.append([nombre, _num_str(xv, 8), _num_str(sp.N(val, 20) if val is not None else None, 9)])
     return filas
 
@@ -839,37 +860,43 @@ def limite_1d(expr, x, a, direccion="+-"):
         cfa = _clase(f_a)
         b.append(H("Paso 1 · Sustitución directa"))
         if cfa == "fin":
-            b.append(T(f"Al sustituir $x={lx(a)}$ se obtiene $f({lx(a)})={lx(f_a)}$ (un valor finito)."
-                       " Ojo: esto es el **valor** de la función; el límite se confirma abajo con los laterales."))
+            b.append(T(
+                "Al sustituir $x=" + lx(a) + "$ se obtiene $f(" + lx(a) + ")=" + lx(f_a) + "$ (un valor finito)."
+                " Ojo: esto es el **valor** de la función; el límite se confirma abajo con los laterales."
+            ))
         else:
             forma = _forma_indeterminada(expr, x, a, d if d != "+-" else "+")
             if forma:
-                b.append(AV(f"Al sustituir se obtiene una **forma indeterminada** ${forma[0]}$: no se puede concluir "
-                            "sustituyendo; hay que simplificar, factorizar o usar L'Hôpital."))
+                b.append(AV(
+                    "Al sustituir se obtiene una **forma indeterminada** $" + forma[0] + "$: no se puede concluir "
+                    "sustituyendo; hay que simplificar, factorizar o usar L'Hôpital."
+                ))
             else:
-                b.append(T("Al sustituir $x=a$ la expresión **no está definida** (división entre cero u otra operación "
-                           "inválida). Hay que estudiar qué ocurre *cerca* de $a$."))
+                b.append(T(
+                    "Al sustituir $x=a$ la expresión **no está definida** (división entre cero u otra operación "
+                    "inválida). Hay que estudiar qué ocurre *cerca* de $a$."
+                ))
     else:
         forma = _forma_indeterminada(expr, x, a, "+-")
         b.append(H("Paso 1 · Comportamiento en el infinito"))
         if forma:
-            b.append(AV(f"Al evaluar directamente aparece una **forma indeterminada** ${forma[0]}$."))
+            b.append(AV("Al evaluar directamente aparece una **forma indeterminada** $" + forma[0] + "$."))
         else:
             b.append(T("Se estudia qué hace la función cuando $x$ crece (o decrece) sin cota."))
 
     b.append(H("Paso 2 · Límite" + ("" if inf else "s laterales")))
     if inf:
         Lv = lim(expr, x, a)
-        b.append(T(f"$\\lim_{{x\\to {lx(a)}}} f(x)=$ {_desc_lim(Lv)}"))
+        b.append(T(r"$\lim_{x\to " + lx(a) + "} f(x)=$ " + _desc_lim(Lv)))
         final, existe = Lv, _clase(Lv) in ("fin", "+oo", "-oo")
         izq = der = None
     else:
         izq = lim(expr, x, a, "-") if d in ("-", "+-") else None
         der = lim(expr, x, a, "+") if d in ("+", "+-") else None
         if d in ("-", "+-"):
-            b.append(T(f"Por la **izquierda** ($x\\to {lx(a)}^-$): {_desc_lim(izq)}"))
+            b.append(T("Por la **izquierda** ($x\\to " + lx(a) + "^-$): " + _desc_lim(izq)))
         if d in ("+", "+-"):
-            b.append(T(f"Por la **derecha** ($x\\to {lx(a)}^+$): {_desc_lim(der)}"))
+            b.append(T("Por la **derecha** ($x\\to " + lx(a) + "^+$): " + _desc_lim(der)))
         if d == "-":
             final, existe = izq, _clase(izq) in ("fin", "+oo", "-oo")
         elif d == "+":
@@ -888,23 +915,23 @@ def limite_1d(expr, x, a, direccion="+-"):
     if inf or d != "+-":
         etiqueta = "" if inf else (" por la derecha" if d == "+" else " por la izquierda")
         if cf == "fin":
-            b.append(OK(f"El límite{etiqueta} **existe y vale** ${lx(final)}$."))
+            b.append(OK("El límite" + etiqueta + " **existe y vale** $" + lx(final) + "$."))
         elif cf in ("+oo", "-oo"):
-            b.append(OK(f"El límite{etiqueta} es ${lx(final)}$: la función {'crece' if cf == '+oo' else 'decrece'} sin cota."))
+            b.append(OK("El límite" + etiqueta + " es $" + lx(final) + "$: la función " + ("crece" if cf == "+oo" else "decrece") + " sin cota."))
         elif cf == "osc":
             b.append(AV("El límite **no existe**: la función oscila sin acercarse a ningún valor."))
         else:
             b.append(AV("No pude determinar este límite."))
     elif existe and _clase(final) == "fin":
-        b.append(OK(f"Los dos laterales coinciden → el límite **existe y vale** ${lx(final)}$."))
+        b.append(OK("Los dos laterales coinciden → el límite **existe y vale** $" + lx(final) + "$."))
     elif existe:
-        b.append(OK(f"Los dos laterales tienden a ${lx(final)}$ → el límite es ${lx(final)}$ (la función diverge)."))
+        b.append(OK("Los dos laterales tienden a $" + lx(final) + "$ → el límite es $" + lx(final) + "$ (la función diverge)."))
     elif _clase(izq) == "nd" or _clase(der) == "nd":
         b.append(AV("No pude calcular alguno de los laterales (o la función no está definida de un lado)."))
     else:
         b.append(AV("Los laterales son **distintos** → el límite bilateral **NO existe**."))
         if _clase(izq) == "fin" and _clase(der) == "fin":
-            b.append(T(f"Hay un **salto** de tamaño ${lx(sp.simplify(der - izq))}$."))
+            b.append(T("Hay un **salto** de tamaño $" + lx(sp.simplify(der - izq)) + "$."))
         elif _clase(izq) in ("+oo", "-oo") and _clase(der) in ("+oo", "-oo"):
             b.append(T("Hay una **asíntota vertical** con signos opuestos a cada lado."))
 
@@ -913,24 +940,27 @@ def limite_1d(expr, x, a, direccion="+-"):
         if forma and forma[1] is not None:
             n, den = forma[1], forma[2]
             Lh = lim(sp.diff(n, x) / sp.diff(den, x), x, a, d)
-            b += [H("Regla de L'Hôpital"),
-                  T(f"Como la forma es ${forma[0]}$, se puede derivar numerador y denominador por separado:"),
-                  L(r"\lim \frac{N'(x)}{D'(x)}=\lim " + sp.latex(sp.diff(n, x) / sp.diff(den, x)) + "=" + lx(Lh if Lh is not None else sp.Symbol("?")))]
+            b += [
+                H("Regla de L'Hôpital"),
+                T("Como la forma es $" + forma[0] + "$, se puede derivar numerador y denominador por separado:"),
+                L(r"\lim \frac{N'(x)}{D'(x)}=\lim " + sp.latex(sp.diff(n, x) / sp.diff(den, x)) + "=" + lx(Lh if Lh is not None else sp.Symbol("?"))),
+            ]
             if Lh is not None and final is not None and _clase(Lh) == "fin" and _clase(final) == "fin" and not _igual(Lh, final):
                 b.append(AV("L'Hôpital no coincide con el valor anterior: revisa."))
 
     filas = _tabla_aproximacion(expr, x, a, d)
     if filas:
         b += [H("Comprobación numérica"), TAB(["acercamiento", "x", "f(x)"], filas)]
-        # validar el resultado simbólico contra el numérico (red de seguridad)
         try:
             ult = [f for f in filas if f[1] != "no definido"]
             if ult and final is not None and _clase(final) == "fin":
                 vals = [_flt(sp.Float(f[2])) for f in ult[-1:] if f[2] not in ("no definido", "+∞", "−∞")]
                 lf = _flt(final)
                 if vals and vals[0] is not None and lf is not None and abs(vals[0] - lf) > 1e-3 * (1 + abs(lf)):
-                    b.append(AV("⚠️ El valor numérico más cercano no coincide con el resultado simbólico; "
-                                "desconfía y revisa la expresión."))
+                    b.append(AV(
+                        "⚠️ El valor numérico más cercano no coincide con el resultado simbólico; "
+                        "desconfía y revisa la expresión."
+                    ))
         except Exception:  # noqa: BLE001
             pass
     return res(b, limite=final, izq=izq, der=der, existe=existe)
@@ -943,30 +973,38 @@ def _clasificar_discontinuidad(expr, x, a, dom):
     izq = lim(expr, x, a, "-") if _lado_en_dominio(dom, a, -1) else None
     der = lim(expr, x, a, "+") if _lado_en_dominio(dom, a, 1) else None
     ci, cd = _clase(izq), _clase(der)
-    ref = (f"$f({lx(a)})={lx(fa)}$" if fa_ok else f"$f({lx(a)})$ no está definida")
+    ref = ("$f(" + lx(a) + ")=" + lx(fa) + "$") if fa_ok else ("$f(" + lx(a) + ")$ no está definida")
     if ci == "nd" and cd == "nd":
-        return "no pude clasificarla", f"No pude calcular los límites laterales en $x={lx(a)}$."
+        return "no pude clasificarla", "No pude calcular los límites laterales en $x=" + lx(a) + "$."
     if ci == "nd" or cd == "nd":
         lado, v = ("derecha", der) if ci == "nd" else ("izquierda", izq)
         if _clase(v) == "fin" and fa_ok and _igual(v, fa):
-            return "continua en la frontera", (f"$x={lx(a)}$ es **frontera del dominio**: solo hay función de un lado y es "
-                                                f"continua por la {lado} ({ref}, límite ${lx(v)}$).")
-        return "frontera del dominio", f"$x={lx(a)}$ es frontera del dominio (solo hay función por la {lado}); {ref}, límite {_desc_lim(v)}."
+            return "continua en la frontera", (
+                "$x=" + lx(a) + "$ es **frontera del dominio**: solo hay función de un lado y es "
+                "continua por la " + lado + " (" + ref + ", límite $" + lx(v) + "$)."
+            )
+        return "frontera del dominio", "$x=" + lx(a) + "$ es frontera del dominio (solo hay función por la " + lado + "); " + ref + ", límite " + _desc_lim(v) + "."
     if ci == "fin" and cd == "fin":
         if _igual(izq, der):
             if fa_ok and _igual(fa, izq):
-                return "continua", f"Es continua en $x={lx(a)}$ ({ref} = límite)."
-            return "evitable", (f"**Discontinuidad evitable (removible)**: el límite existe y vale ${lx(izq)}$, pero {ref}. "
-                                f"Se «repara» definiendo $f({lx(a)})={lx(izq)}$.")
+                return "continua", "Es continua en $x=" + lx(a) + "$ (" + ref + " = límite)."
+            return "evitable", (
+                "**Discontinuidad evitable (removible)**: el límite existe y vale $" + lx(izq) + "$, pero " + ref + ". "
+                "Se «repara» definiendo $f(" + lx(a) + ")=" + lx(izq) + "$."
+            )
         salto = sp.simplify(der - izq)
-        return "salto", (f"**Discontinuidad de salto finito**: límite izquierdo ${lx(izq)}$, derecho ${lx(der)}$ "
-                         f"(salto ${lx(salto)}$); {ref}.")
+        return "salto", (
+            "**Discontinuidad de salto finito**: límite izquierdo $" + lx(izq) + "$, derecho $" + lx(der) + "$ "
+            "(salto $" + lx(salto) + "$); " + ref + "."
+        )
     if ci in ("+oo", "-oo") or cd in ("+oo", "-oo"):
-        return "infinita", (f"**Discontinuidad infinita** (asíntota vertical $x={lx(a)}$): izquierda {_desc_lim(izq)}, "
-                            f"derecha {_desc_lim(der)}.")
+        return "infinita", (
+            "**Discontinuidad infinita** (asíntota vertical $x=" + lx(a) + "$): izquierda " + _desc_lim(izq) + ", "
+            "derecha " + _desc_lim(der) + "."
+        )
     if ci == "osc" or cd == "osc":
-        return "esencial", f"**Discontinuidad esencial**: cerca de $x={lx(a)}$ la función oscila y no tiene límite."
-    return "no pude clasificarla", f"No pude clasificar la discontinuidad en $x={lx(a)}$."
+        return "esencial", "**Discontinuidad esencial**: cerca de $x=" + lx(a) + "$ la función oscila y no tiene límite."
+    return "no pude clasificarla", "No pude clasificar la discontinuidad en $x=" + lx(a) + "$."
 
 
 @_op
@@ -974,30 +1012,39 @@ def continuidad_1d(expr, x):
     """Continuidad de una variable: dominio, discontinuidades clasificadas y teoremas útiles."""
     b = [H("Dónde está definida")]
     cand, dom = _candidatos(expr, x)
-    b.append(L(f"\\operatorname{{Dom}}(f)={sp.latex(dom)}"))
+    b.append(L(r"\operatorname{Dom}(f)=" + sp.latex(dom)))
     if dom == sp.S.EmptySet:
         return res(b + [ER("La función no está definida en ningún real.")])
     if expr.has(sp.floor, sp.ceiling):
-        b.append(AV("Contiene parte entera (piso/techo): salta en cada punto donde su argumento es un entero, "
-                    "así que hay (infinitas) discontinuidades de salto además de las listadas."))
+        b.append(AV(
+            "Contiene parte entera (piso/techo): salta en cada punto donde su argumento es un entero, "
+            "así que hay (infinitas) discontinuidades de salto además de las listadas."
+        ))
     fams = _familias(dom)
     for fam in fams:
         for a in _representantes(fam, 1):
-            tipo, desc = _clasificar_discontinuidad(expr, x, a, dom)
-            b.append(T(f"**Discontinuidades periódicas:** la función no está definida en ningún punto de ${sp.latex(fam)}$. "
-                       "Por ejemplo, " + desc))
+            _, desc = _clasificar_discontinuidad(expr, x, a, dom)
+            b.append(T(
+                "**Discontinuidades periódicas:** la función no está definida en ningún punto de $" + sp.latex(fam) + "$. "
+                "Por ejemplo, " + desc
+            ))
     if not cand and not fams:
-        b += [OK("**La función es continua en todo su dominio** (composición de funciones elementales continuas)."),
-              T("Nota: «continua en su dominio» no significa continua en todo $\\mathbb{R}$ si el dominio tiene huecos.")]
+        b += [
+            OK("**La función es continua en todo su dominio** (composición de funciones elementales continuas)."),
+            T(r"Nota: «continua en su dominio» no significa continua en todo $\mathbb{R}$ si el dominio tiene huecos."),
+        ]
         return res(b, discontinuidades=[], dominio=dom)
     if not cand:
-        return res(b + [IN("Fuera de esas familias periódicas, la función es continua en su dominio.")],
-                   discontinuidades=["periódicas"], dominio=dom)
+        return res(
+            b + [IN("Fuera de esas familias periódicas, la función es continua en su dominio.")],
+            discontinuidades=["periódicas"],
+            dominio=dom,
+        )
     b.append(H("Puntos a revisar"))
     filas, malos, notas = [], [], []
     for a in cand:
         tipo, desc = _clasificar_discontinuidad(expr, x, a, dom)
-        filas.append([f"${lx(a)}$", tipo])
+        filas.append(["$" + lx(a) + "$", tipo])
         notas.append(desc)
         if tipo not in ("continua", "continua en la frontera"):
             malos.append((a, tipo))
@@ -1007,10 +1054,11 @@ def continuidad_1d(expr, x):
     if not malos:
         b.append(OK("Todos los puntos revisados resultan continuos."))
     else:
-        b.append(T("**Conclusión:** la función es continua en su dominio salvo en "
-                   + ", ".join(f"$x={lx(a)}$" for a, _ in malos) + "."))
-    b.append(IN("Teorema del valor intermedio: si $f$ es continua en $[a,b]$ y $f(a)$, $f(b)$ tienen signos opuestos, "
-                "existe al menos un cero en $(a,b)$. Úsalo solo en intervalos donde NO haya discontinuidades."))
+        b.append(T("**Conclusión:** la función es continua en su dominio salvo en " + ", ".join("$x=" + lx(a) + "$" for a, _ in malos) + "."))
+    b.append(IN(
+        "Teorema del valor intermedio: si $f$ es continua en $[a,b]$ y $f(a)$, $f(b)$ tienen signos opuestos, "
+        "existe al menos un cero en $(a,b)$. Úsalo solo en intervalos donde NO haya discontinuidades."
+    ))
     return res(b, discontinuidades=malos, dominio=dom)
 
 
@@ -1055,10 +1103,7 @@ def _no_derivable(expr, x=None):
 
 @_op
 def derivar(expr, variables, punto=None):
-    """
-    Derivada (ordinaria, de orden superior, parcial o mixta).
-    variables = [(símbolo, veces), ...] en el orden de derivación; punto = {símbolo: valor} opcional.
-    """
+    """Derivada (ordinaria, de orden superior, parcial o mixta)."""
     vc = [(v, int(c)) for v, c in variables]
     orden = sum(c for _, c in vc)
     if orden < 1 or orden > 8:
@@ -1068,8 +1113,10 @@ def derivar(expr, variables, punto=None):
     d_s = _simplificar(d)
     b += [H("Resultado"), L(sp.latex(sp.Derivative(expr, *vc)) + "=" + sp.latex(d_s))]
     if len(vc) == 1 and orden == 1:
-        b.append(IN("Interpretación geométrica: $f'(a)$ es la **pendiente de la recta tangente** a la gráfica en $x=a$; "
-                    "interpretación como razón de cambio: cuánto cambia $f$ por cada unidad que crece $x$."))
+        b.append(IN(
+            "Interpretación geométrica: $f'(a)$ es la **pendiente de la recta tangente** a la gráfica en $x=a$; "
+            "interpretación como razón de cambio: cuánto cambia $f$ por cada unidad que crece $x$."
+        ))
     elif len(vc) > 1 or len(expr.free_symbols) > 1:
         b.append(IN("Una derivada parcial mide cómo cambia $f$ al mover SOLO esa variable, dejando las demás fijas."))
     if len(vc) > 1:
@@ -1082,22 +1129,29 @@ def derivar(expr, variables, punto=None):
     nd = _no_derivable(expr, vc[0][0] if len(expr.free_symbols) == 1 else None)
     if nd is not None:
         if nd:
-            b.append(AV("La función **no es derivable** en " + ", ".join(f"$x={lx(p)}$" for p in nd) +
-                        " (pico, salto o cambio de trozo); allí la fórmula de arriba no vale."))
+            b.append(AV(
+                "La función **no es derivable** en " + ", ".join("$x=" + lx(p) + "$" for p in nd)
+                + " (pico, salto o cambio de trozo); allí la fórmula de arriba no vale."
+            ))
         else:
-            b.append(AV("La expresión contiene valor absoluto, signo, parte entera, máx/mín o trozos: puede no ser derivable "
-                        "en algunos puntos; la fórmula solo vale donde sí lo es."))
+            b.append(AV(
+                "La expresión contiene valor absoluto, signo, parte entera, máx/mín o trozos: puede no ser derivable "
+                "en algunos puntos; la fórmula solo vale donde sí lo es."
+            ))
     valor = None
     if punto:
         b.append(H("Valor en el punto"))
         valor = _valor_en(d_s, punto)
-        etiqueta = ",\\,".join(f"{sp.latex(k)}={sp.latex(v)}" for k, v in punto.items())
+        etiqueta = r",\,".join(sp.latex(k) + "=" + sp.latex(v) for k, v in punto.items())
         if valor is None or _clase(valor) != "fin":
-            b.append(AV(f"La derivada no está definida (o no es finita) en ${etiqueta}$."))
+            b.append(AV("La derivada no está definida (o no es finita) en $" + etiqueta + "$."))
         else:
-            b.append(L(f"\\left.{sp.latex(sp.Derivative(expr, *vc))}\\right|_{{{etiqueta}}}={lx(sp.nsimplify(valor) if valor.is_Float else valor)}"
-                       + (f"\\approx {sp.latex(sp.N(valor, 8))}" if not valor.is_Integer and not valor.is_Float else "")))
-            if orden == 1 and len(vc) == 1:       # comprobación numérica por diferencia central
+            aprox_val = (r"\approx " + sp.latex(sp.N(valor, 8))) if not valor.is_Integer and not valor.is_Float else ""
+            b.append(L(
+                r"\left." + sp.latex(sp.Derivative(expr, *vc)) + r"\right|_{" + etiqueta + "}="
+                + lx(sp.nsimplify(valor) if valor.is_Float else valor) + aprox_val
+            ))
+            if orden == 1 and len(vc) == 1:
                 v0 = vc[0][0]
                 h = sp.Float("1e-6", 30)
                 try:
@@ -1121,8 +1175,10 @@ def gradiente_hessiana(expr, vars_, punto=None):
     n = len(vars_)
     b = [H("Gradiente")]
     grad = [_simplificar(sp.diff(expr, v)) for v in vars_]
-    b += [L(r"\nabla f=" + _vec(grad)),
-          IN("El gradiente apunta en la dirección de **máximo crecimiento** de $f$, y es perpendicular a las curvas/superficies de nivel.")]
+    b += [
+        L(r"\nabla f=" + _vec(grad)),
+        IN("El gradiente apunta en la dirección de **máximo crecimiento** de $f$, y es perpendicular a las curvas/superficies de nivel."),
+    ]
     datos = {"gradiente": grad}
     hess = None
     if n <= 4:
@@ -1134,12 +1190,12 @@ def gradiente_hessiana(expr, vars_, punto=None):
         lap = _simplificar(sum(hess[i, i] for i in range(n)))
         b += [H("Laplaciano"), L(r"\nabla^{2}f=\sum_i \frac{\partial^{2}f}{\partial x_i^{2}}=" + sp.latex(lap))]
         if lap == 0:
-            b.append(OK("$\\nabla^{2}f=0$: la función es **armónica**."))
+            b.append(OK(r"$\nabla^{2}f=0$: la función es **armónica**."))
     else:
         b.append(IN("Con más de 4 variables se omite la Hessiana en este módulo."))
     if punto is not None:
-        etiqueta = ",\\,".join(f"{sp.latex(v)}={sp.latex(p)}" for v, p in zip(vars_, punto))
-        b.append(H(f"En el punto (${etiqueta}$)"))
+        etiqueta = r",\,".join(sp.latex(v) + "=" + sp.latex(p) for v, p in zip(vars_, punto))
+        b.append(H("En el punto ($" + etiqueta + "$)"))
         fp = _en_punto(expr, vars_, punto)
         gp = [_en_punto(g, vars_, punto) for g in grad]
         if fp is None or _clase(fp) != "fin" or any(g is None or _clase(g) != "fin" for g in gp):
@@ -1150,7 +1206,7 @@ def gradiente_hessiana(expr, vars_, punto=None):
             if norma == 0:
                 b.append(T("El gradiente es el **vector cero**: es un **punto crítico** (candidato a máximo, mínimo o silla)."))
             else:
-                b.append(T(f"Dirección de máximo crecimiento: $\\nabla f$; razón máxima de cambio $={m(sp.simplify(norma))}$."))
+                b.append(T(r"Dirección de máximo crecimiento: $\nabla f$; razón máxima de cambio $=" + m(sp.simplify(norma))[1:-1] + "$."))
             datos["en_punto"] = {"f": fp, "grad": gp}
             if hess is not None:
                 hp = hess.subs(dict(zip(vars_, punto)))
@@ -1161,7 +1217,7 @@ def gradiente_hessiana(expr, vars_, punto=None):
 
 
 def _clasificar_hessiana(hp, n) -> list:
-    """Bloques con la clasificación de una Hessiana evaluada (valores propios + menores principales)."""
+    """Bloques con la clasificación de una Hessiana evaluada."""
     out = []
     try:
         ev = np.linalg.eigvalsh(np.array(hp.evalf(), dtype=float))
@@ -1177,11 +1233,13 @@ def _clasificar_hessiana(hp, n) -> list:
     elif pos > 0 and neg > 0:
         out.append(OK("**Indefinida** (valores propios de ambos signos) → el punto crítico (si lo es) es un **punto silla**."))
     else:
-        out.append(AV("**Semidefinida** (algún valor propio es 0) → el criterio de la Hessiana **no es concluyente**; "
-                      "hay que estudiar el comportamiento de $f$ cerca del punto."))
+        out.append(AV(
+            "**Semidefinida** (algún valor propio es 0) → el criterio de la Hessiana **no es concluyente**; "
+            "hay que estudiar el comportamiento de $f$ cerca del punto."
+        ))
     if n == 2:
         D = sp.simplify(hp.det())
-        out.append(T(f"Criterio del discriminante: $D=f_{{xx}}f_{{yy}}-f_{{xy}}^2={lx(D)}$ y $f_{{xx}}={lx(sp.simplify(hp[0, 0]))}$."))
+        out.append(T("Criterio del discriminante: $D=f_{xx}f_{yy}-f_{xy}^2=" + lx(D) + "$ y $f_{xx}=" + lx(sp.simplify(hp[0, 0])) + "$."))
     return out
 
 
@@ -1207,14 +1265,19 @@ def derivada_direccional(expr, vars_, punto, direccion):
     b += [H("Derivada direccional"), L(r"D_{\mathbf{u}}f(p)=\nabla f(p)\cdot\mathbf{u}=" + sp.latex(Du) + r"\approx " + sp.latex(sp.N(Du, 6)))]
     s = _flt(Du)
     if s is not None:
-        b.append(T("**Interpretación:** " + ("al avanzar en esa dirección, $f$ **crece**." if s > 1e-12
-                                              else "al avanzar en esa dirección, $f$ **decrece**." if s < -1e-12
-                                              else "en esa dirección $f$ **no cambia** (a primer orden): es tangente a la curva de nivel.")))
+        interp = (
+            "al avanzar en esa dirección, $f$ **crece**." if s > 1e-12
+            else "al avanzar en esa dirección, $f$ **decrece**." if s < -1e-12
+            else "en esa dirección $f$ **no cambia** (a primer orden): es tangente a la curva de nivel."
+        )
+        b.append(T("**Interpretación:** " + interp))
     nm = sp.simplify(sp.sqrt(sum(g ** 2 for g in gv)))
-    b += [H("Direcciones especiales"),
-          T(f"- **Máximo crecimiento:** hacia $\\nabla f(p)$, con razón $\\|\\nabla f(p)\\|={m(nm)}$."),
-          T(f"- **Máximo decrecimiento:** hacia $-\\nabla f(p)$, con razón $-{lx(nm)}$."),
-          T("- **Cambio nulo:** direcciones perpendiculares a $\\nabla f(p)$ (tangentes a la curva de nivel).")]
+    b += [
+        H("Direcciones especiales"),
+        T(r"- **Máximo crecimiento:** hacia $\nabla f(p)$, con razón $\|\nabla f(p)\|=" + lx(nm) + "$."),
+        T(r"- **Máximo decrecimiento:** hacia $-\nabla f(p)$, con razón $-" + lx(nm) + "$."),
+        T(r"- **Cambio nulo:** direcciones perpendiculares a $\nabla f(p)$ (tangentes a la curva de nivel)."),
+    ]
     if _flt(nm) is not None and s is not None and abs(s) > _flt(nm) + 1e-9:
         b.append(ER("Error interno: |D_u f| no puede superar |∇f|. Revisa los datos."))
     return res(b, Du=Du, u=u)
@@ -1237,28 +1300,34 @@ def tangente(expr, vars_, punto):
     nombre = {1: "Recta tangente", 2: "Plano tangente"}.get(n, "Hiperplano tangente")
     b = [H(nombre)]
     if n == 1:
-        b += [T(f"Pendiente $f'({lx(punto[0])})={lx(gp[0])}$ y punto $({lx(punto[0])},\\,{lx(fp)})$:"),
-              L(f"y={sp.latex(lin)}")]
+        b += [
+            T("Pendiente $f'(" + lx(punto[0]) + ")=" + lx(gp[0]) + "$ y punto $(" + lx(punto[0]) + r",\," + lx(fp) + ")$:"),
+            L("y=" + sp.latex(lin)),
+        ]
         if gp[0] != 0:
             norm = sp.expand(fp - (vars_[0] - punto[0]) / gp[0])
-            b += [H("Recta normal"), L(f"y={sp.latex(norm)}")]
+            b += [H("Recta normal"), L("y=" + sp.latex(norm))]
         else:
             b.append(T("La tangente es **horizontal** (derivada 0); la normal es la recta vertical $x=" + lx(punto[0]) + "$."))
     elif n == 2:
-        b += [T("$z=f(p)+f_x(p)(x-x_0)+f_y(p)(y-y_0)$:"), L("z=" + sp.latex(lin)),
-              T(f"Vector normal al plano: $\\mathbf{{n}}=({lx(gp[0])},\\,{lx(gp[1])},\\,-1)$.")]
+        b += [
+            T("$z=f(p)+f_x(p)(x-x_0)+f_y(p)(y-y_0)$:"),
+            L("z=" + sp.latex(lin)),
+            T(r"Vector normal al plano: $\mathbf{n}=(" + lx(gp[0]) + r",\," + lx(gp[1]) + r",\,-1)$."),
+        ]
     else:
-        b += [L(r"w=" + sp.latex(lin))]
-    b += [H("Linealización"), T("Cerca de $p$, $f(x)\\approx L(x)$ (la tangente aproxima a la función). "
-                                 "Comparación con la función real a una distancia pequeña:")]
+        b += [L("w=" + sp.latex(lin))]
+    b += [
+        H("Linealización"),
+        T("Cerca de $p$, $f(x)\\approx L(x)$ (la tangente aproxima a la función). Comparación con la función real a una distancia pequeña:"),
+    ]
     filas = []
     for dlt in (sp.Rational(1, 10), sp.Rational(1, 100), sp.Rational(1, 1000)):
         q = {v: p + dlt for v, p in zip(vars_, punto)}
         real = _valor_en(expr, {k: sp.Float(val, 30) for k, val in q.items()})
         aprox = lin.subs({k: sp.Float(val, 30) for k, val in q.items()})
         if real is not None and _flt(real) is not None:
-            filas.append([f"${sp.latex(dlt)}$", _num_str(real, 10), _num_str(aprox, 10),
-                          _num_str(abs(sp.N(real - aprox, 15)), 3)])
+            filas.append(["$" + sp.latex(dlt) + "$", _num_str(real, 10), _num_str(aprox, 10), _num_str(abs(sp.N(real - aprox, 15)), 3)])
     if filas:
         b.append(TAB(["desplazamiento (en cada variable)", "f real", "L (tangente)", "error"], filas))
     return res(b, tangente=lin, f_p=fp, grad_p=gp)
@@ -1273,26 +1342,32 @@ def taylor(expr, x, a, orden, evaluar_en=None):
     if fa is None or _clase(fa) != "fin":
         raise ErrorCalculo("La función no está definida (o no es finita) en el punto de desarrollo.")
     try:
-        serie = sp.series(expr, x, a, orden + 1)
+        serie_t = sp.series(expr, x, a, orden + 1)
     except Exception as e:  # noqa: BLE001
-        raise ErrorCalculo("SymPy no pudo desarrollar esta función en serie alrededor de ese punto "
-                           "(¿no es analítica ahí?).") from e
-    P = serie.removeO()
-    b = [H(f"Polinomio de Taylor de orden {orden} alrededor de $x={lx(a)}$"),
-         L(r"f(x)\approx\sum_{k=0}^{" + str(orden) + r"}\frac{f^{(k)}(" + lx(a) + r")}{k!}(x-" + (lx(a) if a != 0 else "0") + ")^k"),
-         L(f"P_{{{orden}}}(x)={sp.latex(sp.expand(P))}")]
+        raise ErrorCalculo("SymPy no pudo desarrollar esta función en serie alrededor de ese punto (¿no es analítica ahí?).") from e
+    P = serie_t.removeO()
+    b = [
+        H(f"Polinomio de Taylor de orden {orden} alrededor de $x=" + lx(a) + "$"),
+        L(r"f(x)\approx\sum_{k=0}^{" + str(orden) + r"}\frac{f^{(k)}(" + lx(a) + ")}{k!}(x-" + (lx(a) if a != 0 else "0") + ")^k"),
+        L("P_{" + str(orden) + "}(x)=" + sp.latex(sp.expand(P))),
+    ]
     if a == 0:
         b.append(IN("Con centro en 0 se llama **serie (polinomio) de Maclaurin**."))
     terminos = []
     for k in range(0, orden + 1):
         dk = _valor_en(sp.diff(expr, x, k), {x: a}) if k else fa
         if dk is not None and _clase(dk) == "fin":
-            terminos.append([str(k), f"${lx(sp.simplify(dk))}$", f"${lx(sp.simplify(dk / sp.factorial(k)))}$"])
+            terminos.append([str(k), "$" + lx(sp.simplify(dk)) + "$", "$" + lx(sp.simplify(dk / sp.factorial(k))) + "$"])
     if terminos:
-        b += [H("Coeficientes"), TAB(["k", f"f^(k)({lx(a)})", "coeficiente f^(k)/k!"], terminos)]
-    b += [H("Residuo (forma de Lagrange)"),
-          L(r"R_{" + str(orden) + r"}(x)=\frac{f^{(" + str(orden + 1) + r")}(\xi)}{" + str(orden + 1) + r"!}(x-" + (lx(a) if a != 0 else "0") + r")^{" + str(orden + 1) + r"},\quad \xi\ \text{entre}\ a\ \text{y}\ x"),
-          T("El error $|f(x)-P_n(x)|$ está acotado por el máximo de $|f^{(n+1)}|$ entre $a$ y $x$, dividido entre $(n+1)!$, por $|x-a|^{n+1}$.")]
+        b += [H("Coeficientes"), TAB(["k", "f^(k)(" + lx(a) + ")", "coeficiente f^(k)/k!"], terminos)]
+    b += [
+        H("Residuo (forma de Lagrange)"),
+        L(
+            "R_{" + str(orden) + r"}(x)=\frac{f^{(" + str(orden + 1) + r")}(\xi)}{" + str(orden + 1)
+            + "!}(x-" + (lx(a) if a != 0 else "0") + ")^{" + str(orden + 1) + r"},\quad \xi\ \text{entre}\ a\ \text{y}\ x"
+        ),
+        T("El error $|f(x)-P_n(x)|$ está acotado por el máximo de $|f^{(n+1)}|$ entre $a$ y $x$, dividido entre $(n+1)!$, por $|x-a|^{n+1}$."),
+    ]
     datos = {"polinomio": sp.expand(P), "orden": orden, "centro": a}
     ordenes = sorted({k for k in (1, 2, 3, orden) if 1 <= k <= orden})
     try:
@@ -1307,9 +1382,11 @@ def taylor(expr, x, a, orden, evaluar_en=None):
             err = abs(sp.N(fx - Pk.subs(x, evaluar_en), 15)) if fx is not None else None
             filas.append([str(k), _num_str(Pk.subs(x, evaluar_en), 10), _num_str(err, 4)])
         if fx is not None:
-            b += [H(f"Aproximación de $f({lx(evaluar_en)})$"),
-                  T(f"Valor real: ${lx(sp.N(fx, 12))}$"),
-                  TAB(["orden k", f"P_k({lx(evaluar_en)})", "error |f − P_k|"], filas)]
+            b += [
+                H("Aproximación de $f(" + lx(evaluar_en) + ")$"),
+                T("Valor real: $" + lx(sp.N(fx, 12)) + "$"),
+                TAB(["orden k", "P_k(" + lx(evaluar_en) + ")", "error |f − P_k|"], filas),
+            ]
             b.append(T("Fíjate cómo el error baja al subir el orden (si $x$ está dentro de la zona donde la serie converge)."))
     return res(b, **datos)
 
@@ -1340,15 +1417,22 @@ def taylor_multi(expr, vars_, punto, orden=2):
             parte += mult * val * sp.Mul(*[h[i] for i in combo])
         total += parte / sp.factorial(k)
     P = sp.expand(total)
-    b = [H(f"Polinomio de Taylor de orden {orden} (varias variables)"),
-         L(r"f(\mathbf{x})\approx f(p)+\nabla f(p)\cdot\mathbf{h}" + (r"+\tfrac12\,\mathbf{h}^{T}H_f(p)\,\mathbf{h}" if orden >= 2 else "") + (r"+\cdots" if orden >= 3 else "") + r",\quad \mathbf{h}=\mathbf{x}-p"),
-         L(f"P_{{{orden}}}={sp.latex(P)}")]
+    b = [
+        H(f"Polinomio de Taylor de orden {orden} (varias variables)"),
+        L(
+            r"f(\mathbf{x})\approx f(p)+\nabla f(p)\cdot\mathbf{h}"
+            + (r"+\tfrac12\,\mathbf{h}^{T}H_f(p)\,\mathbf{h}" if orden >= 2 else "")
+            + (r"+\cdots" if orden >= 3 else "")
+            + r",\quad \mathbf{h}=\mathbf{x}-p"
+        ),
+        L("P_{" + str(orden) + "}=" + sp.latex(P)),
+    ]
     filas = []
     for dlt in (sp.Rational(1, 10), sp.Rational(1, 100)):
         q = {v: sp.Float(p + dlt, 30) for v, p in zip(vars_, punto)}
         real = _valor_en(expr, q)
         if real is not None and _flt(real) is not None:
-            filas.append([f"${sp.latex(dlt)}$", _num_str(real, 10), _num_str(P.subs(q), 10), _num_str(abs(sp.N(real - P.subs(q), 15)), 3)])
+            filas.append(["$" + sp.latex(dlt) + "$", _num_str(real, 10), _num_str(P.subs(q), 10), _num_str(abs(sp.N(real - P.subs(q), 15)), 3)])
     if filas:
         b += [H("Comparación con la función"), TAB(["desplazamiento", "f real", "P", "error"], filas)]
     return res(b, polinomio=P, orden=orden)
@@ -1358,32 +1442,48 @@ def taylor_multi(expr, vars_, punto, orden=2):
 # 4. VARIAS VARIABLES: LÍMITES, CONTINUIDAD, EXTREMOS
 # ==============================================================================
 def _caminos(n):
-    """Trayectorias de prueba: [(etiqueta LaTeX, función t -> offsets, lado)]."""
+    """Trayectorias de prueba."""
     out = []
     if n == 2:
-        rayos = [(1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1), (1, 2), (2, 1), (-1, 2), (-2, 1),
-                 (1, -2), (2, -1), (-1, -2), (-2, -1), (1, 3), (3, 1), (1, -3), (3, -1)]
-        curvas = [("y=x^{2}", lambda t: (t, t ** 2)), ("y=-x^{2}", lambda t: (t, -t ** 2)), ("y=2x^{2}", lambda t: (t, 2 * t ** 2)),
-                  ("y=x^{3}", lambda t: (t, t ** 3)), ("x=y^{2}", lambda t: (t ** 2, t)), ("x=-y^{2}", lambda t: (-t ** 2, t)),
-                  ("x=y^{3}", lambda t: (t ** 3, t)), ("y=x^{2}/2", lambda t: (t, t ** 2 / 2))]
+        rayos = [
+            (1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1),
+            (1, 2), (2, 1), (-1, 2), (-2, 1), (1, -2), (2, -1), (-1, -2), (-2, -1),
+            (1, 3), (3, 1), (1, -3), (3, -1),
+        ]
+        curvas = [
+            ("y=x^{2}", lambda t: (t, t ** 2)),
+            ("y=-x^{2}", lambda t: (t, -t ** 2)),
+            ("y=2x^{2}", lambda t: (t, 2 * t ** 2)),
+            ("y=x^{3}", lambda t: (t, t ** 3)),
+            ("x=y^{2}", lambda t: (t ** 2, t)),
+            ("x=-y^{2}", lambda t: (-t ** 2, t)),
+            ("x=y^{3}", lambda t: (t ** 3, t)),
+            ("y=x^{2}/2", lambda t: (t, t ** 2 / 2)),
+        ]
     elif n == 3:
-        rayos = [(1, 0, 0), (0, 1, 0), (0, 0, 1), (-1, 0, 0), (0, -1, 0), (0, 0, -1), (1, 1, 1), (-1, -1, -1), (1, -1, 1),
-                 (1, 1, -1), (-1, 1, 1), (1, 2, 3), (2, -1, 1), (1, 1, 0), (1, 0, 1), (0, 1, 1), (1, -1, 0)]
-        curvas = [("(t,\\,t^{2},\\,t^{3})", lambda t: (t, t ** 2, t ** 3)), ("(t^{2},\\,t,\\,t)", lambda t: (t ** 2, t, t)),
-                  ("(t,\\,t,\\,t^{2})", lambda t: (t, t, t ** 2))]
+        rayos = [
+            (1, 0, 0), (0, 1, 0), (0, 0, 1), (-1, 0, 0), (0, -1, 0), (0, 0, -1),
+            (1, 1, 1), (-1, -1, -1), (1, -1, 1), (1, 1, -1), (-1, 1, 1),
+            (1, 2, 3), (2, -1, 1), (1, 1, 0), (1, 0, 1), (0, 1, 1), (1, -1, 0),
+        ]
+        curvas = [
+            (r"(t,\,t^{2},\,t^{3})", lambda t: (t, t ** 2, t ** 3)),
+            (r"(t^{2},\,t,\,t)", lambda t: (t ** 2, t, t)),
+            (r"(t,\,t,\,t^{2})", lambda t: (t, t, t ** 2)),
+        ]
     else:
         rayos = [tuple(1 if i == j else 0 for i in range(n)) for j in range(n)] + [tuple([1] * n), tuple([-1] * n)]
         curvas = []
     for d in rayos:
-        et = "(" + ",\\,".join(str(c) + "t" if c not in (0, 1, -1) else ("t" if c == 1 else "-t" if c == -1 else "0") for c in d) + ")"
-        out.append((f"\\text{{recta }}{et}", (lambda t, d=d: tuple(c * t for c in d)), "+"))
+        et = "(" + r",\,".join(str(c) + "t" if c not in (0, 1, -1) else ("t" if c == 1 else "-t" if c == -1 else "0") for c in d) + ")"
+        out.append((r"\text{recta }" + et, (lambda t, d=d: tuple(c * t for c in d)), "+"))
     for et, fn in curvas:
-        out.append((f"\\text{{curva }}{et}", fn, "+-"))
+        out.append((r"\text{curva }" + et, fn, "+-"))
     return out
 
 
 def _muestreo_numerico(expr, vars_, punto, L0):
-    """Máxima desviación |f - L| en puntos aleatorios a distancias 1e-3, 1e-5, 1e-7 (mpmath, 40 dígitos)."""
+    """Máxima desviación |f - L| en puntos aleatorios."""
     mp.mp.dps = 40
     try:
         f = sp.lambdify(vars_, expr, "mpmath")
@@ -1396,7 +1496,7 @@ def _muestreo_numerico(expr, vars_, punto, L0):
     for r0 in (1e-3, 1e-5, 1e-7):
         dmax, vistos = 0.0, 0
         for i in range(70):
-            if i % 3 == 2 and n == 2:                       # trayectorias curvas y = k x^2 (parábolas)
+            if i % 3 == 2 and n == 2:
                 k = rng.uniform(-6, 6)
                 pt = [punto[0] + r0, punto[1] + k * r0 ** 2]
             else:
@@ -1421,25 +1521,34 @@ def _limite_multi_core(expr, vars_, punto):
     b = []
     p = list(punto)
     sin_trozos = not expr.has(sp.Piecewise, sp.floor, sp.ceiling, sp.sign)
-    # x**y con base y exponente variables: SymPy evalúa 0**0 = 1, pero la función NO es continua ahí
-    pot_variable = any(isinstance(q, sp.Pow) and q.base.free_symbols and q.exp.free_symbols
-                       for q in sp.preorder_traversal(expr))
+    pot_variable = any(
+        isinstance(q, sp.Pow) and q.base.free_symbols and q.exp.free_symbols
+        for q in sp.preorder_traversal(expr)
+    )
     b.append(H("Paso 1 · Sustitución directa"))
     fp = _en_punto(expr, vars_, p)
     if fp is not None and _clase(fp) == "fin" and sin_trozos and not pot_variable:
-        b.append(OK(f"Al sustituir se obtiene el valor finito ${lx(fp)}$ y la expresión es una combinación de funciones "
-                    "elementales continuas en ese punto → el límite **existe y vale " + f"${lx(fp)}$**."))
+        b.append(OK(
+            "Al sustituir se obtiene el valor finito $" + lx(fp) + "$ y la expresión es una combinación de funciones "
+            "elementales continuas en ese punto → el límite **existe y vale $" + lx(fp) + "$**."
+        ))
         return b, True, fp
     if fp is not None and _clase(fp) == "fin":
-        b.append(IN(f"Al sustituir se obtiene ${lx(fp)}$, pero la función tiene trozos, parte entera, signo o potencias con base "
-                    "y exponente variables, así que no basta sustituir: hay que revisar las trayectorias."))
+        b.append(IN(
+            "Al sustituir se obtiene $" + lx(fp) + "$, pero la función tiene trozos, parte entera, signo o potencias con base "
+            "y exponente variables, así que no basta sustituir: hay que revisar las trayectorias."
+        ))
     else:
-        b.append(AV("Al sustituir **no se obtiene un número** (forma indeterminada o división entre cero). "
-                    "Hay que estudiar las trayectorias."))
+        b.append(AV(
+            "Al sustituir **no se obtiene un número** (forma indeterminada o división entre cero). "
+            "Hay que estudiar las trayectorias."
+        ))
 
     b.append(H("Paso 2 · Límites a lo largo de trayectorias"))
-    b.append(T("Si **dos trayectorias dan límites distintos**, el límite **NO existe** (eso sí es una demostración). "
-               "Si todas dan lo mismo, solo es evidencia a favor."))
+    b.append(T(
+        "Si **dos trayectorias dan límites distintos**, el límite **NO existe** (eso sí es una demostración). "
+        "Si todas dan lo mismo, solo es evidencia a favor."
+    ))
     t = sp.Symbol("t", real=True)
     tp = sp.Symbol("t", positive=True)
     filas, valores = [], []
@@ -1454,7 +1563,7 @@ def _limite_multi_core(expr, vars_, punto):
                 pass
         val = lim(g, tt, 0, lado)
         c = _clase(val)
-        filas.append([f"${etiqueta}$", _desc_lim(val) if c != "fin" else m(val)])
+        filas.append(["$" + etiqueta + "$", _desc_lim(val) if c != "fin" else m(val)])
         valores.append((etiqueta, val, c))
     b.append(TAB(["trayectoria", "límite a lo largo de ella"], filas))
 
@@ -1471,18 +1580,22 @@ def _limite_multi_core(expr, vars_, punto):
         x_, y_ = vars_
         L1 = lim(lim(expr, y_, p[1]), x_, p[0])
         L2 = lim(lim(expr, x_, p[0]), y_, p[1])
-        b.append(T(f"$\\lim_{{x\\to {lx(p[0])}}}\\lim_{{y\\to {lx(p[1])}}} f={_desc_lim(L1)[:80]}$  y  "
-                   f"$\\lim_{{y\\to {lx(p[1])}}}\\lim_{{x\\to {lx(p[0])}}} f={_desc_lim(L2)[:80]}$"))
+        b.append(T(
+            r"$\lim_{x\to " + lx(p[0]) + r"}\lim_{y\to " + lx(p[1]) + "} f=" + _desc_lim(L1)[:80] + "$  y  "
+            r"$\lim_{y\to " + lx(p[1]) + r"}\lim_{x\to " + lx(p[0]) + "} f=" + _desc_lim(L2)[:80] + "$"
+        ))
         if _clase(L1) == "fin" and _clase(L2) == "fin" and not _igual(L1, L2):
             b.append(AV("Los límites iterados son **distintos** → el límite doble **NO existe**."))
             return b, False, None
-        b.append(IN("Si los iterados coinciden NO se concluye nada (el límite doble podría no existir); si el límite doble "
-                    "existe, entonces los iterados (cuando existen) coinciden con él."))
+        b.append(IN(
+            "Si los iterados coinciden NO se concluye nada (el límite doble podría no existir); si el límite doble "
+            "existe, entonces los iterados (cuando existen) coinciden con él."
+        ))
 
     b.append(H("Conclusión"))
     if len(distintos) >= 2:
         (e1, v1), (e2, v2) = distintos[0], distintos[1]
-        b.append(AV(f"Por la trayectoria ${e1}$ el límite es ${lx(v1)}$, pero por ${e2}$ es ${lx(v2)}$ → **el límite NO existe**."))
+        b.append(AV("Por la trayectoria $" + e1 + "$ el límite es $" + lx(v1) + "$, pero por $" + e2 + "$ es $" + lx(v2) + "$ → **el límite NO existe**."))
         return b, False, None
     if infinitos and fin:
         b.append(AV("Unas trayectorias dan un valor finito y otras divergen → **el límite NO existe**."))
@@ -1493,8 +1606,10 @@ def _limite_multi_core(expr, vars_, punto):
     if infinitos and not fin:
         signos = {c for _, _, c in infinitos}
         if len(signos) == 1 and len(infinitos) == len(valores):
-            b.append(OK(f"Por todas las trayectorias la función tiende a ${'+' if '+oo' in signos else '-'}\\infty$: "
-                        "el límite **diverge** (no existe como número real)."))
+            b.append(OK(
+                "Por todas las trayectorias la función tiende a $" + ("+" if "+oo" in signos else "-") + r"\infty$: "
+                "el límite **diverge** (no existe como número real)."
+            ))
         else:
             b.append(AV("La función diverge por las trayectorias probadas pero no de forma uniforme: **el límite no existe**."))
         return b, False, None
@@ -1503,8 +1618,10 @@ def _limite_multi_core(expr, vars_, punto):
         return b, None, None
 
     L0 = distintos[0][1]
-    b.append(T(f"Todas las trayectorias probadas dan el mismo valor ${lx(L0)}$. Eso es **evidencia**, no demostración: "
-               "falta descartar trayectorias que no probamos."))
+    b.append(T(
+        "Todas las trayectorias probadas dan el mismo valor $" + lx(L0) + "$. Eso es **evidencia**, no demostración: "
+        "falta descartar trayectorias que no probamos."
+    ))
     if n == 2:
         r = sp.Symbol("r", positive=True)
         th = sp.Symbol("theta", real=True)
@@ -1515,11 +1632,11 @@ def _limite_multi_core(expr, vars_, punto):
             pass
         Lp = lim(g, r, 0, "+")
         b.append(H("Coordenadas polares"))
-        b.append(T("Se sustituye $x=x_0+r\\cos\\theta$, $y=y_0+r\\sin\\theta$ y se hace $r\\to0^+$:"))
+        b.append(T(r"Se sustituye $x=x_0+r\cos\theta$, $y=y_0+r\sin\theta$ y se hace $r\to0^+$:"))
         if Lp is not None and _clase(Lp) == "fin" and th not in Lp.free_symbols and _igual(Lp, L0):
-            b.append(OK(f"El resultado en polares es ${lx(Lp)}$ **sin depender de $\\theta$**: refuerza que el límite vale ${lx(L0)}$."))
+            b.append(OK("El resultado en polares es $" + lx(Lp) + r"$ **sin depender de $\theta$**: refuerza que el límite vale $" + lx(L0) + "$."))
         elif Lp is not None and th in Lp.free_symbols:
-            b.append(AV(f"En polares el resultado depende de $\\theta$ (${lx(sp.simplify(Lp))}$): **el límite NO existe**."))
+            b.append(AV("En polares el resultado depende de $\\theta$ ($" + lx(sp.simplify(Lp)) + "$): **el límite NO existe**."))
             return b, False, None
         else:
             b.append(IN("No pude resolver el límite en polares de forma simbólica; se confía en el muestreo numérico."))
@@ -1532,57 +1649,66 @@ def _limite_multi_core(expr, vars_, punto):
         if ds:
             tol = 1e-2 * (1 + abs(_flt(L0) or 0))
             if ds[-1] > tol and ds[-1] > 0.5 * ds[0]:
-                b.append(AV("Las desviaciones **no se achican** al acercarse: probablemente **el límite NO existe** "
-                            "(alguna trayectoria curva da otro valor)."))
+                b.append(AV(
+                    "Las desviaciones **no se achican** al acercarse: probablemente **el límite NO existe** "
+                    "(alguna trayectoria curva da otro valor)."
+                ))
                 return b, False, None
             if len(ds) >= 2 and ds[-1] < ds[0] and ds[-1] < tol:
                 b.append(OK("Las desviaciones se achican al acercarse al punto: consistente con que el límite existe."))
-    b.append(OK(f"**Conclusión:** el límite **existe y vale ${lx(L0)}$** (evidencia sólida por trayectorias, polares y muestreo). "
-                "Para una demostración formal usa el **teorema del sandwich** (acotar $|f-L|$ por algo que tienda a 0)."))
+    b.append(OK(
+        "**Conclusión:** el límite **existe y vale $" + lx(L0) + "$** (evidencia sólida por trayectorias, polares y muestreo). "
+        "Para una demostración formal usa el **teorema del sandwich** (acotar $|f-L|$ por algo que tienda a 0)."
+    ))
     return b, True, L0
 
 
 @_op
 def limite_multi(expr, vars_, punto):
-    """Límite en varias variables (trayectorias, iterados, polares y muestreo numérico)."""
+    """Límite en varias variables."""
     n = len(vars_)
     if len(punto) != n:
         raise ErrorCalculo(f"La función tiene {n} variable(s): el punto debe tener {n} componentes.")
-    pt = ",\\,".join(lx(c) for c in punto)
-    b = [H("Planteamiento"), L(f"\\lim_{{({','.join(sp.latex(v) for v in vars_)})\\to({pt})}} {sp.latex(expr)}")]
+    pt = r",\,".join(lx(c) for c in punto)
+    vs_ltx = ",".join(sp.latex(v) for v in vars_)
+    b = [H("Planteamiento"), L(r"\lim_{(" + vs_ltx + r")\to(" + pt + ")} " + sp.latex(expr))]
     bl, existe, valor = _limite_multi_core(expr, vars_, punto)
     return res(b + bl, existe=existe, limite=valor)
 
 
 @_op
 def continuidad_multi(expr, vars_, punto):
-    """Continuidad en un punto: f(p) definida, límite existente e igual a f(p)."""
+    """Continuidad en un punto."""
     n = len(vars_)
     if len(punto) != n:
         raise ErrorCalculo(f"La función tiene {n} variable(s): el punto debe tener {n} componentes.")
-    pt = ",\\,".join(lx(c) for c in punto)
-    b = [H("Las tres condiciones de continuidad en $p$"),
-         T("Una función es continua en $p$ si: **(1)** $f(p)$ existe, **(2)** $\\lim_{x\\to p}f(x)$ existe y **(3)** ambos coinciden.")]
+    pt = r",\,".join(lx(c) for c in punto)
+    b = [
+        H("Las tres condiciones de continuidad en $p$"),
+        T(r"Una función es continua en $p$ si: **(1)** $f(p)$ existe, **(2)** $\lim_{x\to p}f(x)$ existe y **(3)** ambos coinciden."),
+    ]
     fp = _en_punto(expr, vars_, punto)
     cond1 = fp is not None and _clase(fp) == "fin"
     b.append(H("(1) ¿Existe $f(p)$?"))
     if cond1:
-        b.append(OK(f"$f({pt})={lx(fp)}$"))
+        b.append(OK("$f(" + pt + ")=" + lx(fp) + "$"))
     else:
-        b.append(AV(f"$f({pt})$ **no está definida** (el punto no está en el dominio)."))
+        b.append(AV("$f(" + pt + ")$ **no está definida** (el punto no está en el dominio)."))
     b.append(H("(2) ¿Existe el límite?"))
     bl, existe, valor = _limite_multi_core(expr, vars_, punto)
     b += bl
     b.append(H("(3) Conclusión"))
     if cond1 and existe and valor is not None and _igual(fp, valor):
-        b.append(OK(f"**f es continua en $({pt})$**: $f(p)=\\lim f=" + lx(fp) + "$."))
+        b.append(OK("**f es continua en $(" + pt + ")$**: $f(p)=\\lim f=" + lx(fp) + "$."))
         cont = True
     elif existe and valor is not None and not cond1:
-        b.append(AV(f"**Discontinuidad evitable**: el límite existe (${lx(valor)}$) pero $f(p)$ no está definida. "
-                    f"Se repara definiendo $f({pt})={lx(valor)}$."))
+        b.append(AV(
+            "**Discontinuidad evitable**: el límite existe ($" + lx(valor) + "$) pero $f(p)$ no está definida. "
+            "Se repara definiendo $f(" + pt + ")=" + lx(valor) + "$."
+        ))
         cont = False
     elif existe and cond1 and valor is not None:
-        b.append(AV(f"**Discontinuidad evitable**: $\\lim f={lx(valor)}$ pero $f(p)={lx(fp)}$. Se repara redefiniendo $f(p)$."))
+        b.append(AV("**Discontinuidad evitable**: $\\lim f=" + lx(valor) + "$ pero $f(p)=" + lx(fp) + "$. Se repara redefiniendo $f(p)$."))
         cont = False
     elif existe is False:
         b.append(AV("**f NO es continua en $p$**: el límite no existe (discontinuidad esencial)."))
@@ -1619,8 +1745,10 @@ def extremos_multi(expr, vars_):
     if incompletas:
         b.append(AV("El sistema tiene soluciones que forman una **familia** (curva o recta de puntos críticos); no se listan."))
     if not sols:
-        b.append(T("No hay puntos críticos reales: **no hay máximos ni mínimos locales** en el interior del dominio "
-                   "(solo podrían estar en la frontera, si la hay)."))
+        b.append(T(
+            "No hay puntos críticos reales: **no hay máximos ni mínimos locales** en el interior del dominio "
+            "(solo podrían estar en la frontera, si la hay)."
+        ))
         return res(b, criticos=[])
     b.append(T(f"Hay **{len(sols)}** punto(s) crítico(s):"))
     hess = sp.Matrix(n, n, lambda i, j: sp.diff(expr, vars_[i], vars_[j]))
@@ -1646,7 +1774,7 @@ def extremos_multi(expr, vars_):
                 tipo = "no concluyente (Hessiana semidefinida)"
         except Exception:  # noqa: BLE001
             pass
-        filas.append([f"$({','.join(sp.latex(c) for c in pt)})$", m(sp.simplify(fp)) if fp is not None else "—", tipo])
+        filas.append(["$(" + ",".join(sp.latex(c) for c in pt) + ")$", m(sp.simplify(fp)) if fp is not None else "—", tipo])
         crit.append((pt, fp, tipo.replace("*", "")))
     b.append(TAB(["punto crítico", "f(p)", "tipo"], filas))
     if n == 2:
@@ -1659,22 +1787,24 @@ def extremos_multi(expr, vars_):
 
 @_op
 def lagrange(expr, vars_, restricciones):
-    """
-    Extremos con restricciones de igualdad g_i(x)=0 (multiplicadores de Lagrange).
-    restricciones = [g1, g2, ...] ya como expresiones que deben valer 0.
-    """
+    """Extremos con restricciones de igualdad g_i(x)=0 (multiplicadores de Lagrange)."""
     n, k = len(vars_), len(restricciones)
     if k < 1:
         raise ErrorCalculo("Escribe al menos una restricción.")
     if k >= n:
-        raise ErrorCalculo(f"Hay {k} restricción(es) para {n} variable(s): con tantas restricciones el problema queda sin "
-                           "grados de libertad (o sobredeterminado).")
+        raise ErrorCalculo(
+            f"Hay {k} restricción(es) para {n} variable(s): con tantas restricciones el problema queda sin "
+            "grados de libertad (o sobredeterminado)."
+        )
     lams = sp.symbols(f"lambda_1:{k + 1}", real=True)
-    b = [H("Planteamiento"),
-         T("Se buscan los extremos de $f$ **sobre** la curva/superficie definida por las restricciones $g_i=0$."),
-         L(r"\nabla f=" + "+".join(f"\\lambda_{{{i + 1}}}\\nabla g_{{{i + 1}}}" for i in range(k)) + r",\qquad "
-           + r",\ ".join(f"g_{{{i + 1}}}={sp.latex(g)}=0" for i, g in enumerate(restricciones))),
-         H("Sistema de ecuaciones")]
+    suma_lams = "+".join(r"\lambda_{" + str(i + 1) + r"}\nabla g_{" + str(i + 1) + "}" for i in range(k))
+    lista_gs = r",\ ".join("g_{" + str(i + 1) + "}=" + sp.latex(g) + "=0" for i, g in enumerate(restricciones))
+    b = [
+        H("Planteamiento"),
+        T("Se buscan los extremos de $f$ **sobre** la curva/superficie definida por las restricciones $g_i=0$."),
+        L(r"\nabla f=" + suma_lams + r",\qquad " + lista_gs),
+        H("Sistema de ecuaciones"),
+    ]
     eqs = []
     for v in vars_:
         eqs.append(sp.diff(expr, v) - sum(l * sp.diff(g, v) for l, g in zip(lams, restricciones)))
@@ -1685,8 +1815,10 @@ def lagrange(expr, vars_, restricciones):
     if incompletas:
         b.append(AV("Parte de las soluciones forma una familia (curva de candidatos) y no se lista."))
     if not sols:
-        b.append(AV("No encontré soluciones reales del sistema: la restricción podría no tener puntos que cumplan las "
-                    "condiciones, o el sistema es demasiado difícil para el método simbólico."))
+        b.append(AV(
+            "No encontré soluciones reales del sistema: la restricción podría no tener puntos que cumplan las "
+            "condiciones, o el sistema es demasiado difícil para el método simbólico."
+        ))
         return res(b, candidatos=[])
     filas, cand = [], []
     for s in sols:
@@ -1694,8 +1826,12 @@ def lagrange(expr, vars_, restricciones):
         fp = _en_punto(expr, vars_, pt)
         gradg = [[_en_punto(sp.diff(g, v), vars_, pt) for v in vars_] for g in restricciones]
         regular = sp.Matrix(gradg).rank() == k
-        filas.append([f"$({','.join(sp.latex(c) for c in pt)})$", ", ".join(m(sp.simplify(s[l])) for l in lams),
-                      m(sp.simplify(fp)) if fp is not None else "—", "sí" if regular else "NO (∇g = 0)"])
+        filas.append([
+            "$(" + ",".join(sp.latex(c) for c in pt) + ")$",
+            ", ".join(m(sp.simplify(s[l])) for l in lams),
+            m(sp.simplify(fp)) if fp is not None else "—",
+            "sí" if regular else "NO (∇g = 0)",
+        ])
         cand.append((pt, fp, regular))
     b += [H("Puntos candidatos"), TAB(["punto", "multiplicadores λ", "f(p)", "restricción regular"], filas)]
     vals = [(pt, fp) for pt, fp, _ in cand if fp is not None and _flt(fp) is not None]
@@ -1704,30 +1840,37 @@ def lagrange(expr, vars_, restricciones):
         mn, mx = vals[0], vals[-1]
         b.append(H("Conclusión"))
         if len(vals) == 1:
-            b.append(T(f"Un único candidato, con $f={m(mn[1])}$."))
+            b.append(T("Un único candidato, con $f=" + lx(mn[1]) + "$."))
         elif _igual(mn[1], mx[1]):
-            b.append(T(f"Todos los candidatos dan el mismo valor $f={m(mn[1])}$."))
+            b.append(T("Todos los candidatos dan el mismo valor $f=" + lx(mn[1]) + "$."))
         else:
-            b.append(OK(f"**Valor máximo** entre los candidatos: ${lx(sp.simplify(mx[1]))}$ en $({','.join(sp.latex(c) for c in mx[0])})$."))
-            b.append(OK(f"**Valor mínimo** entre los candidatos: ${lx(sp.simplify(mn[1]))}$ en $({','.join(sp.latex(c) for c in mn[0])})$."))
-        b.append(IN("Si el conjunto restringido es **cerrado y acotado** (compacto, p. ej. una circunferencia o elipse), el máximo y "
-                    "mínimo absolutos existen y son los mayor/menor de esta lista (teorema de Weierstrass). "
-                    "Si no es acotado, un candidato puede no ser un extremo."))
+            b.append(OK("**Valor máximo** entre los candidatos: $" + lx(sp.simplify(mx[1])) + "$ en $(" + ",".join(sp.latex(c) for c in mx[0]) + ")$."))
+            b.append(OK("**Valor mínimo** entre los candidatos: $" + lx(sp.simplify(mn[1])) + "$ en $(" + ",".join(sp.latex(c) for c in mn[0]) + ")$."))
+        b.append(IN(
+            "Si el conjunto restringido es **cerrado y acotado** (compacto, p. ej. una circunferencia o elipse), el máximo y "
+            "mínimo absolutos existen y son los mayor/menor de esta lista (teorema de Weierstrass). "
+            "Si no es acotado, un candidato puede no ser un extremo."
+        ))
     if n == 2 and k == 1:
         g = restricciones[0]
         b.append(H("Criterio de la Hessiana orlada (n=2, una restricción)"))
         x, y = vars_
         lam = lams[0]
         Lg = expr - lam * g
-        Hb = sp.Matrix([[0, sp.diff(g, x), sp.diff(g, y)],
-                        [sp.diff(g, x), sp.diff(Lg, x, 2), sp.diff(Lg, x, y)],
-                        [sp.diff(g, y), sp.diff(Lg, x, y), sp.diff(Lg, y, 2)]])
+        Hb = sp.Matrix([
+            [0, sp.diff(g, x), sp.diff(g, y)],
+            [sp.diff(g, x), sp.diff(Lg, x, 2), sp.diff(Lg, x, y)],
+            [sp.diff(g, y), sp.diff(Lg, x, y), sp.diff(Lg, y, 2)],
+        ])
         filas2 = []
         for s in sols:
             d = sp.simplify(Hb.det().subs(s))
             sg = _flt(d)
-            tipo = "no concluyente" if sg is None or abs(sg) < 1e-12 else ("**máximo local** (det > 0)" if sg > 0 else "**mínimo local** (det < 0)")
-            filas2.append([f"$({sp.latex(s[x])},\\,{sp.latex(s[y])})$", m(d), tipo])
+            tipo = (
+                "no concluyente" if sg is None or abs(sg) < 1e-12
+                else ("**máximo local** (det > 0)" if sg > 0 else "**mínimo local** (det < 0)")
+            )
+            filas2.append(["$(" + sp.latex(s[x]) + r",\," + sp.latex(s[y]) + ")$", m(d), tipo])
         b.append(TAB(["punto", "det(Hessiana orlada)", "tipo"], filas2))
     return res(b, candidatos=[(pt, fp) for pt, fp, _ in cand])
 
@@ -1746,10 +1889,12 @@ def integral_indefinida(expr, x):
     b = [H("Planteamiento"), L(r"\int " + sp.latex(expr) + r"\,\mathrm{d}" + sp.latex(x))]
     F = sp.integrate(expr, x)
     if F.has(sp.Integral):
-        b.append(AV("SymPy **no encontró una primitiva** en términos de funciones elementales. Esto puede ser verdad "
-                    "(p. ej. $\\int e^{-x^2}dx$ no es elemental, aunque se expresa con la función error) o una limitación del "
-                    "programa. Prueba con una sustitución o integración por partes a mano, o calcula la integral definida "
-                    "numéricamente."))
+        b.append(AV(
+            r"SymPy **no encontró una primitiva** en términos de funciones elementales. Esto puede ser verdad "
+            r"(p. ej. $\int e^{-x^2}dx$ no es elemental, aunque se expresa con la función error) o una limitación del "
+            "programa. Prueba con una sustitución o integración por partes a mano, o calcula la integral definida "
+            "numéricamente."
+        ))
         return res(b, primitiva=None)
     Fs = _simplificar(F)
     b += [H("Resultado"), L(r"\int " + sp.latex(expr) + r"\,\mathrm{d}" + sp.latex(x) + "=" + sp.latex(Fs) + "+C")]
@@ -1757,27 +1902,37 @@ def integral_indefinida(expr, x):
         if sp.simplify(sp.diff(Fs, x) - expr) == 0:
             b.append(OK("**Verificación:** al derivar el resultado se recupera el integrando ✔"))
         else:
-            ok_num = all(abs(_flt(sp.N((sp.diff(Fs, x) - expr).subs(x, sp.Rational(k, 7) + sp.Rational(1, 3)), 15)) or 0) < 1e-8
-                         for k in (1, 2, 3))
-            b.append(OK("**Verificación numérica:** la derivada del resultado coincide con el integrando ✔") if ok_num
-                     else AV("No pude verificar que la derivada del resultado sea el integrando (podría haber saltos de rama)."))
+            ok_num = all(
+                abs(_flt(sp.N((sp.diff(Fs, x) - expr).subs(x, sp.Rational(k, 7) + sp.Rational(1, 3)), 15)) or 0) < 1e-8
+                for k in (1, 2, 3)
+            )
+            b.append(
+                OK("**Verificación numérica:** la derivada del resultado coincide con el integrando ✔") if ok_num
+                else AV("No pude verificar que la derivada del resultado sea el integrando (podría haber saltos de rama).")
+            )
     except Exception:  # noqa: BLE001
         pass
     if F.has(sp.erf, sp.erfi, sp.Ei, sp.li, sp.fresnels, sp.fresnelc, sp.Si, sp.Ci):
-        b.append(IN("El resultado usa una **función especial** (error, integral exponencial, seno integral…): la primitiva no es "
-                    "elemental, pero sí está bien definida."))
+        b.append(IN(
+            "El resultado usa una **función especial** (error, integral exponencial, seno integral…): la primitiva no es "
+            "elemental, pero sí está bien definida."
+        ))
     return res(b, primitiva=Fs)
 
 
 def _integral_val(expr, x, a, bb):
-    """Valor de ∫_a^b con tratamiento de singularidades interiores (SymPy puede dar valor principal)."""
+    """Valor de ∫_a^b con tratamiento de singularidades interiores."""
     pts = []
     try:
         sing = singularities(expr, x)
         if isinstance(sing, sp.FiniteSet):
-            lo, hi = sorted([_flt(a) if a not in (sp.oo, -sp.oo) else (math.inf if a == sp.oo else -math.inf),
-                             _flt(bb) if bb not in (sp.oo, -sp.oo) else (math.inf if bb == sp.oo else -math.inf)],
-                            key=lambda v: v if v is not None else 0)
+            lo, hi = sorted(
+                [
+                    _flt(a) if a not in (sp.oo, -sp.oo) else (math.inf if a == sp.oo else -math.inf),
+                    _flt(bb) if bb not in (sp.oo, -sp.oo) else (math.inf if bb == sp.oo else -math.inf),
+                ],
+                key=lambda v: v if v is not None else 0,
+            )
             pts = [s for s in sing if s.is_real and _flt(s) is not None and lo < _flt(s) < hi]
     except Exception:  # noqa: BLE001
         pass
@@ -1807,11 +1962,15 @@ def integral_definida(expr, x, a, bb):
     except Exception:  # noqa: BLE001
         pass
     if impropia:
-        b.append(IN("Es una **integral impropia** (hay un límite infinito o el integrando se dispara en el intervalo). "
-                    "Se define como un **límite**; la integral **converge** si ese límite es un número finito."))
+        b.append(IN(
+            "Es una **integral impropia** (hay un límite infinito o el integrando se dispara en el intervalo). "
+            "Se define como un **límite**; la integral **converge** si ese límite es un número finito."
+        ))
     if interiores:
-        b.append(T("El integrando tiene singularidades **dentro** del intervalo en " + ", ".join(f"$x={lx(p)}$" for p in interiores) +
-                   ": se parte en tramos y cada tramo debe converger por separado."))
+        b.append(T(
+            "El integrando tiene singularidades **dentro** del intervalo en " + ", ".join("$x=" + lx(p) + "$" for p in interiores)
+            + ": se parte en tramos y cada tramo debe converger por separado."
+        ))
     Fx = None
     try:
         Fx = sp.integrate(expr, x)
@@ -1820,15 +1979,17 @@ def integral_definida(expr, x, a, bb):
     except Exception:  # noqa: BLE001
         Fx = None
     if Fx is not None:
-        b += [H("Primitiva (Teorema Fundamental del Cálculo)"),
-              L(r"F(x)=" + sp.latex(_simplificar(Fx)) + r",\qquad \int_a^b f=F(b)-F(a)")]
+        b += [
+            H("Primitiva (Teorema Fundamental del Cálculo)"),
+            L("F(x)=" + sp.latex(_simplificar(Fx)) + r",\qquad \int_a^b f=F(b)-F(a)"),
+        ]
 
     b.append(H("Resultado"))
     clases = [_clase(v) for _, _, v in partes]
     if any(c in ("+oo", "-oo", "zoo") for c in clases):
         malo = [(l, r) for (l, r, v) in partes if _clase(v) in ("+oo", "-oo", "zoo")]
-        b.append(AV("La integral **diverge** (el límite es infinito)" +
-                    (": falla el tramo " + ", ".join(f"$[{lx(l)},{lx(r)}]$" for l, r in malo) if len(partes) > 1 else "") + "."))
+        extra_tramo = (": falla el tramo " + ", ".join("$[" + lx(l) + "," + lx(r) + "]$" for l, r in malo)) if len(partes) > 1 else ""
+        b.append(AV("La integral **diverge** (el límite es infinito)" + extra_tramo + "."))
         return res(b, valor=total if len(partes) == 1 else sp.oo, converge=False)
     if any(c in ("nd", "osc") for c in clases) or total.has(sp.Integral):
         try:
@@ -1839,17 +2000,19 @@ def integral_definida(expr, x, a, bb):
             val = mp.quad(f, pts_q)
             if isinstance(val, mp.mpc) or not mp.isfinite(val):
                 raise ValueError
-            b.append(AV(f"SymPy no obtuvo una fórmula exacta. **Valor numérico aproximado:** ${float(val):.10g}$ "
-                        "(cuadratura numérica; si la integral fuera divergente este número no tendría significado)."))
+            b.append(AV(
+                f"SymPy no obtuvo una fórmula exacta. **Valor numérico aproximado:** ${float(val):.10g}$ "
+                "(cuadratura numérica; si la integral fuera divergente este número no tendría significado)."
+            ))
             return res(b, valor=sp.Float(float(val)), converge=None, aproximado=True)
         except Exception:  # noqa: BLE001
             b.append(AV("No pude calcular esta integral (ni exacta ni numéricamente). Puede ser divergente o muy compleja."))
             return res(b, valor=None, converge=None)
     totals = _simplificar(sp.simplify(total))
-    b.append(OK(f"**Converge** y vale ${lx(totals)}$" + ("" if totals.is_Integer or totals.is_Float else f"  $\\approx {sp.latex(sp.N(totals, 10))}$")))
+    aprox_tot = "" if totals.is_Integer or totals.is_Float else (r"  $\approx " + sp.latex(sp.N(totals, 10)) + "$")
+    b.append(OK("**Converge** y vale $" + lx(totals) + "$" + aprox_tot))
     if len(partes) > 1:
-        b.append(T("Tramos: " + "; ".join(f"$[{lx(l)},{lx(r)}]$: ${lx(sp.simplify(v))}$" for l, r, v in partes)))
-    # verificación numérica independiente
+        b.append(T("Tramos: " + "; ".join("$[" + lx(l) + "," + lx(r) + "]$: $" + lx(sp.simplify(v)) + "$" for l, r, v in partes)))
     try:
         f = _mp_f(expr, x)
         lo = mp.inf if a == sp.oo else (-mp.inf if a == -sp.oo else mp.mpf(str(sp.N(a, 20))))
@@ -1861,8 +2024,10 @@ def integral_definida(expr, x, a, bb):
             if abs(float(num) - tv) <= 1e-6 * (1 + abs(tv)):
                 b.append(OK(f"**Verificación numérica independiente:** ≈ {float(num):.10g} ✔"))
             else:
-                b.append(AV(f"⚠️ La cuadratura numérica da ≈ {float(num):.10g}, que no coincide con el valor exacto: "
-                            "desconfía (puede haber una singularidad no detectada)."))
+                b.append(AV(
+                    f"⚠️ La cuadratura numérica da ≈ {float(num):.10g}, que no coincide con el valor exacto: "
+                    "desconfía (puede haber una singularidad no detectada)."
+                ))
     except Exception:  # noqa: BLE001
         pass
     sg = _flt(totals)
@@ -1873,10 +2038,7 @@ def integral_definida(expr, x, a, bb):
 
 @_op
 def integral_multiple(expr, limites):
-    """
-    Integral iterada. limites = [(var, a, b), ...] de ADENTRO hacia AFUERA.
-    Los límites de una integral pueden depender de las variables de las integrales exteriores.
-    """
+    """Integral iterada. limites = [(var, a, b), ...] de ADENTRO hacia AFUERA."""
     if not 2 <= len(limites) <= 3:
         raise ErrorCalculo("Se admiten integrales dobles y triples.")
     vs = [l[0] for l in limites]
@@ -1922,7 +2084,7 @@ def _nn():
 
 
 def _valores_numericos(a, nn, n0, cuantos):
-    """Valores float de a(n) para n=n0..n0+cuantos-1 (None donde no se pueden evaluar)."""
+    """Valores float de a(n) para n=n0..n0+cuantos-1."""
     mp.mp.dps = 30
     try:
         f = sp.lambdify(nn, a, "mpmath")
@@ -1939,7 +2101,7 @@ def _valores_numericos(a, nn, n0, cuantos):
 
 
 def _tendencia(vals, tol=1e-12):
-    """'creciente' | 'decreciente' | 'constante' | 'no monótona' | None, con sus versiones estrictas."""
+    """'creciente' | 'decreciente' | 'constante' | 'no monótona' | None."""
     v = [x for x in vals if x is not None]
     if len(v) < 3:
         return None
@@ -2044,8 +2206,7 @@ def sucesion(expr, n, n0=1):
 
 
 def _lim_sec(a, nn):
-    """Límite de a_n con respaldo: si SymPy no puede, |a_n|→0 implica a_n→0; si |a_n| no se acerca a 0
-    pero el signo alterna sin parar, la sucesión oscila (no tiene límite)."""
+    """Límite de a_n con respaldo."""
     Lv = lim(a, nn, sp.oo)
     if Lv is not None and _clase(Lv) != "nd":
         return Lv
@@ -2077,8 +2238,7 @@ def _sumas_parciales(a, nn, n0, cortes):
 
 
 def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
-    """Aplica criterios en orden; devuelve (bloques, veredicto, tipo) con
-    veredicto ∈ {'conv','div',None} y tipo ∈ {'absoluta','condicional',None}."""
+    """Aplica criterios en orden; devuelve (bloques, veredicto, tipo)."""
     b = []
 
     def paso(titulo):
@@ -2130,9 +2290,9 @@ def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
             r"(converge si $p>1$, diverge si $p\le1$)."
         ))
         if _flt(p_) > 1:
-            b.append(OK("$" + "p=" + lx(p_) + ">1$ → **CONVERGE** (absolutamente)."))
+            b.append(OK("$p=" + lx(p_) + ">1$ → **CONVERGE** (absolutamente)."))
             return b, "conv", "absoluta"
-        b.append(AV("$" + "p=" + lx(p_) + r"\le1$ → **DIVERGE**."))
+        b.append(AV("$p=" + lx(p_) + r"\le1$ → **DIVERGE**."))
         return b, "div", None
 
     # 4) alternante (Leibniz)
@@ -2273,7 +2433,7 @@ def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
 
 @_op
 def serie(expr, n, n0=1):
-    """Serie infinita Σ a_n: criterios de convergencia (en orden), valor de la suma y sumas parciales."""
+    """Serie infinita Σ a_n: criterios de convergencia, valor de la suma y sumas parciales."""
     nn = _nn()
     a = expr.subs(n, nn)
     b = [H("Serie"), L(r"\sum_{n=" + str(n0) + r"}^{\infty}" + sp.latex(a))]
@@ -2324,7 +2484,7 @@ def serie(expr, n, n0=1):
 
 @_op
 def serie_potencias(expr, n, x, centro=0, n0=0):
-    """Serie de potencias Σ a_n(x): radio e intervalo de convergencia (con prueba de los extremos)."""
+    """Serie de potencias Σ a_n(x): radio e intervalo de convergencia."""
     nn = _nn()
     a = expr.subs(n, nn)
     if x not in a.free_symbols:
@@ -2607,17 +2767,8 @@ def evaluar_operacion(obj):
 # ==============================================================================
 # 8. EJECUCIÓN SEGURA (proceso aparte con tiempo límite)
 # ==============================================================================
-# SymPy puede tardar horas (o agotar la memoria) con ciertas expresiones. Para que eso nunca
-# congele la app, cada operación corre en un PROCESO TRABAJADOR persistente (así SymPy ya viene
-# importado y las llamadas siguientes son rápidas). Si se pasa del tiempo, el proceso se mata y
-# se levanta otro; la app solo muestra un aviso.
-import atexit as _atexit  # noqa: E402
-import multiprocessing as _mp  # noqa: E402
-import os as _os  # noqa: E402
-import queue as _queue  # noqa: E402
-
-TIEMPO_POR_DEFECTO = 25                                           # segundos por operación
-LIMITE_MEMORIA_MB = 3072                                          # tope de memoria virtual del trabajador (Linux)
+TIEMPO_POR_DEFECTO = 25
+LIMITE_MEMORIA_MB = 3072
 N_TRABAJADORES = max(1, int(_os.environ.get("CALCULO_TRABAJADORES", "1")))
 
 
@@ -2626,12 +2777,12 @@ class TiempoAgotado(Exception):
 
 
 class ErrorArranque(Exception):
-    """El proceso trabajador murió antes de responder por primera vez (entorno que no permite `spawn`)."""
+    """El proceso trabajador murió antes de responder por primera vez."""
 
 
 @_op
 def _autotest(segundos=0, memoria_mb=0, colgar=False):
-    """Gancho de pruebas del aislamiento (no lo usa la interfaz)."""
+    """Gancho de pruebas del aislamiento."""
     import time
     if colgar:
         while True:
@@ -2646,9 +2797,13 @@ def _autotest(segundos=0, memoria_mb=0, colgar=False):
 def _bucle_trabajador(conn):
     """Código del proceso trabajador: recibe (nombre, args, kwargs) y responde ('ok', dict) o ('err', texto)."""
     try:
+        import calculo_conjuntos  # noqa: F401
+    except Exception:  # noqa: BLE001
+        pass
+    try:
         import resource
         resource.setrlimit(resource.RLIMIT_AS, (LIMITE_MEMORIA_MB * 1024 * 1024,) * 2)
-    except Exception:  # noqa: BLE001  (Windows, macOS o contenedores Linux con cgroups v2)
+    except Exception:  # noqa: BLE001
         pass
     while True:
         try:
@@ -2659,14 +2814,16 @@ def _bucle_trabajador(conn):
             break
         nombre, args, kwargs = msg
         try:
+            if nombre not in OPERACIONES:
+                import calculo_conjuntos  # noqa: F401
             salida = ("ok", OPERACIONES[nombre](*args, **kwargs))
-        except BaseException as e:  # noqa: BLE001  (incluye MemoryError)
-            salida = ("err", f"{type(e).__name__}: {str(e)[:200]}")
+        except BaseException as e:  # noqa: BLE001
+            salida = ("err", type(e).__name__ + ": " + str(e)[:200])
         try:
             conn.send(salida)
-        except Exception as e:  # noqa: BLE001  (resultado no serializable)
+        except Exception as e:  # noqa: BLE001
             try:
-                conn.send(("err", f"No se pudo devolver el resultado ({type(e).__name__})."))
+                conn.send(("err", "No se pudo devolver el resultado (" + type(e).__name__ + ")."))
             except Exception:  # noqa: BLE001
                 break
 
@@ -2675,7 +2832,7 @@ class _Trabajador:
     def __init__(self):
         self.proc = None
         self.conn = None
-        self.respondio = False                       # ¿ha contestado alguna vez este trabajador?
+        self.respondio = False
         self._arrancar()
 
     def _arrancar(self):
@@ -2703,7 +2860,7 @@ class _Trabajador:
         self.conn.send((nombre, args, kwargs))
         if not self.conn.poll(timeout):
             self._matar()
-            self._arrancar()                       # deja uno nuevo listo (calentándose) para la siguiente
+            self._arrancar()
             raise TiempoAgotado()
         try:
             tipo, val = self.conn.recv()
@@ -2712,7 +2869,7 @@ class _Trabajador:
             nunca_respondio = not self.respondio
             self._matar()
             if nunca_respondio:
-                raise ErrorArranque()                # ni siquiera arrancó: no vale la pena reintentar con procesos
+                raise ErrorArranque()
             self._arrancar()
             raise ErrorCalculo(
                 "El proceso de cálculo se cerró inesperadamente (probablemente se agotó la memoria). "
@@ -2723,7 +2880,7 @@ class _Trabajador:
                 self._matar()
                 self._arrancar()
                 raise ErrorCalculo("Se agotó la memoria disponible para este cálculo. Prueba con una expresión más sencilla.")
-            raise ErrorCalculo(f"No pude completar este cálculo ({val}).")
+            raise ErrorCalculo("No pude completar este cálculo (" + val + ").")
         return val
 
     def cerrar(self):
@@ -2752,14 +2909,14 @@ def _obtener_pool():
                     q.put(t)
                 _POOL = q
                 _atexit.register(cerrar_trabajadores)
-            except Exception:  # noqa: BLE001  (entorno que no permite crear procesos)
+            except Exception:  # noqa: BLE001
                 _SIN_AISLAMIENTO = True
                 _POOL = None
         return _POOL
 
 
 def precalentar():
-    """Levanta los procesos trabajadores desde ya (así la primera operación del usuario no espera el arranque)."""
+    """Levanta los procesos trabajadores desde ya."""
     return _obtener_pool() is not None
 
 
@@ -2776,10 +2933,15 @@ def ejecutar_seguro(nombre, *args, timeout=TIEMPO_POR_DEFECTO, **kwargs):
     """
     import time
     if nombre not in OPERACIONES:
-        return res([ER(f"Operación desconocida: {nombre}.")])
+        try:
+            import calculo_conjuntos  # noqa: F401
+        except Exception:  # noqa: BLE001
+            pass
+    if nombre not in OPERACIONES:
+        return res([ER("Operación desconocida: " + str(nombre) + ".")])
     t0 = time.time()
     pool = _obtener_pool()
-    if pool is None:                                   # sin procesos: se corre aquí (sin protección contra cuelgues)
+    if pool is None:
         r = OPERACIONES[nombre](*args, **kwargs)
         r.setdefault("datos", {})["_sin_aislamiento"] = True
         return r
@@ -2789,7 +2951,7 @@ def ejecutar_seguro(nombre, *args, timeout=TIEMPO_POR_DEFECTO, **kwargs):
         return res([AV("El servidor está ocupado con otros cálculos. Inténtalo de nuevo en unos segundos.")], ocupado=True)
     try:
         r = trabajador.correr(nombre, args, kwargs, timeout)
-    except ErrorArranque:                      # los procesos no funcionan aquí: se calcula en el mismo proceso
+    except ErrorArranque:
         global _POOL, _SIN_AISLAMIENTO
         _SIN_AISLAMIENTO, _POOL = True, None
         _TRABAJADORES.clear()
@@ -2798,13 +2960,13 @@ def ejecutar_seguro(nombre, *args, timeout=TIEMPO_POR_DEFECTO, **kwargs):
         return r
     except TiempoAgotado:
         r = res([AV(
-            f"⏱ Este cálculo tardó más de **{timeout} s** y se canceló para no bloquear la aplicación. "
+            "⏱ Este cálculo tardó más de **" + str(timeout) + " s** y se canceló para no bloquear la aplicación. "
             "Prueba con una expresión más sencilla, otro punto, o un orden menor."
         )], timeout=True)
     except ErrorCalculo as e:
         r = res([ER(str(e))])
     except Exception as e:  # noqa: BLE001
-        r = res([ER(f"Error inesperado al calcular ({type(e).__name__}).")])
+        r = res([ER("Error inesperado al calcular (" + type(e).__name__ + ").")])
     finally:
         pool.put(trabajador)
     r.setdefault("datos", {})["_tiempo"] = round(time.time() - t0, 2)
@@ -2812,5 +2974,7 @@ def ejecutar_seguro(nombre, *args, timeout=TIEMPO_POR_DEFECTO, **kwargs):
 
 
 # Operaciones de puntos, vectores, listas, conjuntos y lógica (se registran en OPERACIONES al importarse).
-# Va al final a propósito: calculo_conjuntos importa de este módulo.
-import calculo_conjuntos  # noqa: E402,F401
+try:
+    import calculo_conjuntos  # noqa: E402,F401
+except Exception:  # noqa: BLE001
+    pass
