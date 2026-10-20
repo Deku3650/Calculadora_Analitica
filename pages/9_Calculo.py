@@ -1,3 +1,4 @@
+# pages/9_Calculo.py
 """
 pages/9_Calculo.py
 ==================
@@ -6,10 +7,11 @@ Módulo de Cálculo: se escribe una expresión con el teclado matemático y la a
   1. la INTERPRETA y dice, en español, qué entendió (tipo, lectura en palabras, variables);
   2. COMPRUEBA si tiene sentido (avisos y errores: dominios, límites invertidos, etc.);
   3. ofrece el análisis que corresponde: dominio, derivadas, límites, continuidad, extremos,
-     integrales, series y sucesiones, Taylor, conjuntos de nivel y gráficas.
+     integrales, series y sucesiones, Taylor, conjuntos de nivel, topología de ℝⁿ, lógica y gráficas.
 
 Archivos que usa (todos en la raíz del repo, junto a utils.py):
-  teclado_matematico.py · interprete_latex.py · calculo_motor.py · calculo_graficas.py
+  teclado_matematico.py · interprete_latex.py · estructuras.py · calculo_motor.py ·
+  calculo_conjuntos.py · calculo_graficas.py
 Requiere: streamlit >= 1.51, sympy, numpy, matplotlib, mpmath, scipy.
 """
 import itertools
@@ -17,19 +19,32 @@ import re
 import threading
 from collections import OrderedDict
 
+import matplotlib.pyplot as plt
 import streamlit as st
 
-st.set_page_config(page_title="Cálculo", page_icon="∑", layout="wide")
+st.set_page_config(page_title="Cálculo - MATHESIS", page_icon="∑", layout="wide")
 
 import sympy as sp  # noqa: E402
 
 import calculo_graficas as G  # noqa: E402
 import calculo_motor as M  # noqa: E402
+from estilos import cargar_estilos_globales, encabezado_pagina  # noqa: E402
+from estructuras import Bola, Funcion, Pertenencia, Punto, Region, dimension_de  # noqa: E402
 from interprete_latex import (  # noqa: E402
-    ErrorLatex, ErrorNoSoportado, ascii_a_sympy, ascii_lista, clasificar_entrada,
-    diagnosticar, latex_a_sympy, leer_en_espanol,
+    ErrorLatex,
+    ErrorNoSoportado,
+    ascii_a_sympy,
+    ascii_lista,
+    clasificar_entrada,
+    diagnosticar,
+    latex_a_sympy,
+    leer_en_espanol,
 )
 from teclado_matematico import teclado_matematico  # noqa: E402
+from utils import inicializar_estado  # noqa: E402
+
+cargar_estilos_globales()
+inicializar_estado()
 
 
 # ==============================================================================
@@ -107,7 +122,12 @@ def mostrar(r):
 
 
 def figura(f):
-    st.pyplot(f)
+    if f is not None:
+        st.pyplot(f)
+        try:
+            plt.close(f)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def hay_error(*rs) -> bool:
@@ -138,29 +158,37 @@ def leer_punto(texto, n_, que="El punto"):
 
 
 def ventana_1d(clave, a0=-6.0, b0=6.0):
+    fa0 = M._flt(a0)
+    fb0 = M._flt(b0)
+    a_def = round(fa0, 2) if fa0 is not None else -6.0
+    b_def = round(fb0, 2) if fb0 is not None else 6.0
+    if a_def >= b_def:
+        a_def, b_def = -6.0, 6.0
     with st.expander("🔧 Ventana de la gráfica"):
         c1, c2 = st.columns(2)
         with c1:
-            a = st.number_input("x mínimo", value=float(a0), key=f"{clave}_a_{a0}_{b0}")
+            a = st.number_input("x mínimo", value=float(a_def), key=f"v1d_{clave}_a")
         with c2:
-            b = st.number_input("x máximo", value=float(b0), key=f"{clave}_b_{a0}_{b0}")
+            b = st.number_input("x máximo", value=float(b_def), key=f"v1d_{clave}_b")
     if a >= b:
         st.warning("El mínimo debe ser menor que el máximo; se usa la ventana por defecto.")
-        return (a0, b0)
+        return (a_def, b_def)
     return (a, b)
 
 
 def ventana_2d(clave, r0=3.0, centro=(0.0, 0.0)):
-    x0, y0 = centro
+    x0 = M._flt(centro[0]) or 0.0
+    y0 = M._flt(centro[1]) or 0.0
+    r_def = M._flt(r0) or 3.0
     with st.expander("🔧 Ventana de la gráfica"):
         c = st.columns(4)
         vals = []
-        for i, (et, v0) in enumerate((("x mín", x0 - r0), ("x máx", x0 + r0), ("y mín", y0 - r0), ("y máx", y0 + r0))):
+        for i, (et, v0) in enumerate((("x mín", x0 - r_def), ("x máx", x0 + r_def), ("y mín", y0 - r_def), ("y máx", y0 + r_def))):
             with c[i]:
-                vals.append(st.number_input(et, value=float(v0), key=f"{clave}_{et}_{r0}_{x0}_{y0}"))
+                vals.append(st.number_input(et, value=float(round(v0, 2)), key=f"v2d_{clave}_{i}"))
     if vals[0] >= vals[1] or vals[2] >= vals[3]:
         st.warning("Los mínimos deben ser menores que los máximos; se usa la ventana por defecto.")
-        return (x0 - r0, x0 + r0, y0 - r0, y0 + r0)
+        return (x0 - r_def, x0 + r_def, y0 - r_def, y0 + r_def)
     return tuple(vals)
 
 
@@ -173,12 +201,13 @@ def _discontinuidades(r, tipos):
 # ==============================================================================
 # Encabezado, opciones y teclado
 # ==============================================================================
-st.title("∑ Cálculo")
-st.caption("Escribe con el teclado y pulsa **↵**. La app te dice **qué entendió**, comprueba que **tenga sentido** "
-           "y te ofrece el análisis que corresponde.")
+encabezado_pagina(
+    "∑ Módulo de Cálculo y Análisis en ℝⁿ",
+    "Escribe con el teclado matemático y pulsa **↵**. La app te dice **qué entendió**, comprueba que **tenga sentido** y desarrolla el análisis completo.",
+)
 
 with st.expander("⚙️ Opciones", expanded=False):
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         acoplado = st.toggle("Teclado acoplado abajo", value=False,
                              help="Estilo móvil: el teclado sube desde el borde inferior al tocar el campo.")
@@ -188,6 +217,8 @@ with st.expander("⚙️ Opciones", expanded=False):
     with c3:
         i_imag = st.toggle("La letra «i» (pestaña abc) es √−1", value=False,
                            help="La tecla «i» de la pestaña f(x) siempre es la unidad imaginaria.")
+    with c4:
+        nat0 = st.toggle("ℕ incluye el 0", value=False, help="Por defecto ℕ = {1, 2, 3, …}. Actívalo si en tu curso ℕ = {0, 1, 2, …}.")
 
 with st.expander("📖 Qué puedes escribir (guía rápida)"):
     st.markdown(
@@ -203,6 +234,14 @@ with st.expander("📖 Qué puedes escribir (guía rápida)"):
 
 **Una ecuación o desigualdad**: `x² − 5x + 6 = 0`, `x² + y² ≤ 1`.
 
+**Puntos, vectores y listas**: `(1, 2)`, `⟨3, 4⟩`, `‖⟨3,4⟩‖`, `⟨1,2⟩ · ⟨3,4⟩`, `1, 3, …, 21`.
+
+**Conjuntos y topología** (pestaña ℝⁿ): `[0,1) ∪ (2,3]`, `B_r(p)` (bola), `{(x,y) ∣ x²+y²<1}`, `int`, `cl`, `Fr`, `3 ∈ [0,5]`, `A ⊂ B`.
+
+**Lógica**: `p ⇒ q`, `(p ∧ q) ∨ ¬r`, `∀x ∈ ℝ: x² ≥ 0`, `p ⇒ q, p ∴ q`.
+
+**Funciones**: `f(x) = x² + 1` o `(x, y) ↦ x² + y²` (así eliges tú el orden de las variables).
+
 💡 Si dudas de cómo la leyó la app, mira el recuadro **«Lo que entendí»**: ahí aparece la frase en español.
         """
     )
@@ -217,7 +256,7 @@ if not latex:
 # 1 · Interpretar, explicar y comprobar
 # ==============================================================================
 try:
-    obj = latex_a_sympy(latex, i_imaginaria=i_imag)
+    obj = latex_a_sympy(latex, i_imaginaria=i_imag, naturales_con_cero=nat0)
 except ErrorNoSoportado as e:
     st.warning(f"⚠️ {e}")
     st.stop()
@@ -228,16 +267,20 @@ except ErrorLatex as e:
     st.stop()
 
 info = clasificar_entrada(obj)
-diag = diagnosticar(obj, latex)
+diag = diagnosticar(obj, latex, nat0)
 vs = info["variables"]
-n = info["n"]
+n_vars_entrada = info["n"]
+obj_original = obj                       # lo que se escribió (para la lectura en español)
+if isinstance(obj, Funcion):             # f(x) = … / x ↦ …: el análisis va sobre la fórmula, con las variables declaradas
+    obj = obj_original.expr
 
 st.subheader("1 · Lo que entendí")
 with st.container(border=True):
     st.markdown(f"**Tipo:** {info['etiqueta']}" + (f" — {info['detalle']}" if info.get("detalle") else ""))
-    st.markdown(f"**Entiendo:** {leer_en_espanol(obj)}")
+    st.markdown(f"**Entiendo:** {leer_en_espanol(obj_original)}")
     try:
-        st.latex(sp.latex(obj))
+        if isinstance(obj, sp.Basic):
+            st.latex(sp.latex(obj))
     except Exception:  # noqa: BLE001
         pass
     if vs and info["tipo"] not in ("serie", "suma_finita", "producto"):
@@ -276,8 +319,15 @@ def sec_resumen(f, vs_):
 
 
 def sec_analisis_1d(f, x):
-    pasos = [("dominio", (f,)), ("ceros_cortes", (f, x)), ("simetria_periodo", (f, x)), ("continuidad_1d", (f, x)),
-             ("asintotas", (f, x)), ("monotonia_extremos", (f, x)), ("concavidad", (f, x))]
+    pasos = [
+        ("dominio", (f,)),
+        ("ceros_cortes", (f, x)),
+        ("simetria_periodo", (f, x)),
+        ("continuidad_1d", (f, x)),
+        ("asintotas", (f, x)),
+        ("monotonia_extremos", (f, x)),
+        ("concavidad", (f, x)),
+    ]
     R, barra = {}, st.progress(0.0, text="Analizando la función…")
     for i, (nom, a) in enumerate(pasos):
         R[nom] = calcular(nom, *a)
@@ -287,23 +337,38 @@ def sec_analisis_1d(f, x):
     d_cero, d_mon = R["ceros_cortes"]["datos"], R["monotonia_extremos"]["datos"]
     d_conc, d_as = R["concavidad"]["datos"], R["asintotas"]["datos"]
     pts = [(p, 0, "cero", G.AZUL) for p in d_cero.get("ceros", [])]
-    pts += [(c, fc, ("máx" if "máx" in t else "mín" if "mín" in t else "crít."), G.VERDE if "mín" in t else G.ROJO)
-            for c, fc, t in d_mon.get("extremos", [])]
+    pts += [
+        (c, fc, ("máx" if "máx" in t else "mín" if "mín" in t else "crít."), G.VERDE if "mín" in t else G.ROJO)
+        for c, fc, t in d_mon.get("extremos", [])
+    ]
     pts += [(c, fc, "infl.", G.NARANJA) for c, fc in d_conc.get("inflexion", [])]
-    xs = [M._flt(p[0]) for p in pts if M._flt(p[0]) is not None] + \
-         [M._flt(v) for v in d_as.get("verticales", []) if M._flt(v) is not None]
+    xs = [M._flt(p[0]) for p in pts if M._flt(p[0]) is not None] + [
+        M._flt(v) for v in d_as.get("verticales", []) if M._flt(v) is not None
+    ]
     a0, b0 = (min(xs) - 2.5, max(xs) + 2.5) if xs else (-6.0, 6.0)
     a0, b0 = max(a0, -60.0), min(b0, 60.0)
     if b0 - a0 < 4:
         a0, b0 = a0 - 2, b0 + 2
-    figura(G.fig_funcion_1d(f, x, ventana_1d("an1d", round(a0, 1), round(b0, 1)),
-                            verticales=d_as.get("verticales", []), horizontales=d_as.get("horizontales", []),
-                            oblicuas=d_as.get("oblicuas", []), puntos=pts,
-                            cortes=_discontinuidades(R["continuidad_1d"], ("salto",))))
+    figura(G.fig_funcion_1d(
+        f,
+        x,
+        ventana_1d("an1d", round(a0, 1), round(b0, 1)),
+        verticales=d_as.get("verticales", []),
+        horizontales=d_as.get("horizontales", []),
+        oblicuas=d_as.get("oblicuas", []),
+        puntos=pts,
+        cortes=_discontinuidades(R["continuidad_1d"], ("salto",)),
+    ))
     st.caption("Rojo punteado: asíntotas · puntos azules: ceros · rojo/verde: máximos/mínimos locales · naranja: inflexiones.")
     tabs = st.tabs(["Dominio y rango", "Cortes y simetría", "Continuidad", "Asíntotas", "Crecimiento y extremos", "Concavidad"])
-    grupos = (["dominio"], ["ceros_cortes", "simetria_periodo"], ["continuidad_1d"], ["asintotas"],
-              ["monotonia_extremos"], ["concavidad"])
+    grupos = (
+        ["dominio"],
+        ["ceros_cortes", "simetria_periodo"],
+        ["continuidad_1d"],
+        ["asintotas"],
+        ["monotonia_extremos"],
+        ["concavidad"],
+    )
     for tab, claves in zip(tabs, grupos):
         with tab:
             for k in claves:
@@ -311,16 +376,17 @@ def sec_analisis_1d(f, x):
 
 
 def sec_derivadas(f, vs_):
-    modos = ["Derivada", "Gradiente y Hessiana", "Recta / plano tangente"] + (["Derivada direccional"] if n >= 2 else [])
-    modo = st.radio("Calcular", modos, horizontal=True, key=f"calc_der_{n}")
+    n_ = len(vs_)
+    modos = ["Derivada", "Gradiente y Hessiana", "Recta / plano tangente"] + (["Derivada direccional"] if n_ >= 2 else [])
+    modo = st.radio("Calcular", modos, horizontal=True, key=f"calc_der_{n_}")
     nombres = ", ".join(str(v) for v in vs_)
     if modo == "Derivada":
-        if n == 1:
+        if n_ == 1:
             orden = st.slider("Orden de la derivada", 1, 6, 1, key="calc_der_orden")
             variables = [(vs_[0], orden)]
         else:
             st.caption("Elige cuántas veces derivar respecto de cada variable (0 = no derivar).")
-            cols = st.columns(min(n, 4))
+            cols = st.columns(min(n_, 4))
             variables = []
             for i, v in enumerate(vs_[:4]):
                 with cols[i]:
@@ -332,29 +398,46 @@ def sec_derivadas(f, vs_):
                 return
         punto = None
         if st.checkbox("Evaluar en un punto", key="calc_der_usarpunto"):
-            pt, err = leer_punto(st.text_input(f"Punto ({nombres})", ",".join(["1"] * n), key="calc_der_punto"), n)
+            pt, err = leer_punto(st.text_input(f"Punto ({nombres})", ",".join(["1"] * n_), key="calc_der_punto"), n_)
             if err:
                 st.error(err)
                 return
             punto = dict(zip(vs_, pt))
         r = calcular("derivar", f, variables, punto)
         mostrar(r)
-        if n == 1 and not hay_error(r):
-            figura(G.fig_funcion_1d(f, vs_[0], ventana_1d("der"),
-                                    derivada=r["datos"].get("derivada") if variables[0][1] == 1 else None))
+        if n_ == 1 and not hay_error(r):
+            figura(G.fig_funcion_1d(
+                f,
+                vs_[0],
+                ventana_1d("der"),
+                derivada=r["datos"].get("derivada") if variables[0][1] == 1 else None,
+            ))
     elif modo == "Gradiente y Hessiana":
         t = st.text_input(f"Punto ({nombres}) — opcional", "", key="calc_gh_punto", help="Déjalo vacío para ver solo las fórmulas.")
         punto = None
         if t.strip():
-            punto, err = leer_punto(t, n)
+            punto, err = leer_punto(t, n_)
             if err:
                 st.error(err)
                 return
-        mostrar(calcular("gradiente_hessiana", f, vs_, punto))
-        if n == 2:
+        r_gh = calcular("gradiente_hessiana", f, vs_, punto)
+        mostrar(r_gh)
+        if n_ == 2:
             figura(G.fig_niveles(f, vs_[0], vs_[1], ventana_2d("gh"), gradiente=True, punto=punto))
+        hess_mat = r_gh["datos"].get("hessiana")
+        if hess_mat is not None:
+            with st.expander("📤 Enviar Matriz Hessiana al Módulo de Matrices"):
+                c_h1, c_h2 = st.columns([2, 1])
+                with c_h1:
+                    nom_hess = st.text_input("Nombre para guardar en el inventario:", value="H_CALC", key="nom_save_hess_calc").upper().strip()
+                with c_h2:
+                    st.write("")
+                    if st.button("💾 Guardar en Matrices", key="btn_save_hess_calc", use_container_width=True):
+                        if nom_hess:
+                            st.session_state.mis_matrices[nom_hess] = hess_mat
+                            st.success(f"Matriz '{nom_hess}' guardada en el inventario del módulo de Matrices.")
     elif modo == "Recta / plano tangente":
-        pt, err = leer_punto(st.text_input(f"Punto ({nombres})", ",".join(["1"] * n), key="calc_tg_punto"), n)
+        pt, err = leer_punto(st.text_input(f"Punto ({nombres})", ",".join(["1"] * n_), key="calc_tg_punto"), n_)
         if err:
             st.error(err)
             return
@@ -362,26 +445,36 @@ def sec_derivadas(f, vs_):
         mostrar(r)
         if not hay_error(r):
             L_ = r["datos"]["tangente"]
-            if n == 1:
-                figura(G.fig_funcion_1d(f, vs_[0], ventana_1d("tg", float(pt[0]) - 4, float(pt[0]) + 4), tangente=L_,
-                                        puntos=[(pt[0], r["datos"]["f_p"], "p", G.ROJO)]))
-            elif n == 2:
+            if n_ == 1:
+                p0_f = M._flt(pt[0]) or 0.0
+                figura(G.fig_funcion_1d(
+                    f,
+                    vs_[0],
+                    ventana_1d("tg", p0_f - 4.0, p0_f + 4.0),
+                    tangente=L_,
+                    puntos=[(pt[0], r["datos"]["f_p"], "p", G.ROJO)],
+                ))
+            elif n_ == 2:
                 figura(G.fig_superficie(f, vs_[0], vs_[1], ventana_2d("tg2", 2.0), plano=L_, punto=pt))
     else:
-        pt, err = leer_punto(st.text_input(f"Punto ({nombres})", ",".join(["1"] * n), key="calc_dd_punto"), n)
-        dv, err2 = leer_punto(st.text_input("Dirección v (no hace falta que sea unitaria)",
-                                            ",".join(["1"] + ["0"] * (n - 1)), key="calc_dd_dir"), n, "La dirección")
+        pt, err = leer_punto(st.text_input(f"Punto ({nombres})", ",".join(["1"] * n_), key="calc_dd_punto"), n_)
+        dv, err2 = leer_punto(
+            st.text_input("Dirección v (no hace falta que sea unitaria)", ",".join(["1"] + ["0"] * (n_ - 1)), key="calc_dd_dir"),
+            n_,
+            "La dirección",
+        )
         if err or err2:
             st.error(err or err2)
             return
         r = calcular("derivada_direccional", f, vs_, pt, dv)
         mostrar(r)
-        if n == 2 and not hay_error(r):
+        if n_ == 2 and not hay_error(r):
             figura(G.fig_niveles(f, vs_[0], vs_[1], ventana_2d("dd"), gradiente=True, punto=pt))
 
 
 def sec_limites(f, vs_):
-    if n == 1:
+    n_ = len(vs_)
+    if n_ == 1:
         x = vs_[0]
         c1, c2 = st.columns([2, 3])
         with c1:
@@ -403,32 +496,44 @@ def sec_limites(f, vs_):
         L_ = r["datos"].get("limite")
         finito = L_ is not None and M._clase(L_) == "fin"
         figura(G.fig_funcion_1d(
-            f, x, ventana_1d("lim", round(v0[0], 2), round(v0[1], 2)),
+            f,
+            x,
+            ventana_1d("lim", round(v0[0], 2), round(v0[1], 2)),
             horizontales=[L_] if (finito and af is None) else [],
-            puntos=[(a, L_, "límite", G.ROJO)] if (finito and af is not None) else []))
+            guias=[(a, L_)] if (finito and af is not None) else (),
+            puntos=[(a, L_, "límite", G.ROJO)] if (finito and af is not None) else [],
+        ))
     else:
-        pt, err = leer_punto(st.text_input(f"({', '.join(str(v) for v in vs_)}) tiende a", ",".join(["0"] * n), key="calc_limm_punto"), n)
+        pt, err = leer_punto(st.text_input(f"({', '.join(str(v) for v in vs_)}) tiende a", ",".join(["0"] * n_), key="calc_limm_punto"), n_)
         if err:
             st.error(err)
             return
         r = calcular("limite_multi", f, vs_, pt, timeout=40)
         mostrar(r)
-        if n == 2 and not hay_error(r):
+        if n_ == 2 and not hay_error(r):
             p0, p1 = M._flt(pt[0]) or 0.0, M._flt(pt[1]) or 0.0
             figura(G.fig_niveles(f, vs_[0], vs_[1], ventana_2d("limm", 1.5, (p0, p1)), punto=pt))
-            st.caption("Curvas de nivel cerca del punto (punto rojo). Si varias curvas de nivel **llegan al punto** con valores "
-                       "distintos, el límite no existe.")
+            st.caption(
+                "Curvas de nivel cerca del punto (punto rojo). Si varias curvas de nivel **llegan al punto** con valores "
+                "distintos, el límite no existe."
+            )
 
 
 def sec_continuidad(f, vs_):
-    if n == 1:
+    n_ = len(vs_)
+    if n_ == 1:
         x = vs_[0]
         r = calcular("continuidad_1d", f, x)
         mostrar(r)
-        figura(G.fig_funcion_1d(f, x, ventana_1d("cont"), cortes=_discontinuidades(r, ("salto",)),
-                                verticales=_discontinuidades(r, ("infinita",))))
+        figura(G.fig_funcion_1d(
+            f,
+            x,
+            ventana_1d("cont"),
+            cortes=_discontinuidades(r, ("salto",)),
+            verticales=_discontinuidades(r, ("infinita",)),
+        ))
     else:
-        pt, err = leer_punto(st.text_input(f"Punto ({', '.join(str(v) for v in vs_)})", ",".join(["0"] * n), key="calc_cm_punto"), n)
+        pt, err = leer_punto(st.text_input(f"Punto ({', '.join(str(v) for v in vs_)})", ",".join(["0"] * n_), key="calc_cm_punto"), n_)
         if err:
             st.error(err)
             return
@@ -451,7 +556,8 @@ def _leer_restriccion(latex_r, i_imag_):
 
 
 def sec_extremos(f, vs_):
-    if n == 1:
+    n_ = len(vs_)
+    if n_ == 1:
         x = vs_[0]
         mostrar(calcular("monotonia_extremos", f, x))
         st.markdown("##### Máximo y mínimo **absolutos** en un intervalo cerrado")
@@ -469,16 +575,24 @@ def sec_extremos(f, vs_):
         mostrar(r)
         if not hay_error(r) and r["datos"].get("maximo"):
             (xm, fm), (xn, fn) = r["datos"]["maximo"], r["datos"]["minimo"]
-            figura(G.fig_funcion_1d(f, x, ventana_1d("abs", float(a) - 1, float(b) + 1),
-                                    puntos=[(xm, fm, "máx abs", G.ROJO), (xn, fn, "mín abs", G.VERDE)]))
+            fa_v = M._flt(a) or -2.0
+            fb_v = M._flt(b) or 2.0
+            figura(G.fig_funcion_1d(
+                f,
+                x,
+                ventana_1d("abs", fa_v - 1.0, fb_v + 1.0),
+                puntos=[(xm, fm, "máx abs", G.ROJO), (xn, fn, "mín abs", G.VERDE)],
+            ))
         return
     r = calcular("extremos_multi", f, vs_, timeout=40)
     mostrar(r)
     cand = [tuple(pt) for pt, _, _ in r["datos"].get("criticos", [])]
-    if n == 2:
+    if n_ == 2:
         figura(G.fig_niveles(f, vs_[0], vs_[1], ventana_2d("ext", 3.0), candidatos=cand))
-        st.caption("Estrellas naranja: puntos críticos. Un mínimo/máximo se ve como curvas de nivel cerradas alrededor del punto; "
-                   "una silla, como curvas que se cruzan.")
+        st.caption(
+            "Estrellas naranja: puntos críticos. Un mínimo/máximo se ve como curvas de nivel cerradas alrededor del punto; "
+            "una silla, como curvas que se cruzan."
+        )
     st.divider()
     st.markdown("##### Extremos con restricción (multiplicadores de Lagrange)")
     st.caption("Escribe la restricción con el teclado, por ejemplo `x² + y² = 1`.")
@@ -506,7 +620,7 @@ def sec_extremos(f, vs_):
         return
     rl = calcular("lagrange", f, vs_, gs, timeout=40)
     mostrar(rl)
-    if n == 2 and len(gs) == 1 and not hay_error(rl):
+    if n_ == 2 and len(gs) == 1 and not hay_error(rl):
         cl = [tuple(pt) for pt, _ in rl["datos"].get("candidatos", [])]
         figura(G.fig_niveles(f, vs_[0], vs_[1], ventana_2d("lag", 3.0), restriccion=gs[0], candidatos=cl))
         st.caption("Rojo: la restricción. Estrellas: candidatos. Los extremos están donde una curva de nivel **toca tangente** a la restricción.")
@@ -522,7 +636,8 @@ def _limites_texto(clave, nombre_var, defecto_a, defecto_b):
 
 
 def sec_integrales(f, vs_):
-    if n == 1:
+    n_ = len(vs_)
+    if n_ == 1:
         x = vs_[0]
         modo = st.radio("Tipo", ["Definida (o impropia)", "Indefinida (primitiva)"], horizontal=True, key="calc_int_modo")
         if modo.startswith("Indef"):
@@ -536,25 +651,40 @@ def sec_integrales(f, vs_):
             return
         r = calcular("integral_definida", f, x, a, b, timeout=40)
         mostrar(r)
+        val_int = r["datos"].get("valor")
+        rotulo_area = f"∫ f = {G._num(val_int)}" if (val_int is not None and M._flt(val_int) is not None) else None
         fa, fb = M._flt(a), M._flt(b)
         if fa is not None and fb is not None:
             lo, hi = min(fa, fb), max(fa, fb)
-            figura(G.fig_funcion_1d(f, x, ventana_1d("intd", round(lo - 1, 2), round(hi + 1, 2)), sombrear=(lo, hi)))
+            figura(G.fig_funcion_1d(
+                f,
+                x,
+                ventana_1d("intd", round(lo - 1, 2), round(hi + 1, 2)),
+                sombrear=(lo, hi),
+                area_texto=rotulo_area,
+            ))
         else:
             fin = fa if fa is not None else fb if fb is not None else 0.0
-            figura(G.fig_funcion_1d(f, x, ventana_1d("intd", round(fin - 6, 2), round(fin + 12, 2)),
-                                    sombrear=(fin, fin + 12) if b == sp.oo else (fin - 12, fin) if a == -sp.oo else None))
-    elif n in (2, 3):
-        st.caption("Se integra **de adentro hacia afuera**. Los límites pueden depender de las variables de las integrales de afuera "
-                   "(por ejemplo `0` a `x`). Escribe con `pi`, `sqrt()`, `^`, `*`.")
+            figura(G.fig_funcion_1d(
+                f,
+                x,
+                ventana_1d("intd", round(fin - 6, 2), round(fin + 12, 2)),
+                sombrear=(fin, fin + 12) if b == sp.oo else (fin - 12, fin) if a == -sp.oo else None,
+                area_texto=rotulo_area,
+            ))
+    elif n_ in (2, 3):
+        st.caption(
+            "Se integra **de adentro hacia afuera**. Los límites pueden depender de las variables de las integrales de afuera "
+            "(por ejemplo `0` a `x`). Escribe con `pi`, `sqrt()`, `^`, `*`."
+        )
         ordenes = list(itertools.permutations(vs_))
         etiquetas = ["  ".join(f"d{v}" for v in o) for o in ordenes]
-        et = st.selectbox("Orden de integración (de adentro hacia afuera)", etiquetas, key=f"calc_im_orden_{n}")
+        et = st.selectbox("Orden de integración (de adentro hacia afuera)", etiquetas, key=f"calc_im_orden_{n_}")
         orden = ordenes[etiquetas.index(et)]
         lims = []
         for i, v in enumerate(orden):
-            rol = "interna" if i == 0 else ("externa" if i == n - 1 else "intermedia")
-            ta, tb = _limites_texto(f"calc_im_{n}_{et}_{v}", f"{v} ({rol})", "0", "1")
+            rol = "interna" if i == 0 else ("externa" if i == n_ - 1 else "intermedia")
+            ta, tb = _limites_texto(f"calc_im_{n_}_{et}_{v}", f"{v} ({rol})", "0", "1")
             try:
                 a, b = ascii_a_sympy(ta), ascii_a_sympy(tb)
             except ErrorLatex as e:
@@ -563,8 +693,10 @@ def sec_integrales(f, vs_):
             permitidas = set(orden[i + 1:])
             mal = (a.free_symbols | b.free_symbols) - permitidas
             if mal:
-                st.error(f"Los límites de {v} solo pueden depender de variables de integrales **exteriores** "
-                         f"({', '.join(map(str, orden[i + 1:])) or 'ninguna'}); aparece: {', '.join(map(str, mal))}.")
+                st.error(
+                    f"Los límites de {v} solo pueden depender de variables de integrales **exteriores** "
+                    f"({', '.join(map(str, orden[i + 1:])) or 'ninguna'}); aparece: {', '.join(map(str, mal))}."
+                )
                 return
             lims.append((v, a, b))
         mostrar(calcular("integral_multiple", f, lims, timeout=40))
@@ -574,8 +706,11 @@ def sec_integrales(f, vs_):
 
 def sec_series(f, vs_):
     nom = [v for v in vs_ if v.name == "n"]
-    nv = st.selectbox("Variable índice (n)", vs_, index=vs_.index(nom[0]) if nom else 0, format_func=str,
-                      key="calc_ser_var") if len(vs_) > 1 else vs_[0]
+    nv = (
+        st.selectbox("Variable índice (n)", vs_, index=vs_.index(nom[0]) if nom else 0, format_func=str, key="calc_ser_var")
+        if len(vs_) > 1
+        else vs_[0]
+    )
     modo = st.radio("Estudiar como", ["Sucesión aₙ", "Serie Σ aₙ", "Serie de potencias"], horizontal=True, key="calc_ser_modo")
     n0 = int(st.number_input("Primer valor de n", value=0 if modo == "Serie de potencias" else 1, step=1, key=f"calc_ser_n0_{modo}"))
     if modo.startswith("Suc"):
@@ -602,7 +737,8 @@ def sec_series(f, vs_):
 
 
 def sec_taylor(f, vs_):
-    if n == 1:
+    n_ = len(vs_)
+    if n_ == 1:
         x = vs_[0]
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -625,19 +761,19 @@ def sec_taylor(f, vs_):
         mostrar(r)
         if not hay_error(r):
             figura(G.fig_taylor(f, x, a, r["datos"]["polinomios"]))
-    elif n in (2, 3):
+    elif n_ in (2, 3):
         c1, c2 = st.columns(2)
         with c1:
-            t = st.text_input(f"Punto ({', '.join(str(v) for v in vs_)})", ",".join(["0"] * n), key="calc_taym_p")
+            t = st.text_input(f"Punto ({', '.join(str(v) for v in vs_)})", ",".join(["0"] * n_), key="calc_taym_p")
         with c2:
             orden = st.slider("Orden", 1, 3, 2, key="calc_taym_o")
-        pt, err = leer_punto(t, n)
+        pt, err = leer_punto(t, n_)
         if err:
             st.error(err)
             return
         r = calcular("taylor_multi", f, vs_, pt, orden)
         mostrar(r)
-        if n == 2 and not hay_error(r):
+        if n_ == 2 and not hay_error(r):
             figura(G.fig_superficie(f, vs_[0], vs_[1], ventana_2d("taym", 2.0), plano=r["datos"]["polinomio"], punto=pt))
             st.caption("Naranja: el polinomio de Taylor. Cerca del punto rojo se pega a la superficie.")
     else:
@@ -656,14 +792,15 @@ def _niveles_de_texto(txt):
 
 
 def sec_niveles(f, vs_):
-    if n == 1:
+    n_ = len(vs_)
+    if n_ == 1:
         figura(G.fig_funcion_1d(f, vs_[0], ventana_1d("niv1")))
         cs, err = _niveles_de_texto(st.text_input("Niveles c (separados por comas)", "0", key="calc_niv1"))
         if err:
             st.error(err)
             return
         mostrar(calcular("niveles", f, vs_, cs))
-    elif n == 2:
+    elif n_ == 2:
         vent = ventana_2d("niv2")
         auto = G.niveles_automaticos(f, vs_[0], vs_[1], vent)
         txt = st.text_input("Niveles c (separados por comas; vacío = automático)", "", key="calc_niv2", help="Ejemplo: 1, 4, 9")
@@ -684,15 +821,15 @@ def sec_niveles(f, vs_):
                 return
         t1, t2, t3 = st.tabs(["Curvas de nivel", "Superficie 3D", "Ecuaciones de los niveles"])
         with t1:
-            figura(G.fig_niveles(f, vs_[0], vs_[1], vent, niveles=[float(M._flt(c)) for c in cs] if cs else None,
-                                 gradiente=grad, punto=punto))
+            niv_f = [float(M._flt(c)) for c in cs if M._flt(c) is not None] if cs else None
+            figura(G.fig_niveles(f, vs_[0], vs_[1], vent, niveles=niv_f, gradiente=grad, punto=punto))
             st.caption("Las flechas naranja son el gradiente: **perpendiculares** a las curvas de nivel y apuntan hacia donde f crece más.")
         with t2:
             figura(G.fig_superficie(f, vs_[0], vs_[1], vent, punto=punto))
         with t3:
             niv = cs if cs else [sp.nsimplify(round(v, 3)) for v in auto[:5]]
             mostrar(calcular("niveles", f, vs_, niv))
-    elif n == 3:
+    elif n_ == 3:
         vent = ventana_2d("niv3")
         c1, c2 = st.columns(2)
         with c1:
@@ -705,9 +842,12 @@ def sec_niveles(f, vs_):
             st.error(err or err2)
             return
         mostrar(calcular("niveles", f, vs_, cs))
+        zs_flt = [float(M._flt(z)) for z in zs[:6] if M._flt(z) is not None]
         for c in cs[:3]:
-            st.markdown(f"##### Cortes de la superficie $f={sp.latex(c)}$")
-            figura(G.fig_cortes(f, tuple(vs_), float(M._flt(c)), [float(M._flt(z)) for z in zs[:6]], vent))
+            fc_val = M._flt(c)
+            if fc_val is not None and zs_flt:
+                st.markdown("##### Cortes de la superficie $f=" + sp.latex(c) + "$")
+                figura(G.fig_cortes(f, tuple(vs_), float(fc_val), zs_flt, vent))
     else:
         st.info("Los conjuntos de nivel se dibujan para funciones de 1 a 3 variables.")
 
@@ -720,8 +860,12 @@ def sec_relacion(rel, vs_):
     if len(vs_) == 2:
         figura(G.fig_region(rel, vs_[0], vs_[1], ventana_2d("rel")))
     elif len(vs_) == 1 and isinstance(rel, sp.core.relational.Relational):
-        figura(G.fig_funcion_1d(rel.lhs - rel.rhs, vs_[0], ventana_1d("rel1"),
-                                titulo="g(x) = (lado izquierdo) − (lado derecho): el eje x marca g = 0"))
+        figura(G.fig_funcion_1d(
+            rel.lhs - rel.rhs,
+            vs_[0],
+            ventana_1d("rel1"),
+            titulo="g(x) = (lado izquierdo) − (lado derecho): el eje x marca g = 0",
+        ))
 
 
 def seccion_operacion(obj_, tipo_):
@@ -733,24 +877,169 @@ def seccion_operacion(obj_, tipo_):
         if tipo_ == "limite" and isinstance(obj_, sp.Limit):
             f, x, a = obj_.args[0], obj_.args[1], obj_.args[2]
             af = M._flt(a)
+            L_ = r["datos"].get("limite")
+            finito = L_ is not None and M._clase(L_) == "fin"
             v0 = (af - 4, af + 4) if af is not None else ((0.0, 40.0) if a == sp.oo else (-40.0, 0.0))
             if f.free_symbols == {x}:
-                figura(G.fig_funcion_1d(f, x, ventana_1d("op_lim", round(v0[0], 2), round(v0[1], 2))))
+                figura(G.fig_funcion_1d(
+                    f,
+                    x,
+                    ventana_1d("op_lim", round(v0[0], 2), round(v0[1], 2)),
+                    horizontales=[L_] if (finito and af is None) else [],
+                    guias=[(a, L_)] if (finito and af is not None) else (),
+                    puntos=[(a, L_, "límite", G.ROJO)] if (finito and af is not None) else [],
+                ))
         elif tipo_ == "integral" and isinstance(obj_, sp.Integral) and len(obj_.limits) == 1 and len(obj_.limits[0]) == 3:
             x, a, b = obj_.limits[0]
             fa, fb = M._flt(a), M._flt(b)
+            val_int = r["datos"].get("valor")
+            rot_area = f"∫ f = {G._num(val_int)}" if (val_int is not None and M._flt(val_int) is not None) else None
             if fa is not None and fb is not None and obj_.function.free_symbols == {x}:
                 lo, hi = min(fa, fb), max(fa, fb)
-                figura(G.fig_funcion_1d(obj_.function, x, ventana_1d("op_int", round(lo - 1, 2), round(hi + 1, 2)), sombrear=(lo, hi)))
+                figura(G.fig_funcion_1d(
+                    obj_.function,
+                    x,
+                    ventana_1d("op_int", round(lo - 1, 2), round(hi + 1, 2)),
+                    sombrear=(lo, hi),
+                    area_texto=rot_area,
+                ))
         elif tipo_ == "serie" and r["datos"].get("sumas"):
             figura(G.fig_sumas_parciales(r["datos"]["sumas"], r["datos"].get("suma")))
-        elif tipo_ == "derivada" and isinstance(obj_, sp.Derivative) and len(obj_.expr.free_symbols) == 1 \
-                and len(obj_.variable_count) == 1:
+        elif (
+            tipo_ == "derivada"
+            and isinstance(obj_, sp.Derivative)
+            and len(obj_.expr.free_symbols) == 1
+            and len(obj_.variable_count) == 1
+        ):
             x = obj_.variable_count[0][0]
-            figura(G.fig_funcion_1d(obj_.expr, x, ventana_1d("op_der"),
-                                    derivada=r["datos"].get("derivada") if obj_.variable_count[0][1] == 1 else None))
+            figura(G.fig_funcion_1d(
+                obj_.expr,
+                x,
+                ventana_1d("op_der"),
+                derivada=r["datos"].get("derivada") if obj_.variable_count[0][1] == 1 else None,
+            ))
     except Exception:  # noqa: BLE001
         pass  # la gráfica es un extra: si falla, el resultado de arriba sigue siendo válido
+
+
+# ==============================================================================
+# 3b · Puntos, vectores, listas, conjuntos, lógica…
+# ==============================================================================
+def _ventana_conjunto(clave, S):
+    r0 = 3.0
+    if hasattr(S, "radio") and hasattr(S, "centro"):
+        try:
+            r0 = max(3.0, 1.6 * (max(abs(float(sp.N(c))) for c in S.centro.c) + float(sp.N(S.radio))))
+        except Exception:  # noqa: BLE001
+            pass
+    return ventana_2d(clave, round(r0, 1))
+
+
+def _dibujar_conjunto(S, clave, puntos=()):
+    """Figura de un conjunto canónico (sympy Set de ℝ, bola o región de ℝ²/ℝ³). `puntos` = [(coords, etiqueta, posición)]."""
+    colores = {"interior": G.VERDE, "frontera": G.NARANJA, "exterior": G.ROJO, "pertenece": G.VERDE, "no pertenece": G.ROJO}
+    if isinstance(S, sp.Set) and S != sp.S.Complexes:
+        marcas = [(c[0], et, colores.get(pos, G.GRIS)) for c, et, pos in puntos if len(c) == 1]
+        figura(G.fig_recta_numerica(S, puntos=marcas))
+    elif isinstance(S, Bola) and S.n == 2:
+        figura(G.fig_bola_2d(
+            S.centro.c,
+            S.radio,
+            S.cerrada,
+            [(c[0], c[1], et, pos) for c, et, pos in puntos if len(c) == 2],
+            esfera=S.esfera,
+        ))
+    elif isinstance(S, Bola) and S.n == 3:
+        figura(G.fig_bola_3d(
+            S.centro.c,
+            S.radio,
+            S.cerrada,
+            [(c[0], c[1], c[2], et, pos) for c, et, pos in puntos if len(c) == 3],
+        ))
+    elif isinstance(S, Region) and S.n == 2:
+        vent = _ventana_conjunto(clave, S)
+        figura(G.fig_region(
+            S.cond,
+            S.vars[0],
+            S.vars[1],
+            vent,
+            puntos=[(c[0], c[1], et, colores.get(pos, G.GRIS)) for c, et, pos in puntos if len(c) == 2],
+        ))
+    else:
+        st.caption("Este conjunto vive en una dimensión que no se dibuja aquí; las propiedades de arriba sí son válidas.")
+
+
+def _graficas_estructura(o, d):
+    es_pert = isinstance(o, Pertenencia)
+    els = None if es_pert else d.get("elementos")      # en una pertenencia, «elementos» son (punto, posición), no vectores
+    if els:
+        figura(G.fig_puntos_vectores(els, "Puntos y vectores"))
+    if d.get("valores"):
+        figura(G.fig_lista(d["valores"]))
+    S = d.get("conjunto")
+    pts = []
+    if d.get("puntos_1d"):
+        pts = [((x0,), et, "pertenece" if "no pertenece" not in et else "no pertenece") for x0, et, _ in d["puntos_1d"]]
+    if es_pert and d.get("elementos"):
+        pts = [(pt.c, "p", pos) for pt, pos in d["elementos"]]
+    if S is not None and not els:
+        _dibujar_conjunto(S, "est", pts)
+    if d.get("region") is not None and d.get("vars"):
+        vent = ventana_2d("lg")
+        figura(G.fig_region(d["region"].cond, d["vars"][0], d["vars"][1], vent, titulo="Región donde se cumple la proposición"))
+    if d.get("A") is not None and d.get("B") is not None:
+        for nombre, cj in (("A", d["A"]), ("B", d["B"])):
+            st.markdown(f"**Conjunto {nombre}**")
+            _dibujar_conjunto(cj, f"rel_{nombre}")
+
+
+def _probador_de_puntos(S):
+    """Caja para probar un punto: ¿interior, frontera o exterior del conjunto?"""
+    if S == sp.S.Complexes:
+        return
+    dim = dimension_de(S)
+    if dim is None or dim > 3:
+        return
+    st.markdown("##### Probar un punto")
+    t = st.text_input(
+        "Punto a clasificar" + (" (un número)" if dim == 1 else f" ({dim} coordenadas separadas por comas)"),
+        "",
+        key="calc_probar_punto",
+        help="Te digo si es interior, de frontera o exterior al conjunto, y si le pertenece.",
+    )
+    if not t.strip():
+        return
+    pt, err = leer_punto(t, dim)
+    if err:
+        st.error(err)
+        return
+    r = calcular("clasificar_punto", S, Punto(pt), timeout=30)
+    mostrar(r)
+    if not hay_error(r):
+        pos = r["datos"].get("posicion")
+        _dibujar_conjunto(S, "probar", [(tuple(pt), "p", pos)])
+
+
+def seccion_estructura(o, info_):
+    r = calcular("evaluar_estructura", o, timeout=40)
+    mostrar(r)
+    if hay_error(r):
+        return
+    d = r["datos"]
+    try:
+        _graficas_estructura(o, d)
+    except Exception:  # noqa: BLE001
+        st.caption("(No pude dibujar la figura de este caso; el análisis de arriba sigue siendo válido.)")
+    es_conj_valido = (
+        info_["tipo"] == "conjunto"
+        and d.get("conjunto") is not None
+        and not (
+            isinstance(d.get("conjunto"), (int, float))
+            or (getattr(d.get("conjunto"), "is_number", False) and not isinstance(d.get("conjunto"), sp.Set))
+        )
+    )
+    if es_conj_valido:
+        _probador_de_puntos(d["conjunto"])
 
 
 # ==============================================================================
@@ -759,19 +1048,32 @@ def seccion_operacion(obj_, tipo_):
 tipo = info["tipo"]
 st.subheader("2 · Análisis")
 
-if tipo == "constante" and isinstance(obj, sp.Expr):
+if isinstance(obj_original, Pertenencia) or tipo in (
+    "punto", "vector", "lista", "conjunto", "logica", "cuantificada", "argumento", "comparacion", "vectorial"
+):
+    seccion_estructura(obj_original, info)
+elif tipo == "constante" and isinstance(obj, sp.Expr):
     st.latex(sp.latex(obj) + (r"\approx " + sp.latex(sp.N(obj, 12)) if not (obj.is_Integer or obj.is_Float) else ""))
-    st.info("Es un número. Para estudiar sucesiones o series escribe una expresión con la variable **n** "
-            "(por ejemplo `1/n²`), o una función con **x** para analizarla.")
+    st.info(
+        "Es un número. Para estudiar sucesiones o series escribe una expresión con la variable **n** "
+        "(por ejemplo `1/n²`), o una función con **x** para analizarla."
+    )
 elif tipo == "relacion":
     sec_relacion(obj, vs)
 elif tipo == "funcion":
-    if n > 4:
+    if n_vars_entrada > 4:
         st.warning("Con más de 4 variables solo se ofrecen derivadas, gradiente y extremos; las gráficas no están disponibles.")
-    opciones = ["📋 Resumen y dominio"] + (["📈 Análisis completo"] if n == 1 else []) + [
-        "∂ Derivadas", "→ Límites", "🔗 Continuidad", "⛰️ Extremos", "∫ Integrales", "Σ Series y sucesiones",
-        "🧮 Taylor", "🗺️ Niveles y gráficas"]
-    sec = st.radio("¿Qué quieres estudiar?", opciones, horizontal=True, key=f"calc_sec_{n}")
+    opciones = ["📋 Resumen y dominio"] + (["📈 Análisis completo"] if n_vars_entrada == 1 else []) + [
+        "∂ Derivadas",
+        "→ Límites",
+        "🔗 Continuidad",
+        "⛰️ Extremos",
+        "∫ Integrales",
+        "Σ Series y sucesiones",
+        "🧮 Taylor",
+        "🗺️ Niveles y gráficas",
+    ]
+    sec = st.radio("¿Qué quieres estudiar?", opciones, horizontal=True, key=f"calc_sec_{n_vars_entrada}")
     st.divider()
     if sec.startswith("📋"):
         sec_resumen(obj, vs)
