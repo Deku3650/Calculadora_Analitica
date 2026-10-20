@@ -149,34 +149,31 @@ def evaluar_numerico(matriz_sp):
     except Exception:
         return None
 
+import concurrent.futures
 
-def calcular_con_limite(func, args=(), kwargs=None, timeout=5):
+def calcular_con_limite(func, args=(), kwargs=None, timeout=10):
     """
-    Ejecuta una función pesada de SymPy en un proceso separado y lo termina
-    si excede el timeout. Evita que se congele el servidor.
+    Ejecuta una función de SymPy con límite de tiempo usando un hilo trabajador.
+    Evita errores de serialización (PicklingError con lambdas/métodos) y elimina
+    los 5 segundos de penalización por arranque de subprocesos en Streamlit Cloud.
     """
     if kwargs is None:
         kwargs = {}
-    ctx = multiprocessing.get_context("spawn")
-    pool = ctx.Pool(processes=1)
-    resultado_async = pool.apply_async(func, args, kwargs)
-
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    futuro = executor.submit(func, *args, **kwargs)
     try:
-        resultado = resultado_async.get(timeout=timeout)
-        pool.close()
-        pool.join()
-        return resultado
-    except multiprocessing.TimeoutError:
-        pool.terminate()
-        pool.join()
+        return futuro.result(timeout=timeout)
+    except concurrent.futures.TimeoutError:
+        executor.shutdown(wait=False, cancel_futures=True)
         raise TimeoutError(
             "El cálculo matemático superó el tiempo máximo de " + str(timeout) + " segundos. "
             "Simplifique la expresión o evalúela numéricamente."
         )
     except Exception as e:
-        pool.terminate()
-        pool.join()
+        executor.shutdown(wait=False, cancel_futures=True)
         raise e
+    finally:
+        executor.shutdown(wait=False)
 
 
 def parsear_base_matricial(texto: str, dim: int):
