@@ -33,6 +33,8 @@ import itertools
 import math
 import random
 
+import mpmath as mp
+import numpy as np
 import sympy as sp
 from sympy.calculus.singularities import singularities
 from sympy.calculus.util import continuous_domain, function_range, periodicity
@@ -193,7 +195,9 @@ def _desc_lim(v) -> str:
 
 
 def _valor_en(expr, sub: dict):
-    """Valor de expr sustituyendo TODAS las variables A LA VEZ (simultaneous=True)."""
+    """Valor de expr sustituyendo TODAS las variables A LA VEZ (simultaneous=True).
+    Importante: sustituir en secuencia daría 0 para xy/(x²+y²) en el origen (0·y/y² = 0), cuando en
+    realidad es 0/0."""
     try:
         v = expr.subs(sub, simultaneous=True) if len(sub) > 1 else expr.subs(sub)
         return v
@@ -277,8 +281,8 @@ def _cortes_piecewise(expr, x) -> set:
                 sol = sp.solveset(nodo.args[0], x, sp.S.Reals)
                 if isinstance(sol, sp.FiniteSet):
                     pts |= set(sol)
-            except Exception:  # noqa: BLE001
-                pass
+                except Exception:  # noqa: BLE001
+                    pass
     return pts
 
 
@@ -323,7 +327,11 @@ def condiciones_dominio(expr) -> list[tuple]:
         elif isinstance(n, (sp.coth, sp.csch)):
             add(sp.Ne(n.args[0], 0), "la cotangente/cosecante hiperbólica no existe en 0")
         elif isinstance(n, sp.factorial):
-            add(sp.Ge(n.args[0], 0), "el factorial exige un argumento no negativo")
+            # x! = Γ(x+1): existe para todo real MENOS los enteros negativos (polos de la función gamma)
+            a_ = n.args[0]
+            add(sp.Or(sp.Ge(a_, 0), sp.Ne(sp.sin(sp.pi * a_), 0)),
+                "el factorial x! = Γ(x+1) existe para todo real excepto los enteros negativos (−1, −2, −3, …)")
+    # una condición «≠ 0» sobra si ya hay «> 0» sobre la misma expresión (la implica)
     estrictas = {sp.srepr(r.lhs) for r, _ in conds if isinstance(r, sp.StrictGreaterThan) and r.rhs == 0}
     conds = [(r, t) for r, t in conds
              if not (isinstance(r, sp.Ne) and r.rhs == 0 and sp.srepr(r.lhs) in estrictas)]
@@ -354,7 +362,16 @@ def dominio(expr, x=None):
             if dom == sp.S.EmptySet:
                 b.append(ER("La función no está definida para NINGÚN número real: revisa la expresión."))
         except Exception:  # noqa: BLE001
-            b.append(IN("No pude expresar el dominio como conjunto; usa las condiciones de arriba."))
+            # x! = Γ(x+1): si lo único que restringe son los factoriales de x, el dominio es ℝ sin los enteros negativos
+            solo_factorial = (expr.has(sp.factorial) and all(f_.args[0] == x for f_ in expr.atoms(sp.factorial))
+                              and all(("factorial" in txt_) or any(isinstance(t, sp.factorial) for t in sp.preorder_traversal(rel))
+                                      for rel, txt_ in conds))
+            if solo_factorial:
+                dom = sp.Complement(sp.S.Reals, sp.Range(-sp.oo, 0))
+                datos["dominio"] = dom
+                b += [H("Dominio"), L(r"\operatorname{Dom}(f)=\mathbb{R}\setminus\{-1,-2,-3,\ldots\}")]
+            else:
+                b.append(IN("No pude expresar el dominio como conjunto; usa las condiciones de arriba."))
         try:
             rango = function_range(expr, x, datos.get("dominio", sp.S.Reals))
             if rango.has(sp.Intersection) or rango.has(sp.ImageSet):
@@ -447,7 +464,7 @@ def _candidatos(expr, x, dom=None):
         pass
     try:
         sing = singularities(expr, x)
-        if isinstance(sing, sp.FiniteSet):
+        if isinstance(sing, sp.FiniteSet):          # los conjuntos infinitos NO se recorren (no terminaría)
             cand |= set(sing)
     except Exception:  # noqa: BLE001
         pass
@@ -598,7 +615,7 @@ def monotonia_extremos(expr, x):
     if sing:
         b.append(T("Donde $f'$ no existe pero $f$ sí:  " + ", ".join(f"$x={sp.latex(c)}$" for c in sing)))
 
-    # Cortar también por asíntotas/huecos del dominio para que cada intervalo sea continuo
+    # Cortar también por huecos del dominio para que cada intervalo sea continuo
     cortes_totales = sorted(set(puntos) | set(huecos_dom), key=lambda p: _flt(p))
     rangos = _intervalos(cortes_totales)
     filas = []
@@ -905,6 +922,7 @@ def limite_1d(expr, x, a, direccion="+-"):
     filas = _tabla_aproximacion(expr, x, a, d)
     if filas:
         b += [H("Comprobación numérica"), TAB(["acercamiento", "x", "f(x)"], filas)]
+        # validar el resultado simbólico contra el numérico (red de seguridad)
         try:
             ult = [f for f in filas if f[1] != "no definido"]
             if ult and final is not None and _clase(final) == "fin":
@@ -1144,7 +1162,6 @@ def gradiente_hessiana(expr, vars_, punto=None):
 
 def _clasificar_hessiana(hp, n) -> list:
     """Bloques con la clasificación de una Hessiana evaluada (valores propios + menores principales)."""
-    import numpy as np
     out = []
     try:
         ev = np.linalg.eigvalsh(np.array(hp.evalf(), dtype=float))
@@ -1367,7 +1384,6 @@ def _caminos(n):
 
 def _muestreo_numerico(expr, vars_, punto, L0):
     """Máxima desviación |f - L| en puntos aleatorios a distancias 1e-3, 1e-5, 1e-7 (mpmath, 40 dígitos)."""
-    import mpmath as mp
     mp.mp.dps = 40
     try:
         f = sp.lambdify(vars_, expr, "mpmath")
@@ -1405,6 +1421,7 @@ def _limite_multi_core(expr, vars_, punto):
     b = []
     p = list(punto)
     sin_trozos = not expr.has(sp.Piecewise, sp.floor, sp.ceiling, sp.sign)
+    # x**y con base y exponente variables: SymPy evalúa 0**0 = 1, pero la función NO es continua ahí
     pot_variable = any(isinstance(q, sp.Pow) and q.base.free_symbols and q.exp.free_symbols
                        for q in sp.preorder_traversal(expr))
     b.append(H("Paso 1 · Sustitución directa"))
@@ -1610,7 +1627,6 @@ def extremos_multi(expr, vars_):
     b += [H("Paso 2 · Matriz Hessiana"), L("H_f=" + sp.latex(hess.applyfunc(sp.simplify)))]
     b.append(H("Paso 3 · Clasificación"))
     filas, crit = [], []
-    import numpy as np
     for s in sols:
         pt = [s[v] for v in vars_]
         fp = _en_punto(expr, vars_, pt)
@@ -1720,7 +1736,6 @@ def lagrange(expr, vars_, restricciones):
 # 5. INTEGRALES
 # ==============================================================================
 def _mp_f(expr, var):
-    import mpmath as mp
     mp.mp.dps = 25
     return sp.lambdify(var, expr, "mpmath")
 
@@ -1817,7 +1832,6 @@ def integral_definida(expr, x, a, bb):
         return res(b, valor=total if len(partes) == 1 else sp.oo, converge=False)
     if any(c in ("nd", "osc") for c in clases) or total.has(sp.Integral):
         try:
-            import mpmath as mp
             f = _mp_f(expr, x)
             lo = mp.inf if a == sp.oo else (-mp.inf if a == -sp.oo else mp.mpf(str(sp.N(a, 20))))
             hi = mp.inf if bb == sp.oo else (-mp.inf if bb == -sp.oo else mp.mpf(str(sp.N(bb, 20))))
@@ -1835,8 +1849,8 @@ def integral_definida(expr, x, a, bb):
     b.append(OK(f"**Converge** y vale ${lx(totals)}$" + ("" if totals.is_Integer or totals.is_Float else f"  $\\approx {sp.latex(sp.N(totals, 10))}$")))
     if len(partes) > 1:
         b.append(T("Tramos: " + "; ".join(f"$[{lx(l)},{lx(r)}]$: ${lx(sp.simplify(v))}$" for l, r, v in partes)))
+    # verificación numérica independiente
     try:
-        import mpmath as mp
         f = _mp_f(expr, x)
         lo = mp.inf if a == sp.oo else (-mp.inf if a == -sp.oo else mp.mpf(str(sp.N(a, 20))))
         hi = mp.inf if bb == sp.oo else (-mp.inf if bb == -sp.oo else mp.mpf(str(sp.N(bb, 20))))
@@ -1861,6 +1875,7 @@ def integral_definida(expr, x, a, bb):
 def integral_multiple(expr, limites):
     """
     Integral iterada. limites = [(var, a, b), ...] de ADENTRO hacia AFUERA.
+    Los límites de una integral pueden depender de las variables de las integrales exteriores.
     """
     if not 2 <= len(limites) <= 3:
         raise ErrorCalculo("Se admiten integrales dobles y triples.")
@@ -1868,12 +1883,14 @@ def integral_multiple(expr, limites):
     for i, (v, a, bb) in enumerate(limites):
         interiores = set(vs[:i])
         if (a.free_symbols | bb.free_symbols) & interiores:
-            raise ErrorCalculo(f"Los límites de la integral en ${sp.latex(v)}$ no pueden depender de una variable de una integral "
-                               "INTERIOR; solo pueden depender de las exteriores.")
+            raise ErrorCalculo(
+                "Los límites de la integral en $" + sp.latex(v) + "$ no pueden depender de una variable de una integral "
+                "INTERIOR; solo pueden depender de las exteriores."
+            )
     nombre = {2: "doble", 3: "triple"}[len(limites)]
-    b = [H(f"Integral {nombre}"),
-         L("".join(r"\int_{" + lx(a) + "}^{" + lx(bb) + "}" for v, a, bb in reversed(limites)) + sp.latex(expr)
-           + "".join(r"\,\mathrm{d}" + sp.latex(v) for v in vs))]
+    int_ltx = "".join(r"\int_{" + lx(a) + "}^{" + lx(bb) + "}" for v, a, bb in reversed(limites))
+    dif_ltx = "".join(r"\,\mathrm{d}" + sp.latex(v) for v in vs)
+    b = [H(f"Integral {nombre}"), L(int_ltx + sp.latex(expr) + dif_ltx)]
     if expr == 1:
         b.append(IN("Con integrando 1, esta integral mide el **" + ("área" if len(limites) == 2 else "volumen") + "** de la región."))
     acc = expr
@@ -1881,16 +1898,17 @@ def integral_multiple(expr, limites):
     for v, a, bb in limites:
         acc = sp.integrate(acc, (v, a, bb))
         if acc.has(sp.Integral):
-            b.append(AV(f"SymPy no pudo integrar respecto de ${sp.latex(v)}$ en este paso."))
+            b.append(AV("SymPy no pudo integrar respecto de $" + sp.latex(v) + "$ en este paso."))
             return res(b, valor=None)
         accs = _simplificar(acc)
-        b.append(T(f"Tras integrar en ${sp.latex(v)}$ de ${lx(a)}$ a ${lx(bb)}$:"))
+        b.append(T("Tras integrar en $" + sp.latex(v) + "$ de $" + lx(a) + "$ a $" + lx(bb) + "$:"))
         b.append(L(sp.latex(accs)))
         acc = accs
     if _clase(acc) in ("+oo", "-oo", "zoo"):
         b.append(AV("La integral **diverge**."))
         return res(b, valor=acc, converge=False)
-    b.append(OK(f"**Resultado:** ${lx(acc)}$" + ("" if acc.is_Integer else f" $\\approx {sp.latex(sp.N(acc, 10))}$")))
+    aprox_txt = "" if acc.is_Integer or acc.free_symbols else r" \approx " + sp.latex(sp.N(acc, 10))
+    b.append(OK("**Resultado:** $" + lx(acc) + aprox_txt + "$"))
     if acc.free_symbols:
         b.append(IN("El resultado todavía contiene variables: algún límite dependía de una variable que no se integró."))
     return res(b, valor=acc, converge=True)
@@ -1905,7 +1923,6 @@ def _nn():
 
 def _valores_numericos(a, nn, n0, cuantos):
     """Valores float de a(n) para n=n0..n0+cuantos-1 (None donde no se pueden evaluar)."""
-    import mpmath as mp
     mp.mp.dps = 30
     try:
         f = sp.lambdify(nn, a, "mpmath")
@@ -1945,8 +1962,10 @@ def sucesion(expr, n, n0=1):
     b = [H("Sucesión"), L(r"a_n=" + sp.latex(a) + r",\quad n\ge " + str(n0))]
     primero = a.subs(nn, n0)
     if _clase(primero) != "fin":
-        raise ErrorCalculo(f"El primer término $a_{{{n0}}}$ no está definido (da una división entre cero u otra operación inválida): "
-                           "elige otro valor inicial de n.")
+        raise ErrorCalculo(
+            "El primer término a_" + str(n0) + " no está definido (da una división entre cero u otra operación inválida): "
+            "elige otro valor inicial de n."
+        )
     filas = []
     for k in range(n0, n0 + 10):
         v = a.subs(nn, k)
@@ -1958,9 +1977,9 @@ def sucesion(expr, n, n0=1):
     Lv = _lim_sec(a, nn)
     c = _clase(Lv)
     if c == "fin":
-        b.append(OK(f"$\\lim_{{n\\to\\infty}}a_n={lx(Lv)}$ → la sucesión **converge** a ${lx(Lv)}$."))
+        b.append(OK(r"$\lim_{n\to\infty}a_n=" + lx(Lv) + "$ → la sucesión **converge** a $" + lx(Lv) + "$."))
     elif c in ("+oo", "-oo"):
-        b.append(AV(f"$\\lim a_n={lx(Lv)}$ → la sucesión **diverge** ({'crece' if c == '+oo' else 'decrece'} sin cota)."))
+        b.append(AV(r"$\lim a_n=" + lx(Lv) + "$ → la sucesión **diverge** (" + ("crece" if c == "+oo" else "decrece") + " sin cota)."))
     elif c == "osc":
         b.append(AV("El límite **no existe**: la sucesión **oscila**, así que diverge."))
     else:
@@ -1983,12 +2002,22 @@ def sucesion(expr, n, n0=1):
     tend = _tendencia(nume)
     b.append(L(r"a_{n+1}-a_n=" + sp.latex(d_)))
     if simb:
-        b.append(OK(f"Como $a_{{n+1}}-a_n$ es {'positivo' if 'creciente' in simb and 'no' not in simb[:3] else 'no negativo' if 'creciente' in simb else 'negativo' if 'estrictamente' in simb else 'no positivo'}, "
-                    f"la sucesión es **{simb}** (demostrado)."))
+        signo_txt = (
+            "positivo" if "creciente" in simb and "no" not in simb[:3]
+            else "no negativo" if "creciente" in simb
+            else "negativo" if "estrictamente" in simb
+            else "no positivo"
+        )
+        b.append(OK(f"Como $a_{{n+1}}-a_n$ es {signo_txt}, la sucesión es **{simb}** (demostrado)."))
     elif tend:
-        txt = {"creciente": "estrictamente creciente", "decreciente": "estrictamente decreciente", "constante": "constante",
-               "no decreciente": "creciente (no decreciente)", "no creciente": "decreciente (no creciente)",
-               "no monótona": "no monótona (sube y baja)"}[tend]
+        txt = {
+            "creciente": "estrictamente creciente",
+            "decreciente": "estrictamente decreciente",
+            "constante": "constante",
+            "no decreciente": "creciente (no decreciente)",
+            "no creciente": "decreciente (no creciente)",
+            "no monótona": "no monótona (sube y baja)",
+        }[tend]
         b.append(T(f"En los primeros 300 términos es **{txt}** (evidencia numérica; no es una demostración)."))
     b.append(H("Cotas y tipo"))
     if c == "fin":
@@ -1996,20 +2025,27 @@ def sucesion(expr, n, n0=1):
     elif c in ("+oo", "-oo"):
         b.append(T("**No está acotada** " + ("superiormente." if c == "+oo" else "inferiormente.")))
     if not d_.has(nn):
-        b.append(OK(f"Es una **sucesión aritmética** de diferencia ${lx(d_)}$: $a_n=a_{{{n0}}}+(n-{n0})\\cdot({lx(d_)})$."))
+        b.append(OK("Es una **sucesión aritmética** de diferencia $" + lx(d_) + "$: $a_n=a_{" + str(n0) + "}+(n-" + str(n0) + r")\cdot(" + lx(d_) + ")$."))
     else:
         try:
             r_ = sp.simplify(a.subs(nn, nn + 1) / a)
             if not r_.has(nn) and _clase(r_) == "fin":
-                b.append(OK(f"Es una **sucesión geométrica** de razón ${lx(r_)}$: $a_n=a_{{{n0}}}\\cdot({lx(r_)})^{{n-{n0}}}$."
-                            + (" Converge porque $|r|<1$." if abs(_flt(r_) or 2) < 1 else " No converge a 0 porque $|r|\\ge1$." if abs(_flt(r_) or 0) >= 1 else "")))
+                extra_geo = (
+                    " Converge porque $|r|<1$." if abs(_flt(r_) or 2) < 1
+                    else " No converge a 0 porque $|r|\\ge1$." if abs(_flt(r_) or 0) >= 1
+                    else ""
+                )
+                b.append(OK(
+                    "Es una **sucesión geométrica** de razón $" + lx(r_) + "$: $a_n=a_{" + str(n0) + r"}\cdot(" + lx(r_) + ")^{n-" + str(n0) + "}$." + extra_geo
+                ))
         except Exception:  # noqa: BLE001
             pass
     return res(b, limite=Lv, valores=[v for v in nume[:40]], n0=n0)
 
 
 def _lim_sec(a, nn):
-    """Límite de a_n con respaldo."""
+    """Límite de a_n con respaldo: si SymPy no puede, |a_n|→0 implica a_n→0; si |a_n| no se acerca a 0
+    pero el signo alterna sin parar, la sucesión oscila (no tiene límite)."""
     Lv = lim(a, nn, sp.oo)
     if Lv is not None and _clase(Lv) != "nd":
         return Lv
@@ -2026,7 +2062,6 @@ def _lim_sec(a, nn):
 
 
 def _sumas_parciales(a, nn, n0, cortes):
-    import mpmath as mp
     mp.mp.dps = 30
     f = sp.lambdify(nn, a, "mpmath")
     out, S = [], mp.mpf(0)
@@ -2042,7 +2077,8 @@ def _sumas_parciales(a, nn, n0, cortes):
 
 
 def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
-    """Aplica criterios en orden; devuelve (bloques, veredicto, tipo)."""
+    """Aplica criterios en orden; devuelve (bloques, veredicto, tipo) con
+    veredicto ∈ {'conv','div',None} y tipo ∈ {'absoluta','condicional',None}."""
     b = []
 
     def paso(titulo):
@@ -2053,13 +2089,16 @@ def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
     L1 = _lim_sec(a, nn)
     c1 = _clase(L1)
     if c1 == "fin" and L1 == 0:
-        b.append(T("$\\lim a_n=0$: la condición necesaria **se cumple**, pero **no basta** para concluir convergencia (p. ej. la serie armónica)."))
+        b.append(T(r"$\lim a_n=0$: la condición necesaria **se cumple**, pero **no basta** para concluir convergencia (p. ej. la serie armónica)."))
     elif c1 in ("fin", "+oo", "-oo", "zoo") or (c1 == "osc" and not (L1.min == 0 and L1.max == 0)):
-        b.append(AV(f"$\\lim a_n={_desc_lim(L1).replace('$', '') if c1 != 'fin' else lx(L1)}\\neq 0$ (o no existe) → la serie **DIVERGE** "
-                    "(criterio del término $n$-ésimo: si $a_n\\not\\to0$, $\\sum a_n$ diverge)."))
+        desc_l1 = _desc_lim(L1).replace("$", "") if c1 != "fin" else lx(L1)
+        b.append(AV(
+            r"$\lim a_n=" + desc_l1 + r"\neq 0$ (o no existe) → la serie **DIVERGE** "
+            r"(criterio del término $n$-ésimo: si $a_n\not\to0$, $\sum a_n$ diverge)."
+        ))
         return b, "div", None
     else:
-        b.append(IN("No pude calcular $\\lim a_n$; se continúa con otros criterios."))
+        b.append(IN(r"No pude calcular $\lim a_n$; se continúa con otros criterios."))
 
     # 2) geométrica
     try:
@@ -2068,11 +2107,14 @@ def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
         r_ = None
     if r_ is not None and not r_.has(nn) and _clase(r_) == "fin":
         paso("Criterio 2 · Serie geométrica")
-        b.append(T(f"El cociente $a_{{n+1}}/a_n={lx(r_)}$ es **constante**: es una serie geométrica de razón $r={lx(r_)}$."))
+        b.append(T("El cociente $a_{n+1}/a_n=" + lx(r_) + "$ es **constante**: es una serie geométrica de razón $r=" + lx(r_) + "$."))
         if abs(_flt(r_)) < 1:
-            b.append(OK(f"Como $|r|={lx(abs(r_))}<1$, **CONVERGE** (absolutamente). Suma $=\\dfrac{{a_{{{n0}}}}}{{1-r}}={lx(sp.simplify(a.subs(nn, n0) / (1 - r_)))}$."))
+            suma_geo = lx(sp.simplify(a.subs(nn, n0) / (1 - r_)))
+            b.append(OK(
+                "Como $|r|=" + lx(abs(r_)) + r"<1$, **CONVERGE** (absolutamente). Suma $=\dfrac{a_{" + str(n0) + "}}{1-r}=" + suma_geo + "$."
+            ))
             return b, "conv", "absoluta"
-        b.append(AV(f"Como $|r|={lx(abs(r_))}\\ge1$, **DIVERGE**."))
+        b.append(AV("Como $|r|=" + lx(abs(r_)) + r"\ge1$, **DIVERGE**."))
         return b, "div", None
 
     # 3) p-serie / potencia
@@ -2083,12 +2125,14 @@ def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
     if c_ is not None and not c_.has(nn) and _clase(e_) == "fin" and c_ != 0:
         p_ = -e_
         paso("Criterio 3 · Serie $p$")
-        b.append(T(f"El término es ${lx(sp.simplify(a))}=\\dfrac{{{lx(c_)}}}{{n^{{{lx(p_)}}}}}$: serie $p$ con $p={lx(p_)}$ "
-                   "(converge si $p>1$, diverge si $p\\le1$)."))
+        b.append(T(
+            "El término es $" + lx(sp.simplify(a)) + r"=\dfrac{" + lx(c_) + "}{n^{" + lx(p_) + "}}$: serie $p$ con $p=" + lx(p_) + "$ "
+            r"(converge si $p>1$, diverge si $p\le1$)."
+        ))
         if _flt(p_) > 1:
-            b.append(OK(f"$p={lx(p_)}>1$ → **CONVERGE** (absolutamente)."))
+            b.append(OK("$" + "p=" + lx(p_) + ">1$ → **CONVERGE** (absolutamente)."))
             return b, "conv", "absoluta"
-        b.append(AV(f"$p={lx(p_)}\\le1$ → **DIVERGE**."))
+        b.append(AV("$" + "p=" + lx(p_) + r"\le1$ → **DIVERGE**."))
         return b, "div", None
 
     # 4) alternante (Leibniz)
@@ -2096,23 +2140,26 @@ def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
     if alt:
         bn = sp.simplify(sp.Mul(*[f for f in sp.Mul.make_args(a) if f not in alt]))
         paso("Criterio 4 · Serie alternante (Leibniz)")
-        b.append(T(f"La serie alterna de signo: $a_n=(-1)^{{\\cdots}}\\,b_n$ con $b_n={sp.latex(bn)}$."))
+        b.append(T(r"La serie alterna de signo: $a_n=(-1)^{\cdots}\,b_n$ con $b_n=" + sp.latex(bn) + "$."))
         vals = _valores_numericos(bn, nn, 1, 300)
         positivo = all(v is None or v > 0 for v in vals) and any(v is not None for v in vals)
         tend = _tendencia(vals)
         Lb = lim(bn, nn, sp.oo)
-        b.append(T(f"$b_n>0$: {'sí' if positivo else 'no (revisa)'}; $b_n$ decreciente: "
-                   f"{'sí' if tend in ('decreciente', 'no creciente') else 'no / no se pudo comprobar'}; "
-                   f"$\\lim b_n={_desc_lim(Lb).replace('$', '') if _clase(Lb) != 'fin' else lx(Lb)}$."))
+        desc_lb = _desc_lim(Lb).replace("$", "") if _clase(Lb) != "fin" else lx(Lb)
+        b.append(T(
+            f"$b_n>0$: {'sí' if positivo else 'no (revisa)'}; $b_n$ decreciente: "
+            f"{'sí' if tend in ('decreciente', 'no creciente') else 'no / no se pudo comprobar'}; "
+            r"$\lim b_n=" + desc_lb + "$."
+        ))
         if positivo and tend in ("decreciente", "no creciente") and _clase(Lb) == "fin" and Lb == 0:
             b.append(OK("Se cumplen las tres condiciones de Leibniz → la serie **CONVERGE**."))
             if buscar_absoluta:
                 _, v2, _ = _serie_core(bn, nn, n0, detalle=False, buscar_absoluta=False)
                 if v2 == "conv":
-                    b.append(OK("Además $\\sum |a_n|$ también converge → **converge ABSOLUTAMENTE**."))
+                    b.append(OK(r"Además $\sum |a_n|$ también converge → **converge ABSOLUTAMENTE**."))
                     return b, "conv", "absoluta"
                 if v2 == "div":
-                    b.append(OK("Pero $\\sum |a_n|$ **diverge** → converge solo **CONDICIONALMENTE**."))
+                    b.append(OK(r"Pero $\sum |a_n|$ **diverge** → converge solo **CONDICIONALMENTE**."))
                     return b, "conv", "condicional"
             return b, "conv", None
         b.append(IN("Leibniz no se pudo aplicar o no se cumple; se prueban otros criterios."))
@@ -2126,16 +2173,16 @@ def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
         Lr = None
     cr = _clase(Lr)
     if cr == "fin":
-        b.append(T(f"$\\rho=\\lim\\left|\\dfrac{{a_{{n+1}}}}{{a_n}}\\right|={lx(Lr)}$"))
+        b.append(T(r"$\rho=\lim\left|\dfrac{a_{n+1}}{a_n}\right|=" + lx(Lr) + "$"))
         if _flt(Lr) < 1:
-            b.append(OK("$\\rho<1$ → la serie **CONVERGE ABSOLUTAMENTE**."))
+            b.append(OK(r"$\rho<1$ → la serie **CONVERGE ABSOLUTAMENTE**."))
             return b, "conv", "absoluta"
         if _flt(Lr) > 1:
-            b.append(AV("$\\rho>1$ → la serie **DIVERGE**."))
+            b.append(AV(r"$\rho>1$ → la serie **DIVERGE**."))
             return b, "div", None
-        b.append(IN("$\\rho=1$ → el criterio **no decide**."))
+        b.append(IN(r"$\rho=1$ → el criterio **no decide**."))
     elif cr == "+oo":
-        b.append(AV("$\\rho=\\infty>1$ → la serie **DIVERGE**."))
+        b.append(AV(r"$\rho=\infty>1$ → la serie **DIVERGE**."))
         return b, "div", None
     else:
         b.append(IN("No pude calcular el límite de la razón."))
@@ -2148,7 +2195,7 @@ def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
         Lq = None
     cq = _clase(Lq)
     if cq == "fin":
-        b.append(T(f"$\\lim\\sqrt[n]{{|a_n|}}={lx(Lq)}$"))
+        b.append(T(r"$\lim\sqrt[n]{|a_n|}=" + lx(Lq) + "$"))
         if _flt(Lq) < 1:
             b.append(OK("$<1$ → **CONVERGE ABSOLUTAMENTE**."))
             return b, "conv", "absoluta"
@@ -2160,7 +2207,7 @@ def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
         b.append(IN("No pude calcular este límite."))
 
     # 7) comparación en el límite con una serie p
-    paso("Criterio 7 · Comparación en el límite con $\\sum 1/n^p$")
+    paso(r"Criterio 7 · Comparación en el límite con $\sum 1/n^p$")
     try:
         p_est = -lim(sp.log(sp.Abs(a)) / sp.log(nn), nn, sp.oo)
     except Exception:  # noqa: BLE001
@@ -2169,13 +2216,17 @@ def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
         p_est = sp.nsimplify(p_est)
         K = lim(sp.Abs(a) * nn ** p_est, nn, sp.oo)
         if _clase(K) == "fin" and K > 0:
-            b.append(T(f"Para $n$ grande, $|a_n|$ se parece a $\\dfrac{{{lx(K)}}}{{n^{{{lx(p_est)}}}}}$: "
-                       f"$\\lim |a_n|\\,n^{{{lx(p_est)}}}={lx(K)}\\in(0,\\infty)$."))
+            b.append(T(
+                r"Para $n$ grande, $|a_n|$ se parece a $\dfrac{" + lx(K) + "}{n^{" + lx(p_est) + "}}$: "
+                r"$\lim |a_n|\,n^{" + lx(p_est) + "}=" + lx(K) + r"\in(0,\infty)$."
+            ))
             if _flt(p_est) > 1:
-                b.append(OK(f"Como $\\sum 1/n^{{{lx(p_est)}}}$ converge ($p>1$), la serie **CONVERGE ABSOLUTAMENTE**."))
+                b.append(OK(r"Como $\sum 1/n^{" + lx(p_est) + "}$ converge ($p>1$), la serie **CONVERGE ABSOLUTAMENTE**."))
                 return b, "conv", "absoluta"
-            b.append(AV(f"Como $\\sum 1/n^{{{lx(p_est)}}}$ diverge ($p\\le1$), $\\sum|a_n|$ **diverge**. "
-                        "Si la serie no es de términos positivos, esto no basta para decidir la serie original."))
+            b.append(AV(
+                r"Como $\sum 1/n^{" + lx(p_est) + r"}$ diverge ($p\le1$), $\sum|a_n|$ **diverge**. "
+                "Si la serie no es de términos positivos, esto no basta para decidir la serie original."
+            ))
             if all(v is None or v >= 0 for v in _valores_numericos(a, nn, n0, 200)):
                 return b, "div", None
         else:
@@ -2190,13 +2241,13 @@ def _serie_core(a, nn, n0, detalle=True, buscar_absoluta=True):
         xr = sp.Symbol("x", positive=True)
         fI = a.subs(nn, xr)
         try:
-            I = sp.integrate(fI, (xr, n0, sp.oo))
-            ci = _clase(I)
+            I_val = sp.integrate(fI, (xr, n0, sp.oo))
+            ci = _clase(I_val)
             if ci == "fin":
-                b.append(OK(f"$\\displaystyle\\int_{{{n0}}}^{{\\infty}}f(x)\\,dx={lx(I)}$ **converge** → la serie **CONVERGE**."))
+                b.append(OK(r"$\displaystyle\int_{" + str(n0) + r"}^{\infty}f(x)\,dx=" + lx(I_val) + "$ **converge** → la serie **CONVERGE**."))
                 return b, "conv", "absoluta"
             if ci == "+oo":
-                b.append(AV(f"$\\displaystyle\\int_{{{n0}}}^{{\\infty}}f(x)\\,dx=\\infty$ → la serie **DIVERGE**."))
+                b.append(AV(r"$\displaystyle\int_{" + str(n0) + r"}^{\infty}f(x)\,dx=\infty$ → la serie **DIVERGE**."))
                 return b, "div", None
         except Exception:  # noqa: BLE001
             pass
@@ -2228,7 +2279,7 @@ def serie(expr, n, n0=1):
     b = [H("Serie"), L(r"\sum_{n=" + str(n0) + r"}^{\infty}" + sp.latex(a))]
     primero = a.subs(nn, n0)
     if _clase(primero) != "fin":
-        raise ErrorCalculo(f"El primer término ($n={n0}$) no está definido: elige un valor inicial de $n$ donde la fórmula tenga sentido.")
+        raise ErrorCalculo(f"El primer término (n={n0}) no está definido: elige un valor inicial de n donde la fórmula tenga sentido.")
     bl, v, tipo = _serie_core(a, nn, n0)
     b += bl
     b.append(H("Conclusión"))
@@ -2245,12 +2296,13 @@ def serie(expr, n, n0=1):
             S = sp.summation(a, (nn, n0, sp.oo))
             if not S.has(sp.Sum) and _clase(S) == "fin":
                 suma = sp.simplify(S)
-                b.append(OK(f"**Suma exacta:** $\\sum_{{n={n0}}}^{{\\infty}}a_n={lx(suma)}\\approx{sp.latex(sp.N(suma, 10))}$"))
+                b.append(OK(
+                    r"**Suma exacta:** $\sum_{n=" + str(n0) + r"}^{\infty}a_n=" + lx(suma) + r"\approx" + sp.latex(sp.N(suma, 10)) + "$"
+                ))
         except Exception:  # noqa: BLE001
             pass
         if suma is None and v == "conv":
             try:
-                import mpmath as mp
                 mp.mp.dps = 25
                 f = sp.lambdify(nn, a, "mpmath")
                 val = mp.nsum(f, [n0, mp.inf])
@@ -2276,7 +2328,7 @@ def serie_potencias(expr, n, x, centro=0, n0=0):
     nn = _nn()
     a = expr.subs(n, nn)
     if x not in a.free_symbols:
-        raise ErrorCalculo("Una serie de potencias debe contener la variable $x$ además del índice $n$.")
+        raise ErrorCalculo("Una serie de potencias debe contener la variable x además del índice n.")
     b = [H("Serie de potencias"), L(r"\sum_{n=" + str(n0) + r"}^{\infty}" + sp.latex(a))]
     b.append(H("Radio de convergencia (criterio de la razón)"))
     try:
@@ -2291,33 +2343,41 @@ def serie_potencias(expr, n, x, centro=0, n0=0):
     if Lx is None:
         b.append(AV("No pude calcular el límite de la razón ni de la raíz; no se pudo determinar el radio."))
         return res(b)
-    b.append(L(r"\lim_{n\to\infty}\left|\frac{a_{n+1}}{a_n}\right|=" + sp.latex(Lx) if usado == "razón"
-               else r"\lim_{n\to\infty}\sqrt[n]{|a_n|}=" + sp.latex(Lx)))
+    b.append(L(
+        r"\lim_{n\to\infty}\left|\frac{a_{n+1}}{a_n}\right|=" + sp.latex(Lx) if usado == "razón"
+        else r"\lim_{n\to\infty}\sqrt[n]{|a_n|}=" + sp.latex(Lx)
+    ))
     if Lx == 0:
-        b.append(OK("El límite es 0 para todo $x$ → radio $R=\\infty$: la serie **converge para todo real** $x$."))
+        b.append(OK(r"El límite es 0 para todo $x$ → radio $R=\infty$: la serie **converge para todo real** $x$."))
         return res(b, radio=sp.oo, intervalo=sp.S.Reals)
     if Lx.has(sp.oo, sp.zoo):
-        b.append(OK(f"El límite es infinito para $x\\neq {lx(centro)}$ → radio $R=0$: converge **solo en $x={lx(centro)}$**."))
+        b.append(OK("El límite es infinito para $x\\neq " + lx(centro) + "$ → radio $R=0$: converge **solo en $x=" + lx(centro) + "$**."))
         return res(b, radio=sp.Integer(0), intervalo=sp.FiniteSet(centro))
     try:
         sol = sp.solve_univariate_inequality(Lx < 1, x, relational=False, domain=sp.S.Reals)
     except Exception:  # noqa: BLE001
         sol = None
     if not isinstance(sol, sp.Interval):
-        b.append(AV("No pude resolver la desigualdad $\\rho(x)<1$ para encontrar el intervalo."))
+        b.append(AV(r"No pude resolver la desigualdad $\rho(x)<1$ para encontrar el intervalo."))
         return res(b)
     alfa, beta = sol.start, sol.end
     R = sp.simplify((beta - alfa) / 2)
     cen = sp.simplify((beta + alfa) / 2)
-    b += [T(f"Convergencia absoluta cuando $\\rho(x)<1$, es decir $x\\in{sp.latex(sol)}$."),
-          OK(f"**Radio de convergencia** $R={lx(R)}$, con centro en $x={lx(cen)}$.")]
+    b += [
+        T(r"Convergencia absoluta cuando $\rho(x)<1$, es decir $x\in" + sp.latex(sol) + "$."),
+        OK("**Radio de convergencia** $R=" + lx(R) + "$, con centro en $x=" + lx(cen) + "$."),
+    ]
     b.append(H("Extremos del intervalo (hay que probarlos uno por uno)"))
     estado = {}
     for nombre, e in (("izquierdo", alfa), ("derecho", beta)):
         ae = a.subs(x, e)
         _, v, tipo = _serie_core(sp.simplify(ae), nn, n0, detalle=False)
-        txt = {"conv": f"**converge**{' (condicionalmente)' if tipo == 'condicional' else ''}", "div": "**diverge**", None: "no pude decidirlo"}[v]
-        b.append(T(f"- En $x={lx(e)}$ ({nombre}): la serie numérica ${sp.latex(sp.simplify(ae))}$ {txt}."))
+        txt = {
+            "conv": "**converge**" + (" (condicionalmente)" if tipo == "condicional" else ""),
+            "div": "**diverge**",
+            None: "no pude decidirlo",
+        }[v]
+        b.append(T("- En $x=" + lx(e) + f"$ ({nombre}): la serie numérica $" + sp.latex(sp.simplify(ae)) + f"$ {txt}."))
         estado[nombre] = v
     cierra_izq, cierra_der = estado["izquierdo"] == "conv", estado["derecho"] == "conv"
     inc_dudoso = None in estado.values()
@@ -2353,7 +2413,7 @@ def _clasificar_cuadrica(expr, vars_, c):
                 if A == C and B == 0:
                     cx, cy = -D / (2 * A), -E / (2 * A)
                     r2 = sp.simplify((D ** 2 + E ** 2) / (4 * A ** 2) - F / A)
-                    return f"una **circunferencia** de centro $({lx(cx)},{lx(cy)})$ y radio ${lx(sp.sqrt(r2))}$"
+                    return "una **circunferencia** de centro $(" + lx(cx) + "," + lx(cy) + ")$ y radio $" + lx(sp.sqrt(r2)) + "$"
                 return "una **elipse**"
             return "el **conjunto vacío** (no hay puntos reales)"
         if Q > 0:
@@ -2368,7 +2428,7 @@ def _clasificar_cuadrica(expr, vars_, c):
             r2 = sp.simplify(sum(l ** 2 for l in lin) / (4 * sq[0] ** 2) - F / sq[0])
             cen = [-l / (2 * sq[0]) for l in lin]
             if r2 > 0:
-                return f"una **esfera** de centro $({','.join(lx(t) for t in cen)})$ y radio ${lx(sp.sqrt(r2))}$"
+                return "una **esfera** de centro $(" + ",".join(lx(t) for t in cen) + ")$ y radio $" + lx(sp.sqrt(r2)) + "$"
             return "un único punto" if r2 == 0 else "el **conjunto vacío**"
         if all(cr == 0 for cr in cruz) and all(s != 0 for s in sq):
             return "una **cuádrica** (elipsoide, hiperboloide…) según los signos"
@@ -2380,17 +2440,23 @@ def niveles(expr, vars_, niveles_):
     """Conjuntos de nivel {f = c}: ecuación, forma despejada y clasificación de cónicas/cuádricas."""
     n = len(vars_)
     nombre = {1: "puntos de nivel", 2: "curvas de nivel", 3: "superficies de nivel"}.get(n, "conjuntos de nivel")
-    b = [H(f"Conjuntos de nivel ({nombre})"),
-         T("El **conjunto de nivel** $c$ de $f$ es $\\{p : f(p)=c\\}$: todos los puntos donde la función vale lo mismo. "
-           + {2: "Son las **curvas de nivel** (como las líneas de un mapa topográfico).",
-              3: "Son **superficies** en el espacio."}.get(n, ""))]
+    b = [
+        H(f"Conjuntos de nivel ({nombre})"),
+        T(
+            r"El **conjunto de nivel** $c$ de $f$ es $\{p : f(p)=c\}$: todos los puntos donde la función vale lo mismo. "
+            + {
+                2: "Son las **curvas de nivel** (como las líneas de un mapa topográfico).",
+                3: "Son **superficies** en el espacio.",
+            }.get(n, "")
+        ),
+    ]
     datos = {"niveles": list(niveles_)}
     for c in niveles_:
-        b.append(H(f"Nivel $c={lx(c)}$"))
+        b.append(H("Nivel $c=" + lx(c) + "$"))
         b.append(L(sp.latex(sp.Eq(expr, c))))
         if n == 1:
             pts, _ = sol_reales(expr - c, vars_[0])
-            b.append(T(("Puntos: " + ", ".join(f"$x={lx(p)}$" for p in pts)) if pts else "No hay puntos reales en este nivel."))
+            b.append(T(("Puntos: " + ", ".join("$x=" + lx(p) + "$" for p in pts)) if pts else "No hay puntos reales en este nivel."))
             continue
         desc = _clasificar_cuadrica(expr, vars_, c)
         if desc:
@@ -2402,11 +2468,13 @@ def niveles(expr, vars_, niveles_):
                 sol = []
             sol = [s for s in sol if s.is_real is not False and not s.has(sp.I)][:3]
             if sol and len(sol) <= 3:
-                b.append(T(f"Despejando ${sp.latex(v)}$: " + "; ".join(f"${sp.latex(v)}={sp.latex(sp.simplify(s))}$" for s in sol)))
+                b.append(T("Despejando $" + sp.latex(v) + "$: " + "; ".join("$" + sp.latex(v) + "=" + sp.latex(sp.simplify(s)) + "$" for s in sol)))
                 break
     if n >= 2:
-        b.append(IN("**Propiedad clave:** el gradiente $\\nabla f$ es **perpendicular** a la curva (superficie) de nivel en cada punto, "
-                    "y apunta hacia donde $f$ crece más rápido. Donde las curvas de nivel están muy juntas, $f$ cambia rápido."))
+        b.append(IN(
+            r"**Propiedad clave:** el gradiente $\nabla f$ es **perpendicular** a la curva (superficie) de nivel en cada punto, "
+            "y apunta hacia donde $f$ crece más rápido. Donde las curvas de nivel están muy juntas, $f$ cambia rápido."
+        ))
     if n == 3:
         b.append(IN("Para verlas, la pestaña de gráficas muestra **cortes** (secciones con $z$ fija) de cada superficie de nivel."))
     return res(b, **datos)
@@ -2421,8 +2489,10 @@ def resolver_relacion(rel):
     if rel in (sp.true, sp.false):
         b = [H("Planteamiento"), L(r"\text{(la relación se simplificó por completo)}")]
     if rel == sp.false:
-        return res(b + [AV("**No tiene solución** en los reales: es una condición **siempre falsa** (por ejemplo, un cuadrado "
-                           "nunca es negativo).")], solucion=sp.S.EmptySet)
+        return res(
+            b + [AV("**No tiene solución** en los reales: es una condición **siempre falsa** (por ejemplo, un cuadrado nunca es negativo).")],
+            solucion=sp.S.EmptySet,
+        )
     if rel == sp.true:
         return res(b + [OK("Se cumple para **todo** valor real: es una condición **siempre verdadera**.")], solucion=sp.S.Reals)
     if n == 0:
@@ -2444,7 +2514,7 @@ def resolver_relacion(rel):
         except Exception:  # noqa: BLE001
             b.append(AV("No pude resolverla de forma exacta."))
             return res(b)
-        b.append(L(f"{sp.latex(x)}\\in {sp.latex(sol)}"))
+        b.append(L(sp.latex(x) + r"\in " + sp.latex(sol)))
         if sol == sp.S.EmptySet:
             b.append(AV("**No tiene solución** en los reales."))
         elif sol == sp.S.Reals:
@@ -2455,14 +2525,14 @@ def resolver_relacion(rel):
     b.append(H("Descripción"))
     if isinstance(rel, sp.Eq):
         g = rel.lhs - rel.rhs
-        b.append(T(f"Es la **curva/superficie de nivel 0** de $g={sp.latex(sp.simplify(g))}$ en ℝ^{n}."))
+        b.append(T("Es la **curva/superficie de nivel 0** de $g=" + sp.latex(sp.simplify(g)) + f"$ en ℝ^{n}."))
         for v in vs[:2]:
             try:
                 sol = [s for s in sp.solve(rel, v) if s.is_real is not False and not s.has(sp.I)][:3]
             except Exception:  # noqa: BLE001
                 sol = []
             if sol:
-                b.append(T(f"Despejando ${sp.latex(v)}$: " + "; ".join(f"${sp.latex(v)}={sp.latex(sp.simplify(s))}$" for s in sol)))
+                b.append(T("Despejando $" + sp.latex(v) + "$: " + "; ".join("$" + sp.latex(v) + "=" + sp.latex(sp.simplify(s)) + "$" for s in sol)))
                 break
         desc = _clasificar_cuadrica(g, vs, 0) if n in (2, 3) else None
         if desc:
@@ -2506,9 +2576,10 @@ def evaluar_operacion(obj):
         if val.has(sp.Sum):
             raise ErrorCalculo("SymPy no encontró una fórmula cerrada para esta suma.")
         val = _simplificar(val)
-        b.append(OK(f"**Resultado:** ${lx(val)}$" + ("" if val.is_Integer or val.free_symbols else f" $\\approx{sp.latex(sp.N(val, 10))}$")))
+        aprox_s = "" if val.is_Integer or val.free_symbols else r" \approx " + sp.latex(sp.N(val, 10))
+        b.append(OK("**Resultado:** $" + lx(val) + aprox_s + "$"))
         if bb.free_symbols:
-            b.append(IN("El resultado es una **fórmula en función de** " + ", ".join(f"${sp.latex(s)}$" for s in bb.free_symbols) + "."))
+            b.append(IN("El resultado es una **fórmula en función de** " + ", ".join("$" + sp.latex(s) + "$" for s in bb.free_symbols) + "."))
         return res(b, valor=val)
     if isinstance(obj, sp.Product):
         k, a, bb = obj.limits[0]
@@ -2521,7 +2592,7 @@ def evaluar_operacion(obj):
             val = sp.product(obj.function, (k, a, bb))
             if val.has(sp.Product):
                 raise ErrorCalculo("SymPy no encontró una fórmula cerrada para este producto.")
-        b.append(OK(f"**Resultado:** ${lx(_simplificar(val))}$"))
+        b.append(OK("**Resultado:** $" + lx(_simplificar(val)) + "$"))
         return res(b, valor=val)
     if isinstance(obj, sp.Derivative):
         return derivar(obj.expr, [(v, c) for v, c in obj.variable_count])
@@ -2536,10 +2607,14 @@ def evaluar_operacion(obj):
 # ==============================================================================
 # 8. EJECUCIÓN SEGURA (proceso aparte con tiempo límite)
 # ==============================================================================
-import atexit as _atexit
-import multiprocessing as _mp
-import os as _os
-import queue as _queue
+# SymPy puede tardar horas (o agotar la memoria) con ciertas expresiones. Para que eso nunca
+# congele la app, cada operación corre en un PROCESO TRABAJADOR persistente (así SymPy ya viene
+# importado y las llamadas siguientes son rápidas). Si se pasa del tiempo, el proceso se mata y
+# se levanta otro; la app solo muestra un aviso.
+import atexit as _atexit  # noqa: E402
+import multiprocessing as _mp  # noqa: E402
+import os as _os  # noqa: E402
+import queue as _queue  # noqa: E402
 
 TIEMPO_POR_DEFECTO = 25                                           # segundos por operación
 LIMITE_MEMORIA_MB = 3072                                          # tope de memoria virtual del trabajador (Linux)
@@ -2573,7 +2648,7 @@ def _bucle_trabajador(conn):
     try:
         import resource
         resource.setrlimit(resource.RLIMIT_AS, (LIMITE_MEMORIA_MB * 1024 * 1024,) * 2)
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  (Windows, macOS o contenedores Linux con cgroups v2)
         pass
     while True:
         try:
@@ -2585,11 +2660,11 @@ def _bucle_trabajador(conn):
         nombre, args, kwargs = msg
         try:
             salida = ("ok", OPERACIONES[nombre](*args, **kwargs))
-        except BaseException as e:  # noqa: BLE001
+        except BaseException as e:  # noqa: BLE001  (incluye MemoryError)
             salida = ("err", f"{type(e).__name__}: {str(e)[:200]}")
         try:
             conn.send(salida)
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001  (resultado no serializable)
             try:
                 conn.send(("err", f"No se pudo devolver el resultado ({type(e).__name__})."))
             except Exception:  # noqa: BLE001
@@ -2600,7 +2675,7 @@ class _Trabajador:
     def __init__(self):
         self.proc = None
         self.conn = None
-        self.respondio = False
+        self.respondio = False                       # ¿ha contestado alguna vez este trabajador?
         self._arrancar()
 
     def _arrancar(self):
@@ -2628,7 +2703,7 @@ class _Trabajador:
         self.conn.send((nombre, args, kwargs))
         if not self.conn.poll(timeout):
             self._matar()
-            self._arrancar()
+            self._arrancar()                       # deja uno nuevo listo (calentándose) para la siguiente
             raise TiempoAgotado()
         try:
             tipo, val = self.conn.recv()
@@ -2637,10 +2712,12 @@ class _Trabajador:
             nunca_respondio = not self.respondio
             self._matar()
             if nunca_respondio:
-                raise ErrorArranque()
+                raise ErrorArranque()                # ni siquiera arrancó: no vale la pena reintentar con procesos
             self._arrancar()
-            raise ErrorCalculo("El proceso de cálculo se cerró inesperadamente (probablemente se agotó la memoria). "
-                               "Prueba con una expresión más sencilla.") from None
+            raise ErrorCalculo(
+                "El proceso de cálculo se cerró inesperadamente (probablemente se agotó la memoria). "
+                "Prueba con una expresión más sencilla."
+            ) from None
         if tipo == "err":
             if val.startswith("MemoryError"):
                 self._matar()
@@ -2675,14 +2752,14 @@ def _obtener_pool():
                     q.put(t)
                 _POOL = q
                 _atexit.register(cerrar_trabajadores)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001  (entorno que no permite crear procesos)
                 _SIN_AISLAMIENTO = True
                 _POOL = None
         return _POOL
 
 
 def precalentar():
-    """Levanta los procesos trabajadores desde ya."""
+    """Levanta los procesos trabajadores desde ya (así la primera operación del usuario no espera el arranque)."""
     return _obtener_pool() is not None
 
 
@@ -2702,7 +2779,7 @@ def ejecutar_seguro(nombre, *args, timeout=TIEMPO_POR_DEFECTO, **kwargs):
         return res([ER(f"Operación desconocida: {nombre}.")])
     t0 = time.time()
     pool = _obtener_pool()
-    if pool is None:
+    if pool is None:                                   # sin procesos: se corre aquí (sin protección contra cuelgues)
         r = OPERACIONES[nombre](*args, **kwargs)
         r.setdefault("datos", {})["_sin_aislamiento"] = True
         return r
@@ -2712,7 +2789,7 @@ def ejecutar_seguro(nombre, *args, timeout=TIEMPO_POR_DEFECTO, **kwargs):
         return res([AV("El servidor está ocupado con otros cálculos. Inténtalo de nuevo en unos segundos.")], ocupado=True)
     try:
         r = trabajador.correr(nombre, args, kwargs, timeout)
-    except ErrorArranque:
+    except ErrorArranque:                      # los procesos no funcionan aquí: se calcula en el mismo proceso
         global _POOL, _SIN_AISLAMIENTO
         _SIN_AISLAMIENTO, _POOL = True, None
         _TRABAJADORES.clear()
@@ -2720,8 +2797,10 @@ def ejecutar_seguro(nombre, *args, timeout=TIEMPO_POR_DEFECTO, **kwargs):
         r.setdefault("datos", {})["_sin_aislamiento"] = True
         return r
     except TiempoAgotado:
-        r = res([AV(f"⏱ Este cálculo tardó más de **{timeout} s** y se canceló para no bloquear la aplicación. "
-                    "Prueba con una expresión más sencilla, otro punto, o un orden menor.")], timeout=True)
+        r = res([AV(
+            f"⏱ Este cálculo tardó más de **{timeout} s** y se canceló para no bloquear la aplicación. "
+            "Prueba con una expresión más sencilla, otro punto, o un orden menor."
+        )], timeout=True)
     except ErrorCalculo as e:
         r = res([ER(str(e))])
     except Exception as e:  # noqa: BLE001
@@ -2730,3 +2809,8 @@ def ejecutar_seguro(nombre, *args, timeout=TIEMPO_POR_DEFECTO, **kwargs):
         pool.put(trabajador)
     r.setdefault("datos", {})["_tiempo"] = round(time.time() - t0, 2)
     return r
+
+
+# Operaciones de puntos, vectores, listas, conjuntos y lógica (se registran en OPERACIONES al importarse).
+# Va al final a propósito: calculo_conjuntos importa de este módulo.
+import calculo_conjuntos  # noqa: E402,F401
