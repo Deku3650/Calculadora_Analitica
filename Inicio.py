@@ -172,15 +172,14 @@ st.write("")
 st.markdown(
     """
     <div class="formal-card">
-        <div class="formal-title">Acerca del Proyecto</div>
+        <div class="formal-title">Acerca de Mathesis</div>
         <p style="margin-bottom: 10px;">
             <strong>MATHESIS</strong> es una herramienta computacional interactiva desarrollada en la
             <strong>Facultad de Ciencias de la Universidad Nacional Autónoma de México (UNAM)</strong>.
         </p>
         <p style="margin-bottom: 0;">
-            Su objetivo es integrar el rigor simbólico de <em>SymPy</em> con la velocidad numérica de <em>NumPy/SciPy</em>
-            y visualizaciones didácticas estilo libro de texto para apoyar las asignaturas de la Licenciatura en Actuaría
-            y carreras afines.
+            Es un entorno computacional interactivo diseñado para facilitar el análisis, la exploración cuantitativa y 
+            la resolución práctica de modelos matemáticos aplicados en <b>Cálculo, Álgebra Lineal, Geometría, Sistemas Dinámicos, Economía y Matemáticas Financieras.
         </p>
     </div>
     """,
