@@ -1,21 +1,19 @@
 # interprete_latex.py
 """
-interprete_latex.py
-===================
 Convierte lo que escribe el teclado (LaTeX) en objetos de SymPy, SIN eval ni
 sympify (no ejecuta código del usuario), y explica en español qué entendió.
 
 Piezas públicas
 ---------------
-latex_a_sympy(latex)        LaTeX -> expresión / operación de SymPy.
+latex_a_sympy(latex)        LaTeX -> expresión / operación de SymPy o estructura.
 ascii_a_sympy(texto)        Texto plano seguro ("pi/2", "-oo", "sqrt(2)") -> SymPy.
 ascii_lista(texto)          "(1, 2, pi)" -> [1, 2, pi]
 leer_en_espanol(obj)        Frase en español con lo que entendió el intérprete.
 clasificar_entrada(obj)     ¿Es una función, un límite, una serie, una ecuación…?
 diagnosticar(obj, latex)    Comprobaciones de sentido: errores, avisos e información.
 
-Operaciones que reconoce (quedan SIN evaluar; las evalúa calculo_motor.py)
--------------------------------------------------------------------------
+Operaciones que reconoce (quedan SIN evaluar; las evalúa calculo_motor.py / calculo_conjuntos.py)
+------------------------------------------------------------------------------------------------
   \\lim_{x\\to a}        sp.Limit            (a^{+}, a^{-} para laterales)
   \\lim_{(x,y)\\to(a,b)}  LimiteMulti
   \\int, \\int_a^b        sp.Integral         (también integrales iteradas)
@@ -31,6 +29,14 @@ import re
 from typing import Any
 
 import sympy as sp
+
+import estructuras as _E
+from estructuras import (
+    ELIPSIS, Angulo, Argumento, Aproximado, Bola, Congruencia, ConjuntoImagen, Cuantificado, Distancia, Divisibilidad,
+    Equivalencia, ErrorEstructura, Espacio, Funcion, Lista, Norma, OpTop, Pertenencia, Punto, ProdPunto, Region, RelConj, Vector,
+    a_conjunto, a_region, complemento, completar_patron, conjunto_nb, coords_de, es_conjunto, es_vectorial, evaluar_nodos,
+    lectura_de, operar_conjuntos, pertenece, producto_cartesiano, variables_por_defecto,
+)
 
 __all__ = [
     "latex_a_sympy", "ascii_a_sympy", "ascii_lista", "leer_en_espanol",
@@ -73,6 +79,7 @@ class Gradiente(sp.Function):
 # ==============================================================================
 _MAX_LONGITUD = 2000
 _MAX_BITS = 200_000        # tope para potencias numéricas (evita 9^(9^9) y similares)
+_MAX_EXP_SIMBOLICO = 10_000
 _MAX_FACTORIAL = 5000
 
 _IGNORAR = {r"\,", r"\;", r"\:", r"\!", r"\ ", r"\quad", r"\qquad", r"\displaystyle", r"\limits", "~"}
@@ -114,26 +121,27 @@ _RELACIONES = {
 }
 _NO_ATOMO = set(_RELACIONES) | {
     r"\cdot", r"\times", r"\div", r"\right", r"\end", r"\to", r"\pm", r"\\", r"\mapsto", r"\mid",
+    r"\land", r"\lor", r"\wedge", r"\vee", r"\lnot", r"\neg", r"\Rightarrow", r"\Leftrightarrow", r"\implies", r"\iff",
+    r"\in", r"\notin", r"\subset", r"\subseteq", r"\supset", r"\supseteq", r"\cup", r"\cap", r"\setminus",
+    r"\therefore", r"\approx", r"\equiv", r"\circ", r"\ldots", r"\cdots", r"\dots", r"\rangle", r"\}", r"\rbrace",
+    r"\pmod", r"\bmod", r"\forall", r"\exists", r"\nexists",
 }
-_MSG_CONJUNTOS = (
-    "Los conjuntos y la notación «tal que» (∣) aún no se evalúan. Para analizar una región o una "
-    "curva escribe directamente la condición, por ejemplo x²+y² ≤ 1."
-)
+_PUNTOS = (r"\ldots", r"\cdots", r"\dots")
 _NO_SOPORTADO = {
-    r"\mathbb": "los conjuntos numéricos (ℝ, ℕ…)",
-    r"\in": "la pertenencia a conjuntos", r"\notin": "la pertenencia a conjuntos",
-    r"\subset": "los conjuntos", r"\subseteq": "los conjuntos", r"\supset": "los conjuntos",
-    r"\supseteq": "los conjuntos", r"\cup": "los conjuntos", r"\cap": "los conjuntos",
-    r"\emptyset": "los conjuntos", r"\setminus": "los conjuntos",
-    r"\land": "los signos lógicos", r"\lor": "los signos lógicos", r"\lnot": "los signos lógicos",
-    r"\Rightarrow": "los signos lógicos", r"\Leftrightarrow": "los signos lógicos",
-    r"\forall": "los cuantificadores", r"\exists": "los cuantificadores", r"\nexists": "los cuantificadores",
-    r"\therefore": "los signos lógicos", r"\langle": "los vectores con ⟨ ⟩", r"\rangle": "los vectores con ⟨ ⟩",
-    r"\ldots": "las listas", r"\vec": "los vectores con flecha", r"\overline": "la barra superior",
-    r"\circ": "la composición de funciones", r"\approx": "las aproximaciones (≈)", r"\equiv": "las congruencias (≡)",
-    r"\prime": "la notación de prima (f′)",
+    r"\vec": "los vectores con flecha (usa ⟨ ⟩ para escribir un vector)",
+    r"\prime": "la prima suelta (escríbela como exponente de una expresión: f′)",
 }
+_ESTRUCT = {"d", "dist", "int", "cl", "Fr", "ext", "diam"}      # \operatorname{…} de estructuras
 _DEG = object()  # marcador: el exponente era un grado (^{\circ})
+_COMPL = object()  # marcador: el exponente era «c» (complemento de un conjunto)
+
+
+class _Primas:
+    """Marcador: el exponente eran k primas (f′, f″…)."""
+    __slots__ = ("k",)
+
+    def __init__(self, k):
+        self.k = k
 
 
 def _tokenizar(s: str) -> list[str]:
@@ -190,11 +198,13 @@ def _es_letra_o_griega(t: str) -> bool:
 
 
 class _Parser:
-    def __init__(self, toks, reales: bool, i_imaginaria: bool, ent=None):
+    def __init__(self, toks, reales: bool, i_imaginaria: bool, ent=None, nat0: bool = False, sin_ev: int = 0):
+        self.sin_ev = sin_ev                          # >0: las relaciones NO se evalúan (se conserva lo que se escribió)
         self.t = toks
         self.p = 0
         self.reales = reales
         self.i_imag = i_imaginaria
+        self.nat0 = nat0                              # ¿ℕ incluye el 0?
         self.abs_plano = 0
         self.ent = ent if ent is not None else {}   # símbolos "especiales" (índices enteros de sumas)
 
@@ -222,7 +232,7 @@ class _Parser:
             )
 
     def _sub(self, tokens: list[str]):
-        return _Parser(tokens, self.reales, self.i_imag, self.ent).completo()
+        return _Parser(tokens, self.reales, self.i_imag, self.ent, self.nat0, self.sin_ev).completo()
 
     def inicia_atomo(self, tok) -> bool:
         if tok is None:
@@ -259,33 +269,303 @@ class _Parser:
     def completo(self):
         if not self.t:
             raise ErrorLatex("No hay nada que interpretar.")
+        d = self._definicion()
+        if d is not None:
+            return d
         val = self.relacion()
+        if self.peek() in (",", r"\therefore"):
+            elems = [val]
+            while self.eat(","):
+                if self.peek() in _PUNTOS:
+                    self.next()
+                    elems.append(ELIPSIS)
+                else:
+                    elems.append(self.relacion())
+            if self.eat(r"\therefore"):
+                concl = self.relacion()
+                if self.peek() is not None:
+                    raise ErrorLatex(f"Hay símbolos que no se pudieron interpretar cerca de «{self.peek()}».")
+                return Argumento([self._bool(e) for e in elems], self._bool(concl))
+            if self.peek() is not None:
+                raise ErrorLatex(f"Hay símbolos que no se pudieron interpretar cerca de «{self.peek()}».")
+            return self._lista_de(elems)
         if self.peek() is not None:
-            if self.peek() == ",":
-                raise ErrorNoSoportado("Las listas y los puntos (a, b) aún no están soportados aquí.")
             raise ErrorLatex(f"Hay símbolos que no se pudieron interpretar cerca de «{self.peek()}».")
         return val
 
+    def _lista_de(self, elems):
+        if any(e is ELIPSIS for e in elems):
+            k = elems.index(ELIPSIS)
+            antes, despues = elems[:k], elems[k + 1:]
+            if ELIPSIS in despues:
+                raise ErrorLatex("Solo se admite un «…» por lista.")
+            return completar_patron(antes, despues)
+        return Lista(elems)
+
+    def _definicion(self):
+        """f(x) = …  /  g(x, y) = …  se leen como la DEFINICIÓN de una función (y no como el producto f·x)."""
+        t = self.t
+        if len(t) < 6 or t[0] not in "fghFGH" or len(t[0]) != 1:
+            return None
+        i = 1
+        if t[i] == r"\left":
+            i += 1
+        if t[i] != "(":
+            return None
+        depth, j = 0, i
+        while j < len(t):
+            if t[j] == "(":
+                depth += 1
+            elif t[j] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        else:
+            return None
+        if j + 1 >= len(t) or t[j + 1] != "=":
+            return None
+        interior = t[i + 1:j]
+        if interior and interior[-1] == r"\right":
+            interior = interior[:-1]
+        trozos = _partir_comas(interior)
+        vars_ = []
+        for tr in trozos:
+            if not tr or not _es_letra_o_griega(tr[0]):
+                return None
+            v = self._sub(tr)
+            if not isinstance(v, sp.Symbol):
+                return None
+            vars_.append(v)
+        cuerpo = self._sub(t[j + 2:])
+        if not isinstance(cuerpo, sp.Expr):
+            raise ErrorLatex("A la derecha de «f(x) =» debe ir la fórmula de la función (una expresión con las variables).")
+        self.p = len(t)
+        return Funcion(t[0], vars_, cuerpo)
+
     def relacion(self):
+        """Nivel superior de una expresión: proposiciones y, con «↦», funciones anónimas."""
+        izq = self.proposicion()
+        if self.peek() == r"\mapsto":
+            self.next()
+            if self.peek() is None:
+                raise ErrorLatex("A la derecha de «↦» debe ir una fórmula (una expresión), por ejemplo x ↦ x².")
+            cuerpo = self.relacion()
+            return self._anonima(izq, cuerpo)
+        return izq
+
+    def _anonima(self, izq, cuerpo):
+        if isinstance(izq, sp.Symbol):
+            vars_ = (izq,)
+        elif isinstance(izq, Punto) and all(isinstance(c, sp.Symbol) for c in izq.c):
+            vars_ = izq.c
+        else:
+            raise ErrorLatex("A la izquierda de «↦» va la variable (x ↦ x²) o varias entre paréntesis ((x, y) ↦ x² + y²).")
+        if not isinstance(cuerpo, sp.Expr):
+            raise ErrorLatex("A la derecha de «↦» debe ir una fórmula (una expresión).")
+        return Funcion(None, vars_, cuerpo)
+
+    def proposicion(self):
+        izq = self.implicacion()
+        while self.peek() in (r"\Leftrightarrow", r"\iff", r"\equiv"):
+            op = self.next()
+            der = self.implicacion()
+            if op == r"\equiv":
+                if self.peek() == r"\pmod":
+                    self.next()
+                    n = self.grupo() if self.peek() == "{" else self.atomo()
+                    izq = Congruencia(izq, der, n)
+                else:
+                    es_bool_izq = isinstance(izq, sp.logic.boolalg.Boolean) and not isinstance(izq, sp.Symbol)
+                    es_bool_der = isinstance(der, sp.logic.boolalg.Boolean) and not isinstance(der, sp.Symbol)
+                    if es_bool_izq or es_bool_der:
+                        izq = Equivalencia(self._bool(izq), self._bool(der))
+                    else:
+                        izq = Equivalencia(izq, der)
+            else:
+                izq = sp.Equivalent(self._bool(izq), self._bool(der))
+        return izq
+
+    def implicacion(self):
+        izq = self.disyuncion()
+        if self.peek() in (r"\Rightarrow", r"\implies"):
+            self.next()
+            der = self.implicacion()
+            return sp.Implies(self._bool(izq), self._bool(der))
+        return izq
+
+    def disyuncion(self):
+        izq = self.conjuncion()
+        while self.peek() in (r"\lor", r"\vee"):
+            self.next()
+            der = self.conjuncion()
+            izq = sp.Or(self._bool(izq), self._bool(der))
+        return izq
+
+    def conjuncion(self):
+        izq = self.negacion()
+        while self.peek() in (r"\land", r"\wedge"):
+            self.next()
+            der = self.negacion()
+            izq = sp.And(self._bool(izq), self._bool(der))
+        return izq
+
+    def negacion(self):
+        if self.peek() in (r"\lnot", r"\neg"):
+            self.next()
+            return sp.Not(self._bool(self.negacion()))
+        if self.peek() in (r"\forall", r"\exists", r"\nexists"):
+            return self.cuantificado()
+        return self.rel()
+
+    def _bool(self, v):
+        """Convierte lo que haya en una proposición de SymPy (o explica por qué no se puede)."""
+        if isinstance(v, bool):
+            return sp.true if v else sp.false
+        if isinstance(v, sp.Symbol):
+            return sp.Symbol(v.name)                    # una letra suelta en lógica = proposición atómica (p, q…)
+        if isinstance(v, sp.logic.boolalg.Boolean):
+            return v
+        if isinstance(v, Divisibilidad):
+            a, b = v.a, v.b
+            if a.is_number and b.is_number and a != 0 and a.is_Integer and b.is_Integer:
+                return sp.true if b % a == 0 else sp.false
+            return sp.Eq(sp.Mod(b, a), 0)
+        if isinstance(v, Congruencia):
+            if v.a.is_number and v.b.is_number and v.n.is_Integer and v.n > 0 and (v.a - v.b).is_Integer:
+                return sp.true if (v.a - v.b) % v.n == 0 else sp.false
+            return sp.Eq(sp.Mod(v.a - v.b, v.n), 0)
+        if isinstance(v, Equivalencia):
+            if isinstance(v.a, sp.logic.boolalg.Boolean) and isinstance(v.b, sp.logic.boolalg.Boolean):
+                return sp.Equivalent(v.a, v.b)
+            return sp.Eq(v.a, v.b)
+        if isinstance(v, Pertenencia):
+            return v.valor()
+        if isinstance(v, (RelConj, Aproximado)):
+            raise ErrorLatex("Las relaciones entre conjuntos (⊂, ⊆, =) y las aproximaciones (≈) no se pueden combinar todavía con "
+                             "∧ ∨ ¬ ⇒ ⇔: evalúalas por separado.")
+        if isinstance(v, Cuantificado):
+            raise ErrorLatex("Un enunciado con ∀ / ∃ no se puede combinar con ∧ ∨ ¬ ⇒ ⇔: escríbelo solo.")
+        raise ErrorLatex("Eso no es una proposición (algo que pueda ser verdadero o falso): por ejemplo «x > 0» o una letra «p».")
+
+    def cuantificado(self):
+        q = {r"\forall": "para_todo", r"\exists": "existe", r"\nexists": "no_existe"}[self.next()]
+        vars_ = []
+        while True:
+            tok = self.peek()
+            if tok is None or not _es_letra_o_griega(tok):
+                raise ErrorLatex("Después de ∀ / ∃ va la variable (por ejemplo ∀x ∈ ℝ: x² ≥ 0).")
+            self.next()
+            nombre = tok[1:] if tok.startswith("\\") else tok
+            vars_.append(self.simbolo(nombre))
+            if not self.eat(","):
+                break
+        dominio = None
+        if self.eat(r"\in"):
+            dominio = self.conjuntos()
+            if not es_conjunto(dominio) and not (isinstance(dominio, Punto) and dominio.ambiguo):
+                raise ErrorLatex("Después de «∈» debe ir un conjunto (por ejemplo ℝ, ℕ, [0, 1]).")
+        if not (self.eat(":") or self.eat(".") or self.eat(r"\mid") or self.eat(",")):
+            if self.peek() is None:
+                raise ErrorLatex("A ∀ / ∃ le falta la condición después de «:».")
+        self.sin_ev += 1
+        try:
+            cuerpo = self.proposicion()
+        finally:
+            self.sin_ev -= 1
+        if isinstance(dominio, Punto):
+            dominio = a_conjunto(dominio)
+        return Cuantificado(q, vars_, dominio, cuerpo if isinstance(cuerpo, Cuantificado) else self._bool(cuerpo))
+
+    def rel(self):
+        izq = self.conjuntos()
+        if self.peek() in _RELACIONES:
+            rels = []
+            while self.peek() in _RELACIONES:
+                op = self.next()
+                der = self.conjuntos()
+                rels.append(self._rel_estandar(op, izq, der))
+                izq = der
+            return rels[0] if len(rels) == 1 else sp.And(*rels)
+        tok = self.peek()
+        if tok == r"\equiv":
+            # Si es una congruencia «a ≡ b (mod n)», se resuelve aquí a nivel de relación;
+            # si no tiene \pmod, se delega a proposicion() para admitir conectivos lógicos a ambos lados.
+            pos_antes = self.p
+            self.next()
+            try:
+                der = self.conjuntos()
+            except ErrorLatex:
+                self.p = pos_antes
+                return izq
+            if self.peek() == r"\pmod":
+                self.next()
+                n = self.grupo() if self.peek() == "{" else self.atomo()
+                return Congruencia(izq, der, n)
+            self.p = pos_antes
+            return izq
+        if tok in (r"\in", r"\notin", r"\subset", r"\subseteq", r"\supset", r"\supseteq", r"\approx", r"\mid"):
+            self.next()
+            der = self.conjuntos()
+            return self._rel_especial(tok, izq, der)
+        return izq
+
+    def _rel_estandar(self, op, a, b):
+        if isinstance(a, sp.Expr) and isinstance(b, sp.Expr):
+            return _RELACIONES[op](a, b, evaluate=False) if self.sin_ev else _RELACIONES[op](a, b)
+        if op in ("=", r"\neq", r"\ne"):
+            igual = op == "="
+            if isinstance(a, sp.Expr) and isinstance(b, sp.FiniteSet):             # x = ±2
+                eqs = [sp.Eq(a, e) for e in b.args]
+                return sp.Or(*eqs) if igual else sp.And(*[sp.Not(e) for e in eqs])
+            if isinstance(a, (Punto, Vector)) and type(a) is type(b):
+                if a.n != b.n:
+                    raise ErrorLatex(f"No se pueden comparar objetos de dimensión {a.n} y {b.n}.")
+                e = sp.And(*[sp.Eq(x, y) for x, y in zip(a.c, b.c)])
+                return e if igual else sp.Not(e)
+            if es_conjunto(a) or es_conjunto(b) or (isinstance(a, Punto) and a.ambiguo) or (isinstance(b, Punto) and b.ambiguo):
+                return RelConj("eq" if igual else "ne", conjunto_nb(a), conjunto_nb(b))
+            if isinstance(a, Lista) and isinstance(b, Lista):
+                return sp.true if a.items == b.items else sp.false
+        raise ErrorLatex("Las comparaciones <, >, ≤, ≥ solo valen entre números; para conjuntos usa ⊂, ⊆, ∈; para puntos usa «=».")
+
+    def _rel_especial(self, op, a, b):
+        if op == r"\in" or op == r"\notin":
+            if not (es_conjunto(b) or (isinstance(b, Punto) and b.ambiguo)):
+                raise ErrorLatex("Después de «∈» debe ir un conjunto (por ejemplo ℝ, ℕ, [0, 1] o una bola).")
+            pert = Pertenencia(a, conjunto_nb(b), negado=(op == r"\notin"))
+            pert.valor()                      # valida ya (dimensiones, ℝ^n sin n concreto…): lanza ErrorEstructura si no tiene sentido
+            return pert
+        if op in (r"\subset", r"\subseteq", r"\supset", r"\supseteq"):
+            clave = {r"\subset": "subset", r"\subseteq": "subseteq", r"\supset": "supset", r"\supseteq": "supseteq"}[op]
+            return RelConj(clave, conjunto_nb(a), conjunto_nb(b))
+        if op == r"\approx":
+            return Aproximado(a, b)
+        if op == r"\mid":
+            return Divisibilidad(a, b)
+        raise ErrorLatex("Relación no reconocida.")
+
+    def conjuntos(self):
         izq = self.suma()
-        rels = []
-        while self.peek() in _RELACIONES:
+        while self.peek() in (r"\cup", r"\cap", r"\setminus"):
             op = self.next()
             der = self.suma()
-            rels.append(_RELACIONES[op](izq, der))
-            izq = der
-        if self.peek() == r"\mid":
-            raise ErrorNoSoportado(_MSG_CONJUNTOS)
-        if not rels:
-            return izq
-        return rels[0] if len(rels) == 1 else sp.And(*rels)
+            izq = operar_conjuntos({r"\cup": "union", r"\cap": "inter", r"\setminus": "dif"}[op], izq, der)
+        return izq
 
     def suma(self):
         val = self.termino()
-        while self.peek() in ("+", "-"):
+        while self.peek() in ("+", "-", r"\pm"):
             op = self.next()
             rhs = self.termino()
-            val = val + rhs if op == "+" else val - rhs
+            if op == "+":
+                val = val + rhs
+            elif op == "-":
+                val = val - rhs
+            else:
+                if not (isinstance(val, sp.Expr) and isinstance(rhs, sp.Expr)):
+                    raise ErrorLatex("El signo ± solo se usa entre números o expresiones (a ± b).")
+                val = sp.FiniteSet(val + rhs, val - rhs)
         return val
 
     def termino(self):
@@ -294,20 +574,53 @@ class _Parser:
             tok = self.peek()
             if tok in ("*", r"\cdot", r"\times"):
                 self.next()
-                val = val * self.unario()
+                val = self._mult(val, self.unario(), tok)
             elif tok in ("/", r"\div"):
                 self.next()
-                val = val / self.unario()
+                rhs = self.unario()
+                val = val / rhs
+            elif tok == r"\circ":
+                self.next()
+                rhs = self.unario()
+                if not (isinstance(val, Funcion) and isinstance(rhs, Funcion)):
+                    raise ErrorLatex("La composición «∘» necesita dos funciones, por ejemplo (x ↦ x²) ∘ (x ↦ x + 1).")
+                val = val.componer(rhs)
             elif self.inicia_atomo(tok):           # multiplicación implícita: 2x, (a)(b), x\sin x
-                val = val * self.potencia()
+                val = self._mult(val, self.potencia(), "implicito")
             else:
                 return val
+
+    def _mult(self, a, b, op):
+        va, vb = es_vectorial(a), es_vectorial(b)
+        if va and vb:
+            if op == r"\cdot":
+                ca, cb = coords_de(a), coords_de(b)
+                if len(ca) != len(cb):
+                    raise ErrorLatex(f"El producto punto necesita vectores de la misma dimensión (hay {len(ca)} y {len(cb)}).")
+                return ProdPunto(sp.Tuple(*ca), sp.Tuple(*cb))
+            if op in (r"\times", "*") and isinstance(a, Vector) and isinstance(b, Vector):
+                return a.cruz(b)
+            raise ErrorLatex("Dos vectores no se multiplican «a secas». Usa «·» para el producto punto o «×» para el producto cruz "
+                             "(solo en ℝ³); los puntos no se multiplican.")
+        if va or vb:
+            return a * b
+        if op in (r"\times", "*") and es_conjunto(a) and es_conjunto(b):
+            return producto_cartesiano(a, b)
+        if op == r"\times" and ((isinstance(a, Punto) and a.ambiguo) or (isinstance(b, Punto) and b.ambiguo)) \
+                and (es_conjunto(a) or es_conjunto(b)):
+            return producto_cartesiano(a_conjunto(a), a_conjunto(b))
+        return a * b
 
     def unario(self):
         if self.eat("-"):
             return -self.unario()
         if self.eat("+"):
             return self.unario()
+        if self.eat(r"\pm"):
+            v = self.unario()
+            if not isinstance(v, sp.Expr):
+                raise ErrorLatex("El signo ± solo se usa delante de un número o una expresión.")
+            return sp.FiniteSet(v, -v)
         return self.potencia()
 
     def potencia(self):
@@ -315,10 +628,30 @@ class _Parser:
         if self.peek() == "^":
             self.next()
             exp = self.exponente()
-            if exp is _DEG:
-                return base * sp.pi / 180
-            return _pot(base, exp)
+            return self._aplicar_exp(base, exp)
         return base
+
+    def _aplicar_exp(self, base, exp):
+        if exp is _DEG:
+            if es_conjunto(base):
+                return OpTop("int", base)
+            if isinstance(base, sp.Expr):
+                return base * sp.pi / 180
+            raise ErrorLatex("El símbolo ° solo se usa sobre un número (grados) o sobre un conjunto (su interior).")
+        if isinstance(exp, _Primas):
+            if not isinstance(base, sp.Expr):
+                raise ErrorLatex("La prima (f′) solo se usa sobre una expresión: derivada respecto de su variable.")
+            libres = sorted((v for v in base.free_symbols if isinstance(v, sp.Symbol)), key=lambda v: v.name)
+            if len(libres) != 1:
+                raise ErrorLatex("La prima (f′) necesita una expresión con UNA sola variable; con varias usa d/dx o ∂/∂x.")
+            return sp.Derivative(base, (libres[0], exp.k))
+        if exp is _COMPL:
+            if es_conjunto(base):
+                return complemento(base)
+            return _pot(base, sp.Symbol("c", real=True))
+        if isinstance(base, (Punto, Vector, Lista)) or es_conjunto(base):
+            raise ErrorLatex("Los puntos, vectores, listas y conjuntos no se elevan a una potencia. (Para la norma al cuadrado: ‖v‖².)")
+        return _pot(base, exp)
 
     def postfijo(self):
         val = self.atomo()
@@ -327,18 +660,49 @@ class _Parser:
             if val.is_Integer and val > _MAX_FACTORIAL:
                 raise ErrorLatex("Ese factorial es demasiado grande para calcularlo aquí.")
             if val.is_Integer and val < 0:
-                raise ErrorLatex(f"El factorial no está definido para enteros negativos (se escribió ({val})!).")
+                raise ErrorLatex(f"({val})! no está definido: x! = Γ(x+1) existe para todo real MENOS los enteros negativos "
+                                 "(−1, −2, −3, …), donde la función gamma tiene polos.")
             val = sp.factorial(val)
         return val
 
+    def _peek_grupo(self):
+        """Tokens dentro del {…} que viene (sin consumirlos), o None."""
+        if self.peek() != "{":
+            return None
+        depth, j = 0, self.p
+        while j < len(self.t):
+            if self.t[j] == "{":
+                depth += 1
+            elif self.t[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    return self.t[self.p + 1:j]
+            j += 1
+        return None
+
     def exponente(self):
-        if self.peek() == "{":
-            if self.peek(1) == r"\circ" and self.peek(2) == "}":
+        cuerpo = self._peek_grupo()
+        if cuerpo is not None:
+            if cuerpo == [r"\circ"]:
                 self.p += 3
                 return _DEG
+            if cuerpo and all(c == r"\prime" for c in cuerpo):
+                self.p += len(cuerpo) + 2
+                return _Primas(len(cuerpo))
+            if cuerpo in (["c"], [r"\complement"]):
+                self.p += 3
+                return _COMPL
             return self.grupo()
         if self.eat(r"\circ"):
             return _DEG
+        if self.peek() == r"\prime":
+            k = 0
+            while self.peek() == r"\prime":
+                self.next()
+                k += 1
+            return _Primas(k)
+        if self.eat(r"\complement"):
+            return _COMPL
         if self.eat("-"):
             return -self.atomo()
         if self.eat("+"):
@@ -397,21 +761,19 @@ class _Parser:
         if tok[0].isdigit() or (tok[0] == "." and len(tok) > 1):
             return sp.Rational(tok) if "." in tok else sp.Integer(tok)
         if len(tok) == 1 and tok.isalpha():
+            if tok in ("B", "S") and self._es_notacion_bola():
+                return self._bola(cerrada=False, esfera=(tok == "S"))
             if tok == "e" and self.peek() != "_" and "e" not in self.ent:
                 return sp.E
             if tok == "i" and self.i_imag and self.peek() != "_" and "i" not in self.ent:
                 return sp.I
             return self.simbolo(tok)
-        if tok == "(":
-            val = self.relacion()
-            if self.peek() == ",":
-                raise ErrorNoSoportado("Las listas y los puntos (a, b) aún no están soportados aquí.")
-            self.expect(")")
-            return val
-        if tok == "[":
-            val = self.relacion()
-            self.expect("]")
-            return val
+        if tok in ("(", "["):
+            items = self._items()
+            cierre = self.next()
+            if cierre not in (")", "]"):
+                raise ErrorLatex(f"Falta cerrar «{tok}».")
+            return self._armar(tok, cierre, items)
         if tok == "{":
             val = self.relacion()
             self.expect("}")
@@ -421,10 +783,291 @@ class _Parser:
             val = self.relacion()
             self.expect("|")
             self.abs_plano -= 1
-            return sp.Abs(val)
+            return _abs(val)
         if tok.startswith("\\"):
             return self.comando(tok)
         raise ErrorLatex(f"No se reconoce el símbolo «{tok}».")
+
+    def _items(self):
+        """Elementos separados por comas (admite «…»); no consume el cierre."""
+        items = []
+        while True:
+            if self.peek() in _PUNTOS:
+                self.next()
+                items.append(ELIPSIS)
+            else:
+                items.append(self.relacion())
+            if not self.eat(","):
+                return items
+
+    def _armar(self, abre, cierre, items):
+        """(a), (a, b, …), [a], [a, b], [a, b), (a, b], [a, b, c, …]."""
+        k = len(items)
+        if ELIPSIS in items:
+            lista = self._lista_de(items)
+            if abre == "(" and lista.simbolica:
+                lista.lectura = "el punto " + lista.txt().replace("[", "(").replace("]", ")")
+            return lista
+        escalares = all(isinstance(i, sp.Expr) for i in items)
+        if (abre, cierre) == ("(", ")"):
+            if k == 1:
+                return items[0]
+            return Punto(items, ambiguo=(k == 2 and escalares and not any(i.free_symbols for i in items)))
+        if (abre, cierre) == ("[", "]"):
+            if k == 1:
+                return items[0]
+            if k == 2 and escalares:
+                return sp.Interval(items[0], items[1])
+            return Lista(items)
+        if (abre, cierre) == ("[", ")") and k == 2 and escalares:
+            return sp.Interval.Ropen(items[0], items[1])
+        if (abre, cierre) == ("(", "]") and k == 2 and escalares:
+            return sp.Interval.Lopen(items[0], items[1])
+        raise ErrorLatex("Esos delimitadores no forman un intervalo válido: con dos números usa [a, b], [a, b), (a, b] o (a, b).")
+
+    def _vector(self, items):
+        if ELIPSIS in items:
+            raise ErrorLatex("Un vector necesita todas sus componentes escritas (no admite «…»).")
+        return Vector(items)
+
+    def _hasta_right(self):
+        """Tokens hasta el \\right que cierra el \\left actual; consume \\right y su delimitador."""
+        depth, j = 1, self.p
+        while j < len(self.t):
+            if self.t[j] == r"\left":
+                depth += 1
+            elif self.t[j] == r"\right":
+                depth -= 1
+                if depth == 0:
+                    toks = self.t[self.p:j]
+                    self.p = j + 2
+                    return toks
+            j += 1
+        raise ErrorLatex("Falta el paréntesis o llave que cierra (\\right).")
+
+    def _hasta_llave(self):
+        """Tokens hasta la \\} que cierra la \\{ actual (sin \\left); consume la \\}."""
+        depth, j = 1, self.p
+        while j < len(self.t):
+            if self.t[j] in (r"\{", r"\lbrace"):
+                depth += 1
+            elif self.t[j] in (r"\}", r"\rbrace"):
+                depth -= 1
+                if depth == 0:
+                    toks = self.t[self.p:j]
+                    self.p = j + 1
+                    return toks
+            j += 1
+        raise ErrorLatex("Falta la llave que cierra el conjunto («}»).")
+
+    def _conjunto_tokens(self, tokens):
+        if not tokens:
+            return sp.S.EmptySet
+        i = _buscar(tokens, r"\mid")
+        if i is None:
+            i = _buscar(tokens, ":")
+        if i is not None:
+            return self._constructor(tokens[:i], tokens[i + 1:])
+        items = []
+        for tr in _partir_comas(tokens):
+            items.append(ELIPSIS if tr and tr[0] in _PUNTOS and len(tr) == 1 else self._sub(tr))
+        return self._finito(items)
+
+    def _finito(self, items):
+        if ELIPSIS in items:
+            lista = self._lista_de(items)
+            if lista.simbolica or lista.abierta:
+                raise ErrorLatex("Un conjunto con «…» necesita un patrón completo con último término (por ejemplo {1, 2, …, 10}).")
+            items = list(lista.items)
+        if all(isinstance(i, sp.Expr) for i in items):
+            return sp.FiniteSet(*items)
+        if all(isinstance(i, (Punto, Vector)) for i in items):
+            pts = [i if isinstance(i, Punto) else Punto(i.c) for i in items]
+            n = pts[0].n
+            if any(q.n != n for q in pts):
+                raise ErrorLatex("Todos los puntos de un conjunto deben tener la misma dimensión.")
+            vs = variables_por_defecto(n)
+            cond = sp.Or(*[sp.And(*[sp.Eq(v, c) for v, c in zip(vs, q.c)]) for q in pts])
+            lect = "el conjunto formado por los puntos " + ", ".join(q.txt() for q in pts)
+            return Region(vs, cond, lect, puntos=pts)
+        raise ErrorLatex("Los elementos de un conjunto deben ser todos números o todos puntos.")
+
+    def _vars_de(self, toks):
+        """[x] ó [x, y] si los tokens son una variable o una tupla de variables; si no, None."""
+        if not toks:
+            return None
+        try:
+            v = self._sub(toks)
+        except ErrorLatex:
+            return None
+        if isinstance(v, sp.Symbol):
+            return [v]
+        if isinstance(v, Punto) and all(isinstance(c, sp.Symbol) for c in v.c):
+            return list(v.c)
+        return None
+
+    def _constructor(self, izq, der):
+        """{ variables ∈ A ∣ condición }   ó   { expresión ∣ n ∈ A }."""
+        self.sin_ev += 1
+        try:
+            conds = [self._bool(self._sub(c)) for c in _partir_comas(der)] if der else []
+        finally:
+            self.sin_ev -= 1
+        cond = sp.And(*conds) if conds else sp.true
+        j = _buscar(izq, r"\in")
+        a_toks, dom_toks = (izq[:j], izq[j + 1:]) if j is not None else (izq, None)
+        dominio = self._sub(dom_toks) if dom_toks else None
+        vars_ = self._vars_de(a_toks)
+        if vars_ is not None:
+            n = len(vars_)
+            total = cond
+            dom1d = None
+            if dominio is not None:
+                if isinstance(dominio, Punto) and dominio.ambiguo:
+                    dominio = a_conjunto(dominio)
+                if not es_conjunto(dominio):
+                    raise ErrorLatex("Después de «∈» debe ir un conjunto (por ejemplo ℝ, ℕ, [0, 1] o ℝ²).")
+                pt = Punto(vars_) if n > 1 else vars_[0]
+                if isinstance(dominio, Espacio):
+                    if dominio.dim is not None and dominio.dim != n:
+                        raise ErrorLatex(f"Declaraste {n} variable(s) pero el conjunto base es ℝ^{dominio.dim}.")
+                else:
+                    total = sp.And(pertenece(pt, dominio), cond)
+                    if n == 1 and isinstance(dominio, sp.Set):
+                        dom1d = dominio
+            desc = ("los números " + vars_[0].name) if n == 1 else "los puntos (" + ", ".join(v.name for v in vars_) + ")"
+            base = f" de {lectura_de(dominio)}" if dominio is not None else ""
+            lect = f"el conjunto de {desc}{base} que cumplen: {lectura_de(cond)}" if conds else f"el conjunto de {desc}{base}"
+            return Region(vars_, total, lect, dominio=dom1d)
+        # conjunto imagen: { 2n ∣ n ∈ ℤ }
+        expr = self._sub(a_toks)
+        if not isinstance(expr, sp.Expr) or not expr.free_symbols:
+            raise ErrorLatex("A la izquierda de «∣» debe ir la variable (x), varias ((x, y)) o una expresión con su variable ({2n ∣ n ∈ ℤ}).")
+        libres = sorted((v for v in expr.free_symbols if isinstance(v, sp.Symbol)), key=lambda v: v.name)
+        if len(libres) != 1:
+            raise ErrorLatex("Un conjunto de valores {expresión ∣ …} admite una sola variable.")
+        var = libres[0]
+        base, resto = sp.S.Reals, []
+        for atomo in (cond.args if isinstance(cond, sp.And) else [cond]):
+            if isinstance(atomo, sp.Contains) and atomo.args[0] == var:
+                base = atomo.args[1]
+            else:
+                resto.append(atomo)
+        return ConjuntoImagen(expr, var, base, sp.And(*resto) if resto else None)
+
+    def _conj_numerico(self):
+        letra = self.grupo_texto()
+        base = {"R": sp.S.Reals, "N": sp.S.Naturals0 if self.nat0 else sp.S.Naturals, "Z": sp.S.Integers,
+                "Q": sp.S.Rationals, "C": sp.S.Complexes}.get(letra)
+        if base is None:
+            raise ErrorLatex(f"No reconozco el conjunto «\\mathbb{{{letra}}}»: usa R, N, Z, Q o C.")
+        if self.peek() != "^":
+            return base
+        self.next()
+        exp = self._peek_grupo()
+        if exp is None:
+            exp = [self.next()]
+        else:
+            self.p += len(exp) + 2
+        if exp == ["+"]:
+            if letra != "R":
+                raise ErrorLatex("Solo ℝ⁺ (reales positivos) está soportado con el signo +.")
+            return sp.Interval.open(0, sp.oo)
+        if exp in (["*"], [r"\times"]):
+            if letra == "R":
+                return sp.Union(sp.Interval.open(-sp.oo, 0), sp.Interval.open(0, sp.oo))
+            if letra == "Z":
+                return sp.Complement(sp.S.Integers, sp.FiniteSet(0))
+            raise ErrorLatex("El asterisco (sin el cero) solo está soportado para ℝ* y ℤ*.")
+        if letra != "R":
+            raise ErrorLatex("Solo se puede elevar ℝ a una dimensión (ℝ², ℝ³, ℝⁿ).")
+        val = self._sub(exp)
+        if isinstance(val, sp.Integer) and val >= 1:
+            return Espacio(int(val)) if val != 1 else sp.S.Reals
+        if isinstance(val, sp.Symbol):
+            return Espacio(val)
+        raise ErrorLatex("El exponente de ℝ debe ser la dimensión: un entero positivo (ℝ²) o una letra (ℝⁿ).")
+
+    def _barra(self):
+        if self.peek() != "{":
+            raise ErrorLatex("La barra superior va sobre algo entre llaves: \\overline{B}_r(p) (bola cerrada) o \\overline{A} (cerradura).")
+        toks = self.grupo_tokens()
+        if toks == ["B"] and self._es_notacion_bola():
+            return self._bola(cerrada=True)
+        val = self._sub(toks)
+        if isinstance(val, Punto) and val.ambiguo:
+            val = a_conjunto(val)
+        if es_conjunto(val):
+            return OpTop("cl", val)
+        raise ErrorLatex("La barra superior solo se entiende como cerradura de un conjunto o como bola cerrada \\overline{B}_r(p).")
+
+    def _es_notacion_bola(self):
+        """¿Lo que sigue a la «B» es B_{r}(p)  ó  B(p, r)?"""
+        t, p = self.t, self.p
+
+        def abre_paren(i):
+            return i < len(t) and (t[i] == "(" or (t[i] == r"\left" and i + 1 < len(t) and t[i + 1] == "("))
+
+        if p < len(t) and t[p] == "_":
+            j = p + 1
+            if j < len(t) and t[j] == "{":
+                depth = 0
+                while j < len(t):
+                    if t[j] == "{":
+                        depth += 1
+                    elif t[j] == "}":
+                        depth -= 1
+                        if depth == 0:
+                            break
+                    j += 1
+                j += 1
+            else:
+                j += 1
+            return abre_paren(j)
+        if abre_paren(p):
+            i = p + (2 if t[p] == r"\left" else 1)
+            depth, comas = 1, 0
+            while i < len(t) and depth > 0:
+                if t[i] in ("(", "[", "{"):
+                    depth += 1
+                elif t[i] in (")", "]", "}"):
+                    depth -= 1
+                elif t[i] == "," and depth == 1:
+                    comas += 1
+                i += 1
+            return depth == 0 and comas == 1
+        return False
+
+    def _bola(self, cerrada, esfera=False):
+        if self.peek() == "_":
+            self.next()
+            r = self._sub(self._tokens_arg())
+            centro = self.atomo()
+        else:
+            if self.eat(r"\left"):
+                self.expect("(")
+                items = self._items()
+                self.expect(r"\right")
+                self.expect(")")
+            else:
+                self.expect("(")
+                items = self._items()
+                self.expect(")")
+            if len(items) != 2:
+                raise ErrorLatex("Una bola se escribe B(centro, radio) o B_r(centro).")
+            centro, r = items
+        if isinstance(centro, Vector):
+            centro = Punto(centro.c)
+        if not isinstance(r, sp.Expr):
+            raise ErrorLatex("El radio de una bola debe ser un número.")
+        if r.is_number and r.is_real and r < 0:
+            raise ErrorLatex(f"Un radio negativo (r = {sp.sstr(r)}) no tiene sentido: el radio de una bola es un número positivo.")
+        if isinstance(centro, sp.Expr) or (isinstance(centro, Punto) and centro.n == 1):
+            c = centro if isinstance(centro, sp.Expr) else centro.c[0]
+            if esfera:
+                return sp.FiniteSet(c - r, c + r)
+            return sp.Interval(c - r, c + r) if cerrada else sp.Interval.open(c - r, c + r)
+        return Bola(centro, r, cerrada=cerrada, esfera=esfera)
 
     def operando(self, de_quien: str):
         sig = self.peek()
@@ -434,6 +1077,22 @@ class _Parser:
 
     def comando(self, tok: str):
         nombre = tok[1:]
+        if tok == r"\langle":
+            items = self._items()
+            self.expect(r"\rangle")
+            return self._vector(items)
+        if tok in (r"\{", r"\lbrace"):
+            return self._conjunto_tokens(self._hasta_llave())
+        if tok == r"\mathbb":
+            return self._conj_numerico()
+        if tok in (r"\emptyset", r"\varnothing"):
+            return sp.S.EmptySet
+        if tok == r"\complement":
+            return complemento(self._como_conjunto(self.potencia()))
+        if tok == r"\overline":
+            return self._barra()
+        if tok == r"\partial":
+            return OpTop("Fr", self._como_conjunto(self.potencia(), "La frontera (∂)"))
         if tok == r"\pi":
             return sp.pi
         if tok == r"\infty":
@@ -475,7 +1134,7 @@ class _Parser:
                 return sp.E
             if txt == "i":
                 return sp.I
-            if txt in _FUNCIONES or txt in _MULTI or txt == "log":
+            if txt in _FUNCIONES or txt in _MULTI or txt == "log" or txt in _ESTRUCT:
                 return self.funcion(txt)
             raise ErrorLatex(f"No se reconoce «{txt}».")
         if tok == r"\operatorname":
@@ -483,7 +1142,8 @@ class _Parser:
         if nombre in _FUNCIONES or nombre in _MULTI or nombre == "log":
             return self.funcion(nombre)
         if tok == r"\mid":
-            raise ErrorNoSoportado(_MSG_CONJUNTOS)
+            raise ErrorLatex("El símbolo ∣ va entre dos expresiones (a ∣ b: «a divide a b») o dentro de llaves {x ∣ condición}; "
+                             "aquí falta algo antes de él.")
         if tok in _NO_SOPORTADO:
             raise ErrorNoSoportado(f"El intérprete aún no evalúa {_NO_SOPORTADO[tok]}; la tecla escribe, pero el cálculo no existe todavía.")
         if tok == r"\{":
@@ -746,30 +1406,47 @@ class _Parser:
         return sp.Integral(f, (var, self._sub(inf), self._sub(sup)))
 
     # -- delimitadores, funciones y entornos --------------------------------
+    def _cerrar_right(self):
+        self.expect(r"\right")
+        return self.next()
+
     def delimitado(self):
         d = self.next()
-        interior = self.relacion()
-        if self.peek() == ",":
-            raise ErrorNoSoportado("Las listas y los puntos (a, b) aún no están soportados aquí.")
-        self.expect(r"\right")
-        self.next()  # delimitador de cierre (no se valida: se acepta con tolerancia)
-        if d in ("(", "[", r"\{", ".", r"\lbrace"):
-            return interior
+        if d in (r"\{", r"\lbrace"):
+            return self._conjunto_tokens(self._hasta_right())
         if d in ("|", r"\vert", r"\lvert"):
-            return sp.Abs(interior)
-        if d == r"\lfloor":
-            return sp.floor(interior)
-        if d == r"\lceil":
-            return sp.ceiling(interior)
+            val = self.relacion()
+            self._cerrar_right()
+            return _abs(val)
         if d in (r"\Vert", r"\|", r"\lVert"):
-            raise ErrorNoSoportado("La norma ‖·‖ de vectores aún no está soportada (para un número usa |x|).")
+            val = self.relacion()
+            self._cerrar_right()
+            return _norma(val)
+        if d in (r"\lfloor", r"\lceil"):
+            val = self.relacion()
+            self._cerrar_right()
+            if not isinstance(val, sp.Expr):
+                raise ErrorLatex("La parte entera (⌊ ⌋, ⌈ ⌉) se aplica a un número o expresión.")
+            return sp.floor(val) if d == r"\lfloor" else sp.ceiling(val)
+        if d == r"\langle":
+            items = self._items()
+            self._cerrar_right()
+            return self._vector(items)
+        if d == ".":
+            val = self.relacion()
+            self._cerrar_right()
+            return val
+        if d in ("(", "["):
+            items = self._items()
+            cierre = self._cerrar_right()
+            return self._armar(d, cierre, items)
         raise ErrorLatex(f"Delimitador no reconocido: «{d}».")
 
     def _argumento_sin_parentesis(self):
-        """Evalúa el argumento de \\sin 2x o \\cos -x agrupando monomios simples."""
+        """Evalúa el argumento de \\sin 2x o \\cos -x agrupando factores monómicos simples."""
         val = self.unario()
         while self._es_factor_monomio(self.peek()):
-            val = val * self.potencia()
+            val = self._mult(val, self.potencia(), "implicito")
         return val
 
     def argumentos(self) -> list:
@@ -794,7 +1471,28 @@ class _Parser:
             args.append(self.relacion())
         return args
 
+    def _como_conjunto(self, v, que="La operación"):
+        if isinstance(v, Punto) and v.ambiguo:
+            return a_conjunto(v)
+        if es_conjunto(v):
+            return v
+        raise ErrorLatex(f"{que} se aplica a un conjunto (un intervalo, una bola, {{x ∣ …}}…).")
+
+    def _estruct(self, nombre, args):
+        if nombre in ("d", "dist"):
+            if len(args) != 2:
+                raise ErrorLatex("La distancia d(p, q) necesita dos puntos.")
+            a, b = coords_de(args[0]), coords_de(args[1])
+            if len(a) != len(b):
+                raise ErrorLatex(f"La distancia necesita puntos de la misma dimensión (hay {len(a)} y {len(b)}).")
+            return Distancia(sp.Tuple(*a), sp.Tuple(*b))
+        if len(args) != 1:
+            raise ErrorLatex(f"«{nombre}» recibe un solo conjunto.")
+        return OpTop(nombre, self._como_conjunto(args[0], f"«{nombre}»"))
+
     def funcion(self, nombre: str):
+        if nombre in _ESTRUCT:
+            return self._estruct(nombre, self.argumentos())
         base_log = None
         if nombre == "log" and self.peek() == "_":
             self.next()
@@ -879,8 +1577,20 @@ class _Parser:
         return sp.Piecewise(*pares)
 
 
+def _norma(v):
+    if isinstance(v, (Punto, Vector)):
+        return Norma(sp.Tuple(*v.c))
+    if isinstance(v, sp.Expr):
+        return sp.Abs(v)
+    raise ErrorLatex("La norma ‖ ‖ se aplica a un vector, un punto o un número.")
+
+
+def _abs(v):
+    return _norma(v) if isinstance(v, (Punto, Vector)) else sp.Abs(v)
+
+
 def _pot(base, exp):
-    """base ** exp con tope para potencias numéricas gigantescas."""
+    """base ** exp con tope para potencias numéricas o simbólicas gigantescas."""
     if getattr(base, "is_Rational", False) and getattr(exp, "is_Rational", False):
         try:
             bits = abs(float(exp)) * math.log2(max(abs(float(base)), 2.0))
@@ -888,10 +1598,16 @@ def _pot(base, exp):
             bits = float("inf")
         if bits > _MAX_BITS:
             raise ErrorLatex("Esa potencia numérica es demasiado grande para calcularla aquí.")
+    elif getattr(exp, "is_Number", False) and getattr(base, "free_symbols", None):
+        try:
+            if abs(float(exp)) > _MAX_EXP_SIMBOLICO:
+                raise ErrorLatex("El exponente es demasiado grande para analizar simbólicamente esta expresión.")
+        except (OverflowError, ValueError, TypeError):
+            raise ErrorLatex("El exponente es demasiado grande para analizar simbólicamente esta expresión.") from None
     return base ** exp
 
 
-def latex_a_sympy(latex: str, *, reales: bool = True, i_imaginaria: bool = False) -> sp.Basic:
+def latex_a_sympy(latex: str, *, reales: bool = True, i_imaginaria: bool = False, naturales_con_cero: bool = False):
     """
     Convierte LaTeX (el que escribe el teclado) en una expresión u operación de SymPy.
 
@@ -902,9 +1618,11 @@ def latex_a_sympy(latex: str, *, reales: bool = True, i_imaginaria: bool = False
     Lanza ErrorLatex (o ErrorNoSoportado) con un mensaje en español si no se puede.
     """
     try:
-        return _Parser(_tokenizar(latex), reales, i_imaginaria).completo()
+        return _Parser(_tokenizar(latex), reales, i_imaginaria, nat0=naturales_con_cero).completo()
     except ErrorLatex:
         raise
+    except ErrorEstructura as e:
+        raise ErrorLatex(str(e)) from None
     except RecursionError:
         raise ErrorLatex("La expresión está demasiado anidada.") from None
     except (NotImplementedError, TypeError, ValueError, ArithmeticError, AttributeError) as e:
@@ -1072,6 +1790,8 @@ _ORDINAL = {4: "cuarta", 5: "quinta", 6: "sexta", 7: "séptima", 8: "octava", 9:
 _REL_TXT = {sp.Eq: "es igual a", sp.Ne: "es distinto de", sp.Lt: "es menor que", sp.Le: "es menor o igual que",
             sp.Gt: "es mayor que", sp.Ge: "es mayor o igual que"}
 
+# niveles: 0 átomo · 1 potencia · 2 función · 3 producto/cociente · 4 suma · 5 operación/relación
+
 
 def _env(txt: str, nivel: int, minimo: int = 1) -> str:
     return f"({txt})" if nivel >= minimo else txt
@@ -1094,7 +1814,7 @@ def _grado_total(t) -> float:
 
 
 def _ordenar_terminos(e) -> list:
-    """Términos de una suma por grado descendente."""
+    """Términos de una suma por grado descendente (SymPy pone el 1 de 1 - x² antes que x²)."""
     base = list(e.as_ordered_terms())
     return sorted(base, key=lambda t: -_grado_total(t))
 
@@ -1107,7 +1827,56 @@ def _v(e) -> tuple[str, int]:
         return str(e), 0
 
 
+def _tup(t, a="(", b=")") -> str:
+    return a + ", ".join(_v(c)[0] for c in t) + b
+
+
+def _v_set(e) -> tuple[str, int]:
+    if e == sp.S.EmptySet:
+        return "el conjunto vacío (∅)", 2
+    nombres = {sp.S.Reals: "los números reales (ℝ)", sp.S.Naturals: "los números naturales (ℕ = 1, 2, 3, …)",
+               sp.S.Naturals0: "los naturales con el cero (ℕ = 0, 1, 2, …)", sp.S.Integers: "los números enteros (ℤ)",
+               sp.S.Rationals: "los números racionales (ℚ)", sp.S.Complexes: "los números complejos (ℂ)"}
+    for k, v in nombres.items():
+        if e == k:
+            return v, 2
+    if isinstance(e, sp.Interval):
+        a, b, li, ld = e.start, e.end, e.left_open, e.right_open
+        if a == -sp.oo and b == sp.oo:
+            return nombres[sp.S.Reals], 2
+        if b == sp.oo:
+            return (f"los números mayores que {_v(a)[0]}" if li else f"los números mayores o iguales que {_v(a)[0]}"), 2
+        if a == -sp.oo:
+            return (f"los números menores que {_v(b)[0]}" if ld else f"los números menores o iguales que {_v(b)[0]}"), 2
+        if li and ld:
+            return f"el intervalo abierto de {_v(a)[0]} a {_v(b)[0]}", 2
+        if not li and not ld:
+            return f"el intervalo cerrado de {_v(a)[0]} a {_v(b)[0]}", 2
+        return (f"el intervalo de {_v(a)[0]} a {_v(b)[0]}, abierto en {_v(a)[0]} y cerrado en {_v(b)[0]}" if li else
+                f"el intervalo de {_v(a)[0]} a {_v(b)[0]}, cerrado en {_v(a)[0]} y abierto en {_v(b)[0]}"), 2
+    if isinstance(e, sp.FiniteSet):
+        el = [_v(x)[0] for x in e.args]
+        if len(el) == 1:
+            return f"el conjunto con el único elemento {el[0]}", 2
+        return "el conjunto con los elementos " + ", ".join(el), 2
+    if isinstance(e, sp.Union):
+        return "la unión de " + " y ".join(_env(*_v_set(t) if isinstance(t, sp.Set) else _v(t), minimo=3) for t in e.args), 2
+    if isinstance(e, sp.Intersection):
+        return "la intersección de " + " y ".join(_v(t)[0] for t in e.args), 2
+    if isinstance(e, sp.Complement):
+        return f"los elementos de {_v(e.args[0])[0]} que no están en {_v(e.args[1])[0]}", 2
+    return str(e), 2
+
+
+def _log(e) -> str:
+    """Hijo de un operador lógico: entre paréntesis si es compuesto."""
+    t, _ = _v(e)
+    return f"({t})" if isinstance(e, (sp.And, sp.Or, sp.Implies, sp.Equivalent)) else t
+
+
 def _v_inner(e) -> tuple[str, int]:
+    if hasattr(e, "lectura") and not isinstance(e, sp.Basic):          # puntos, vectores, listas, bolas, funciones…
+        return e.lectura, (0 if isinstance(e, (Punto, Vector)) else 5)
     if e == sp.true:
         return "una condición siempre verdadera", 5
     if e == sp.false:
@@ -1136,6 +1905,29 @@ def _v_inner(e) -> tuple[str, int]:
         return _nombre_simbolo(e), 0
     if isinstance(e, sp.Tuple):
         return "(" + ", ".join(_v(a)[0] for a in e) + ")", 0
+    if isinstance(e, Norma):
+        return f"la norma del vector {_tup(e.args[0], '⟨', '⟩')}", 2
+    if isinstance(e, ProdPunto):
+        return f"el producto punto de {_tup(e.args[0], '⟨', '⟩')} y {_tup(e.args[1], '⟨', '⟩')}", 3
+    if isinstance(e, Distancia):
+        return f"la distancia entre los puntos {_tup(e.args[0])} y {_tup(e.args[1])}", 2
+    if isinstance(e, Angulo):
+        return f"el ángulo entre los vectores {_tup(e.args[0], '⟨', '⟩')} y {_tup(e.args[1], '⟨', '⟩')}", 2
+    if isinstance(e, sp.Set):
+        return _v_set(e)
+    if isinstance(e, sp.Contains):
+        return f"{_v(e.args[0])[0]} pertenece a {_v(e.args[1])[0]}", 5
+    if isinstance(e, sp.Not):
+        a0 = e.args[0]
+        return (f"no {_v(a0)[0]}" if isinstance(a0, sp.Symbol) else f"no se cumple que {_v(a0)[0]}"), 5
+    if isinstance(e, sp.Implies):
+        return f"si {_log(e.args[0])}, entonces {_log(e.args[1])}", 5
+    if isinstance(e, sp.Equivalent):
+        return " si y solo si ".join(_log(a) for a in e.args), 5
+    if isinstance(e, sp.And) and all(isinstance(a, sp.Symbol) or isinstance(a, (sp.Not, sp.Or, sp.Implies, sp.Equivalent)) for a in e.args):
+        return " y ".join(_log(a) for a in e.args), 5
+    if isinstance(e, sp.Or):
+        return " o ".join(_log(a) for a in e.args), 5
 
     # ---- operaciones de cálculo ----
     if isinstance(e, sp.Limit):
@@ -1150,15 +1942,15 @@ def _v_inner(e) -> tuple[str, int]:
     if isinstance(e, Gradiente):
         return f"el gradiente de {_env(*_v(e.args[0]), minimo=3)}", 5
     if isinstance(e, sp.Integral):
-        lim = list(e.limits)
+        limites_op = list(e.limits)
         f = _env(*_v(e.function), minimo=3)
-        if len(lim) == 1 and len(lim[0]) == 1:
-            return f"la integral indefinida de {f} respecto de {_v(lim[0][0])[0]}", 5
-        if len(lim) == 1:
-            v, a, b = lim[0]
+        if len(limites_op) == 1 and len(limites_op[0]) == 1:
+            return f"la integral indefinida de {f} respecto de {_v(limites_op[0][0])[0]}", 5
+        if len(limites_op) == 1:
+            v, a, b = limites_op[0]
             return (f"la integral definida de {f} respecto de {_v(v)[0]}, desde {_v(a)[0]} hasta {_v(b)[0]}", 5)
         partes = []
-        for l in lim:
+        for l in limites_op:
             if len(l) == 3:
                 partes.append(f"{_v(l[0])[0]} de {_v(l[1])[0]} a {_v(l[2])[0]}")
             else:
@@ -1206,7 +1998,10 @@ def _v_inner(e) -> tuple[str, int]:
     if isinstance(e, sp.log):
         return f"logaritmo natural de {_env(*_v(e.args[0]))}", 2
     if isinstance(e, sp.factorial):
-        return f"{_env(*_v(e.args[0]))} factorial", 2
+        a0 = e.args[0]
+        if a0.is_number and not a0.is_Integer:
+            return f"el factorial generalizado (con la función gamma) de {_env(*_v(a0))}", 2
+        return f"{_env(*_v(a0))} factorial", 2
     if isinstance(e, sp.binomial):
         return f"el coeficiente binomial de {_v(e.args[0])[0]} sobre {_v(e.args[1])[0]}", 2
     if isinstance(e, (sp.Max, sp.Min)):
@@ -1237,6 +2032,7 @@ def _v_inner(e) -> tuple[str, int]:
     if e.is_Mul or e.is_Pow:
         num, den = sp.fraction(e)
         if den != 1:
+            # logaritmo en otra base: log(a)/log(b)
             if isinstance(num, sp.log) and isinstance(den, sp.log) and not den.args[0].free_symbols:
                 return f"logaritmo en base {_v(den.args[0])[0]} de {_env(*_v(num.args[0]))}", 2
             nt, nn = _v(num)
@@ -1275,10 +2071,19 @@ def _v_inner(e) -> tuple[str, int]:
     return str(e), 0
 
 
+def _gramatica(t: str) -> str:
+    """Contracciones del español: «de el» → «del», «a el» → «al»."""
+    return t.replace(" de el ", " del ").replace(" a el ", " al ").replace("(de el ", "(del ")
+
+
+_E.LEER = lambda v: _gramatica(_v(v)[0])           # gancho: las estructuras leen sus conjuntos de SymPy con este verbalizador
+
+
 def leer_en_espanol(obj) -> str:
-    """Frase en español con lo que entendió el intérprete."""
+    """Frase en español con lo que entendió el intérprete. Sin mayúscula inicial: la interfaz
+    la antepone a «Entiendo: …» (así no se convierte una variable «x» o «α» en «X» o «Α»)."""
     txt, _ = _v(obj)
-    return txt + "."
+    return _gramatica(txt) + "."
 
 
 # ==============================================================================
@@ -1329,13 +2134,127 @@ def _describir_funcion(expr, vars_) -> str:
     return "algebraica"
 
 
+def _simbolos_de(obj) -> list:
+    if isinstance(obj, Funcion):
+        return list(obj.vars)
+    if isinstance(obj, Region):
+        return list(obj.vars)
+    if isinstance(obj, (Punto, Vector)):
+        return sorted({v for c in obj.c for v in c.free_symbols if isinstance(v, sp.Symbol)}, key=lambda v: v.name)
+    if isinstance(obj, Lista):
+        return sorted({v for c in obj.items if isinstance(c, sp.Basic) for v in c.free_symbols if isinstance(v, sp.Symbol)},
+                      key=lambda v: v.name)
+    if isinstance(obj, Cuantificado):
+        cuerpo = obj.cuerpo
+        libres = _simbolos_de(cuerpo) if isinstance(cuerpo, Cuantificado) else _variables(cuerpo)
+        return [v for v in libres if v not in obj.vars]
+    if isinstance(obj, sp.Basic):
+        return _variables(obj)
+    return []
+
+
+def _etiqueta_conjunto(obj) -> str:
+    if isinstance(obj, Bola):
+        return ("Esfera" if obj.esfera else "Bola cerrada" if obj.cerrada else "Bola abierta") + f" de ℝ^{obj.n}"
+    if isinstance(obj, Espacio):
+        return f"El espacio ℝ^{texto_valor_corto(obj.n)}"
+    if isinstance(obj, Region):
+        if obj.puntos:
+            return f"Conjunto finito de {len(obj.puntos)} punto(s) de ℝ^{obj.n}"
+        if obj.n == 1:
+            return "Conjunto de números definido por una condición"
+        return f"Región de ℝ^{obj.n} (conjunto definido por una condición)"
+    if isinstance(obj, ConjuntoImagen):
+        return "Conjunto de valores {expresión ∣ …}"
+    if isinstance(obj, OpTop):
+        return "Operación topológica sobre un conjunto"
+    if obj == sp.S.EmptySet:
+        return "Conjunto vacío"
+    nombres = {sp.S.Reals: "Los números reales (ℝ)", sp.S.Naturals: "Los números naturales (ℕ)", sp.S.Naturals0: "Los naturales con el cero (ℕ₀)",
+               sp.S.Integers: "Los números enteros (ℤ)", sp.S.Rationals: "Los números racionales (ℚ)", sp.S.Complexes: "Los números complejos (ℂ)"}
+    for k, v in nombres.items():
+        if obj == k:
+            return v
+    if isinstance(obj, sp.Interval):
+        return "Intervalo de ℝ"
+    if isinstance(obj, sp.Union):
+        return "Unión de conjuntos de ℝ"
+    if isinstance(obj, sp.FiniteSet):
+        return f"Conjunto finito de {len(obj.args)} elemento(s)"
+    return "Conjunto de números"
+
+
+def texto_valor_corto(v) -> str:
+    return _E.texto_valor(v)
+
+
+def _es_logica(obj) -> bool:
+    if not isinstance(obj, sp.logic.boolalg.Boolean) or isinstance(obj, (sp.Symbol, sp.logic.boolalg.BooleanAtom)):
+        return False
+    if isinstance(obj, (sp.Implies, sp.Equivalent, sp.Not)):
+        return True
+    libres = [v for v in obj.free_symbols if isinstance(v, sp.Symbol)]
+    return bool(libres) and all(not v.is_real for v in libres) and not obj.atoms(sp.core.relational.Relational)
+
+
 def clasificar_entrada(obj) -> dict:
-    """Clasifica el objeto de SymPy devuelto por el intérprete."""
-    vars_ = _variables(obj)
+    """
+    ¿Qué es lo que se escribió?  Devuelve un dict con:
+      tipo       funcion | constante | relacion | limite | limite_multi | integral | serie |
+                 suma_finita | producto | derivada | gradiente | compuesta
+      etiqueta   nombre legible ("Función de 2 variables", "Serie infinita"…)
+      variables  lista de símbolos libres (sin los índices/variables ligadas)
+      n          cantidad de variables
+      detalle    texto corto adicional (tipo de función, definida/indefinida, etc.)
+    """
+    vars_ = _simbolos_de(obj)
     n = len(vars_)
     info: dict[str, Any] = {"variables": vars_, "n": n, "detalle": ""}
 
-    if obj in (sp.true, sp.false):
+    if isinstance(obj, Punto):
+        info.update(tipo="punto", etiqueta=f"Punto de ℝ^{obj.n}", detalle=f"{obj.n} coordenadas"
+                    + (" (si se usa como conjunto, es el intervalo abierto)" if obj.ambiguo else ""))
+    elif isinstance(obj, Vector):
+        info.update(tipo="vector", etiqueta=f"Vector de ℝ^{obj.n}", detalle=f"{obj.n} componentes")
+    elif isinstance(obj, Lista):
+        det = ""
+        if obj.patron:
+            det = "progresión aritmética" if obj.patron[0] == "aritmetica" else "progresión geométrica"
+        info.update(tipo="lista", etiqueta=f"Lista de {obj.n} elemento(s)" + (" (sigue indefinidamente)" if obj.abierta else ""), detalle=det)
+    elif isinstance(obj, (Region, Bola, Espacio, ConjuntoImagen, OpTop)) or isinstance(obj, sp.Set):
+        info.update(tipo="conjunto", etiqueta=_etiqueta_conjunto(obj))
+    elif isinstance(obj, Funcion):
+        info.update(tipo="funcion", etiqueta=f"Función de {obj.n} variable{'s' if obj.n != 1 else ''} ({', '.join(str(v) for v in obj.vars)})"
+                    + (f" «{obj.nombre}»" if obj.nombre else ""), detalle=_describir_funcion(obj.expr, list(obj.vars)),
+                    por_trozos=bool(obj.expr.has(sp.Piecewise)), definida=True)
+    elif isinstance(obj, Cuantificado):
+        pal = {"para_todo": "universal (∀)", "existe": "existencial (∃)", "no_existe": "de no existencia (∄)"}[obj.cuantificador]
+        info.update(tipo="cuantificada", etiqueta=f"Enunciado con cuantificador {pal}")
+    elif isinstance(obj, Argumento):
+        info.update(tipo="argumento", etiqueta=f"Argumento lógico ({len(obj.premisas)} premisa(s) y una conclusión)")
+    elif isinstance(obj, Pertenencia):
+        con_var = bool(obj.valor().free_symbols)
+        info.update(tipo="relacion" if con_var else "comparacion",
+                    etiqueta="Condición de pertenencia (∈ / ∉) sobre una variable" if con_var else "Pertenencia (∈ / ∉)")
+    elif isinstance(obj, Equivalencia):
+        info.update(tipo="comparacion", etiqueta="Equivalencia (identidad o equivalencia lógica)")
+    elif isinstance(obj, Aproximado):
+        info.update(tipo="comparacion", etiqueta="Aproximación (≈)")
+    elif isinstance(obj, Congruencia):
+        info.update(tipo="comparacion", etiqueta="Congruencia módulo n")
+    elif isinstance(obj, Divisibilidad):
+        info.update(tipo="comparacion", etiqueta="Divisibilidad (a ∣ b)")
+    elif isinstance(obj, RelConj):
+        info.update(tipo="comparacion", etiqueta="Relación entre conjuntos")
+    elif _es_logica(obj):
+        reales = bool(obj.atoms(sp.core.relational.Relational)) or any(v.is_real for v in obj.free_symbols)
+        info.update(tipo="logica", etiqueta="Proposición lógica" + (" sobre los números reales" if reales else
+                    f" ({len(obj.free_symbols)} variable(s) proposicional(es))"))
+    elif isinstance(obj, sp.Contains):
+        info.update(tipo="relacion", etiqueta="Condición de pertenencia")
+    elif isinstance(obj, sp.Basic) and obj.has(Norma, ProdPunto, Distancia, Angulo):
+        info.update(tipo="vectorial", etiqueta="Operación entre puntos o vectores (da un número)")
+    elif obj in (sp.true, sp.false):
         info.update(tipo="relacion", etiqueta="Condición ya decidida: es " + ("siempre verdadera" if obj == sp.true else "siempre falsa"))
     elif isinstance(obj, (sp.Eq, sp.Ne, sp.Lt, sp.Le, sp.Gt, sp.Ge, sp.And, sp.Or)):
         parte = "ecuación" if isinstance(obj, sp.Eq) else "desigualdad" if not isinstance(obj, (sp.And, sp.Or)) else "sistema de condiciones"
@@ -1349,10 +2268,10 @@ def clasificar_entrada(obj) -> dict:
     elif isinstance(obj, LimiteMulti):
         info.update(tipo="limite_multi", etiqueta=f"Límite de {len(obj.args[1])} variables")
     elif isinstance(obj, sp.Integral):
-        lim = list(obj.limits)
-        definida = all(len(l) == 3 for l in lim)
-        impropia = definida and any(b in (sp.oo, -sp.oo) or a in (sp.oo, -sp.oo) for _, a, b in lim)
-        mult = {1: "", 2: " doble", 3: " triple"}.get(len(lim), " múltiple")
+        limites_op = list(obj.limits)
+        definida = all(len(l) == 3 for l in limites_op)
+        impropia = definida and any(b in (sp.oo, -sp.oo) or a in (sp.oo, -sp.oo) for _, a, b in limites_op)
+        mult = {1: "", 2: " doble", 3: " triple"}.get(len(limites_op), " múltiple")
         etiq = f"Integral{mult} {'impropia' if impropia else 'definida' if definida else 'indefinida'}"
         info.update(tipo="integral", etiqueta=etiq)
     elif isinstance(obj, sp.Sum):
@@ -1401,23 +2320,29 @@ def _a(n, t):
     return {"nivel": n, "texto": t}
 
 
-def diagnosticar(obj, latex: str = "") -> list[dict]:
-    """Revisa si lo escrito TIENE SENTIDO matemático y avisa de lo dudoso."""
+def _diag_basico(obj, latex: str = "") -> list[dict]:
+    """
+    Revisa si lo escrito TIENE SENTIDO matemático y avisa de lo dudoso.
+    Devuelve una lista de {"nivel": "error"|"aviso"|"info", "texto": str}.
+    """
     r: list[dict] = []
 
+    # --- a nivel de texto LaTeX ---
     if latex:
         if re.search(r"(?<![A-Za-z\\])[fgh]\\left\(|(?<![A-Za-z\\])[fgh]\(", latex):
-            r.append(_a("aviso", "Escribiste algo como «f(x)». La app no define funciones con nombre: lo lee como el producto "
-                        "de f por (x). Si querías definir una función, escribe directamente su fórmula (por ejemplo x²+1)."))
+            r.append(_a("aviso", "Escribiste algo como «f(x)». La app no define funciones con nombre sueltas: lo lee como el producto "
+                        "de f por (x). Si querías definir una función escribe «f(x) = fórmula» o directamente la fórmula (por ejemplo x²+1)."))
         if re.search(r"\\mathrm\{d\}\s*\\mathrm\{d\}", latex):
             r.append(_a("aviso", "Hay dos diferenciales seguidos; revisa que no sobre una «d»."))
         if re.search(r"\\log(?!_)", latex):
             r.append(_a("info", "Nota: la tecla «log» sin base se evalúa como logaritmo en **base 10** ($\\log_{10}$). "
                         "Para el logaritmo natural usa la tecla **ln**."))
 
+    # --- recorrer la estructura ---
     for nodo in sp.preorder_traversal(obj):
         _diag_nodo(nodo, r)
 
+    # --- comprobaciones globales de expresiones ---
     if isinstance(obj, sp.Expr) and not isinstance(obj, _OPERACIONES):
         if obj.has(sp.zoo, sp.nan):
             r.append(_a("error", "La expresión contiene una división entre cero o una operación indefinida "
@@ -1455,6 +2380,7 @@ def diagnosticar(obj, latex: str = "") -> list[dict]:
             "siempre verdadera (por ejemplo, los dos lados son idénticos): no restringe nada." if obj == sp.true
             else "siempre falsa (una contradicción): no tiene solución.")))
 
+    # --- notas informativas de convención ---
     if isinstance(obj, sp.Basic):
         nombres = {s.name for s in obj.free_symbols if isinstance(s, sp.Symbol)}
         if "n" in nombres and len(nombres) > 1 and not obj.has(sp.Sum, sp.Limit):
@@ -1492,6 +2418,7 @@ def _diag_trozos(pw: sp.Piecewise, r: list[dict]) -> None:
 
 
 def _diag_nodo(n, r: list[dict]) -> None:
+    # ---------- Límite ----------
     if isinstance(n, sp.Limit):
         f, x, a = n.args[0], n.args[1], n.args[2]
         d = str(n.args[3]) if len(n.args) > 3 else "+-"
@@ -1506,6 +2433,7 @@ def _diag_nodo(n, r: list[dict]) -> None:
         extra = sorted((s.name for s in f.free_symbols if s != x), key=str)
         if extra:
             r.append(_a("aviso", f"El límite contiene otras variables ({', '.join(extra)}): se tratarán como constantes (parámetros)."))
+    # ---------- Límite de varias variables ----------
     elif isinstance(n, LimiteMulti):
         f, xs, as_ = n.args
         if len(xs) != len(as_):
@@ -1517,6 +2445,7 @@ def _diag_nodo(n, r: list[dict]) -> None:
             r.append(_a("error", "Hay una variable repetida en el límite."))
         if len(xs) == 1:
             r.append(_a("info", "Escribiste un límite con una sola variable entre paréntesis; se tratará como límite normal."))
+    # ---------- Integral ----------
     elif isinstance(n, sp.Integral):
         for l in n.limits:
             v = l[0]
@@ -1540,6 +2469,7 @@ def _diag_nodo(n, r: list[dict]) -> None:
         vars_int = [l[0] for l in n.limits]
         if len(set(vars_int)) != len(vars_int):
             r.append(_a("error", "Se integra dos veces respecto de la misma variable: revisa los diferenciales."))
+    # ---------- Suma / Producto ----------
     elif isinstance(n, (sp.Sum, sp.Product)):
         k, a, b = n.limits[0]
         que = "suma" if isinstance(n, sp.Sum) else "producto"
@@ -1559,6 +2489,7 @@ def _diag_nodo(n, r: list[dict]) -> None:
                         f"(vale {'0' if isinstance(n, sp.Sum) else '1'} por convención)."))
         if b == -sp.oo:
             r.append(_a("aviso", "El límite superior es −∞; normalmente es +∞ o un entero."))
+    # ---------- Derivada ----------
     elif isinstance(n, sp.Derivative):
         total = sum(c for _, c in n.variable_count)
         for v, c in n.variable_count:
@@ -1568,11 +2499,13 @@ def _diag_nodo(n, r: list[dict]) -> None:
             r.append(_a("aviso", f"Derivada de orden {total}: puede tardar y producir expresiones enormes."))
         if n.expr.has(sp.Abs, sp.floor, sp.ceiling, sp.sign, sp.Piecewise, sp.Max, sp.Min):
             r.append(_a("info", "La expresión contiene valor absoluto, parte entera, signo o trozos: no es derivable en algunos puntos."))
+    # ---------- Gradiente ----------
     elif isinstance(n, Gradiente):
         if not n.args[0].free_symbols:
             r.append(_a("aviso", "El gradiente de una constante es el vector cero."))
         elif len(n.args[0].free_symbols) == 1:
             r.append(_a("info", "Con una sola variable el gradiente es simplemente la derivada."))
+    # ---------- Funciones con dominio restringido (constantes obvias) ----------
     elif isinstance(n, sp.log) and not n.args[0].free_symbols:
         v = _num_val(n.args[0])
         if v is not None and v <= 0:
@@ -1591,5 +2524,165 @@ def _diag_nodo(n, r: list[dict]) -> None:
                 r.append(_a("error", f"Hay una raíz de índice par de un número negativo ({b}): no existe en los reales."))
     elif isinstance(n, sp.factorial) and not n.args[0].free_symbols:
         v = _num_val(n.args[0])
-        if v is not None and (v < 0 or v != int(v)):
-            r.append(_a("error", f"El factorial solo se define para enteros no negativos (se escribió {n.args[0]})."))
+        if v is not None and v < 0 and v == int(v):
+            r.append(_a("error", f"({n.args[0]})! no está definido: x! = Γ(x+1) existe para todo real menos los enteros "
+                        "negativos (−1, −2, −3, …), donde la función gamma tiene polos."))
+        elif v is not None and v != int(v):
+            r.append(_a("info", f"({n.args[0]})! no es un entero: se calcula con la función gamma, x! = Γ(x+1)."))
+    elif isinstance(n, Norma):
+        if all(c == 0 for c in n.args[0]):
+            r.append(_a("info", "La norma del vector cero es 0 (y el vector cero no tiene dirección)."))
+    elif isinstance(n, sp.factorial) and n.args[0].free_symbols:
+        r.append(_a("info", "Con una variable, x! se entiende como la función gamma Γ(x+1): está definida para todo real salvo los "
+                    "enteros negativos (−1, −2, …)."))
+
+
+# ------------------------------------------------------------------------------
+# Comprobaciones de sentido para las estructuras (puntos, conjuntos, bolas, lógica…)
+# ------------------------------------------------------------------------------
+def _finito(v) -> bool:
+    return not v.has(sp.oo, -sp.oo, sp.zoo, sp.nan)
+
+
+def _diag_logica(obj, r: list) -> None:
+    atomos = sorted([v for v in obj.free_symbols if isinstance(v, sp.Symbol) and not v.is_real], key=lambda v: v.name)
+    reales = [v for v in obj.free_symbols if isinstance(v, sp.Symbol) and v.is_real]
+    if atomos and reales:
+        r.append(_a("aviso", "La letra " + ", ".join(v.name for v in atomos) + " se usa como proposición y a la vez hay variables "
+                    "reales en la misma fórmula; no se pueden mezclar."))
+    if atomos and not reales and len(atomos) <= 5:
+        import itertools
+        filas = [bool(obj.subs(dict(zip(atomos, vals)))) for vals in itertools.product([True, False], repeat=len(atomos))]
+        if all(filas):
+            r.append(_a("info", "Es una **tautología**: es verdadera para cualquier valor de verdad de sus letras."))
+        elif not any(filas):
+            r.append(_a("info", "Es una **contradicción**: es falsa para cualquier valor de verdad de sus letras."))
+
+
+def _diag_estructura(obj, latex: str, r: list) -> None:
+    if isinstance(obj, (Punto, Vector)):
+        if not all(_finito(c) for c in obj.c):
+            r.append(_a("error", "Las coordenadas deben ser números finitos: ∞ no es una coordenada."))
+        if isinstance(obj, Punto) and obj.ambiguo:
+            r.append(_a("info", "(a, b) se entiende aquí como el PUNTO de ℝ². Si lo usas como conjunto (con ∪, ∩, ∈, ∖) se "
+                        "entiende como el intervalo ABIERTO de a a b."))
+        if isinstance(obj, Vector) and all(c == 0 for c in obj.c):
+            r.append(_a("info", "Es el vector cero: no tiene dirección y su norma es 0."))
+        if obj.n >= 4:
+            r.append(_a("info", f"Vive en ℝ^{obj.n}: se puede calcular con él, pero no dibujarlo."))
+    elif isinstance(obj, Lista):
+        if obj.abierta:
+            r.append(_a("info", "La lista termina en «…»: sigue indefinidamente; se analizan sus primeros términos y el patrón."))
+        if obj.simbolica:
+            r.append(_a("info", "Tiene elementos simbólicos con «…»: se puede leer pero no calcular valores concretos."))
+        elif len(set(obj.items)) < obj.n:
+            r.append(_a("info", "Tiene elementos repetidos (en un conjunto { } se contarían una sola vez)."))
+    elif isinstance(obj, Region):
+        if obj.cond == sp.true:
+            r.append(_a("info", "La condición se cumple siempre: el conjunto es todo el espacio."))
+        elif obj.cond == sp.false:
+            r.append(_a("aviso", "Ningún punto cumple la condición: el conjunto es VACÍO."))
+        else:
+            libres = [v for v in obj.cond.free_symbols if isinstance(v, sp.Symbol) and v not in obj.vars]
+            if libres:
+                r.append(_a("aviso", "La condición tiene letras que no son variables del conjunto (" + ", ".join(v.name for v in libres)
+                            + "): se tratan como constantes (parámetros)."))
+            falta = [v for v in obj.vars if v not in obj.cond.free_symbols] if not obj.puntos else []
+            if falta:
+                r.append(_a("aviso", "La condición no menciona a " + ", ".join(v.name for v in falta) + ": esa(s) coordenada(s) quedan LIBRES, "
+                            "así que el conjunto se extiende sin límite en esa dirección."))
+        if obj.n >= 4:
+            r.append(_a("info", f"Vive en ℝ^{obj.n}: se puede analizar, pero no dibujar."))
+    elif isinstance(obj, Bola):
+        rad = obj.radio
+        if rad.is_number and rad == 0:
+            r.append(_a("aviso", "Radio 0: " + ("la bola abierta es VACÍA." if not obj.cerrada and not obj.esfera else "se reduce a un solo punto (el centro).")))
+        elif rad.free_symbols:
+            r.append(_a("info", "El radio es simbólico: se supone positivo."))
+        if not all(_finito(c) for c in obj.centro.c) or not _finito(rad):
+            r.append(_a("error", "El centro y el radio deben ser números finitos."))
+        if obj.n >= 4:
+            r.append(_a("info", f"Es una bola de ℝ^{obj.n}: se pueden calcular sus propiedades, pero no dibujarla."))
+    elif isinstance(obj, Espacio):
+        if obj.dim is None:
+            r.append(_a("info", "Con n simbólico solo se pueden dar propiedades generales de ℝⁿ; para operar o dibujar usa un valor concreto (ℝ², ℝ³)."))
+    elif isinstance(obj, Cuantificado):
+        cuerpo_vars = obj.cuerpo.free_symbols if not isinstance(obj.cuerpo, Cuantificado) else set(_simbolos_de(obj.cuerpo)) | set(obj.cuerpo.vars)
+        for v in obj.vars:
+            if v not in cuerpo_vars:
+                r.append(_a("aviso", f"La variable {v} no aparece en la condición: cuantificar sobre ella no cambia nada (o el dominio está vacío)."))
+        libres = [v for v in _simbolos_de(obj) if v not in obj.vars]
+        if libres:
+            r.append(_a("aviso", "La condición tiene letras sin cuantificar (" + ", ".join(v.name for v in libres) + "): se tratan como parámetros fijos."))
+        if obj.dominio is not None and obj.dominio == sp.S.EmptySet:
+            r.append(_a("aviso", "El dominio es VACÍO: «para todo» sería verdadero sin decir nada, y «existe» sería falso."))
+        if obj.cuantificador == "no_existe":
+            r.append(_a("info", "«No existe x tal que P(x)» equivale a «para todo x, no P(x)»."))
+        if len(obj.vars) > 2:
+            r.append(_a("info", "Con tres o más variables cuantificadas la comprobación es solo numérica (evidencia, no demostración)."))
+    elif isinstance(obj, Argumento):
+        if not obj.premisas:
+            r.append(_a("error", "Un argumento necesita al menos una premisa."))
+        r.append(_a("info", "Un argumento es VÁLIDO si en todos los casos en que las premisas son verdaderas, la conclusión también lo es."))
+    elif isinstance(obj, Divisibilidad):
+        a, b = obj.a, obj.b
+        if a.is_number and a == 0 and not (b.is_number and b == 0):
+            r.append(_a("error", "El 0 no divide a ningún número distinto de 0."))
+        for v in (a, b):
+            if v.is_number and not v.is_Integer:
+                r.append(_a("aviso", "«∣» se define entre números ENTEROS; con otros números la afirmación no tiene sentido usual."))
+                break
+    elif isinstance(obj, Congruencia):
+        n = obj.n
+        if n.is_number and (not n.is_Integer or n <= 0):
+            r.append(_a("error", "El módulo de una congruencia debe ser un entero positivo."))
+        for v in (obj.a, obj.b):
+            if v.is_number and not v.is_Integer:
+                r.append(_a("aviso", "Las congruencias se definen entre números ENTEROS."))
+                break
+    elif isinstance(obj, Aproximado):
+        r.append(_a("info", "«≈» no es una igualdad exacta: se considera verdadera si los dos valores difieren menos de 0.1 %."))
+    elif isinstance(obj, Equivalencia):
+        r.append(_a("info", "«≡» se entiende como identidad (las dos expresiones valen lo mismo para cualquier valor) o, entre proposiciones, equivalencia lógica."))
+    elif isinstance(obj, RelConj):
+        da, db = _E.dimension_de(obj.a), _E.dimension_de(obj.b)
+        if da is not None and db is not None and da != db:
+            r.append(_a("error", f"Los conjuntos viven en espacios distintos (ℝ^{da} y ℝ^{db}): no se pueden comparar."))
+    elif isinstance(obj, Pertenencia):
+        if obj.S == sp.S.EmptySet:
+            r.append(_a("info", "El conjunto es vacío: ninguna pertenencia a él es verdadera."))
+    elif isinstance(obj, OpTop):
+        r.append(_a("info", "Las propiedades topológicas se calculan de forma exacta para intervalos y bolas; para regiones definidas por "
+                    "desigualdades se usa el criterio de regularidad (se supone que la frontera es «suave»)."))
+    elif isinstance(obj, ConjuntoImagen):
+        r.append(_a("info", "Es el conjunto de los valores que toma la expresión cuando la variable recorre su dominio."))
+
+
+def diagnosticar(obj, latex: str = "", naturales_con_cero: bool = False) -> list[dict]:
+    """
+    Revisa si lo escrito TIENE SENTIDO matemático y avisa de lo dudoso.
+    Devuelve una lista de {"nivel": "error"|"aviso"|"info", "texto": str}.
+    """
+    r: list[dict] = []
+    if isinstance(obj, Funcion):
+        r += _diag_basico(obj.expr, "")
+        faltan = [v for v in obj.vars if v not in obj.expr.free_symbols]
+        if faltan:
+            r.append(_a("aviso", "La fórmula no depende de " + ", ".join(v.name for v in faltan) + ": la función es constante respecto de esa(s) variable(s)."))
+        extra = sorted((v for v in obj.expr.free_symbols if isinstance(v, sp.Symbol) and v not in obj.vars), key=lambda v: v.name)
+        if extra:
+            r.append(_a("aviso", "La fórmula tiene letras que no son variables de la función (" + ", ".join(v.name for v in extra)
+                        + "): se tratan como constantes (parámetros)."))
+    elif not isinstance(obj, sp.Basic):
+        _diag_estructura(obj, latex, r)
+    else:
+        r += _diag_basico(obj, latex)
+        if isinstance(obj, sp.logic.boolalg.Boolean) and not isinstance(obj, (sp.Symbol, sp.logic.boolalg.BooleanAtom)):
+            _diag_logica(obj, r)
+    if latex and r"\mathbb{N}" in latex and not naturales_con_cero:
+        r.append(_a("info", "ℕ se toma como {1, 2, 3, …}. Si en tu curso ℕ incluye el 0, activa «ℕ incluye el 0» en Opciones."))
+    if latex and re.search(r"\\infty\s*(\\right)?\s*\]|\[\s*-?\s*\\infty", latex):
+        r.append(_a("info", "El infinito no es un número real, así que un intervalo nunca lo incluye: ese extremo queda ABIERTO (por ejemplo [0, ∞) es en realidad [0, ∞[)."))
+    if obj == sp.S.EmptySet and latex and not re.search(r"emptyset|varnothing|\\\{\s*\\\}|\\left\\\{\\right\\\}", latex):
+        r.append(_a("aviso", "El conjunto resultó VACÍO. Si escribiste un intervalo [a, b], revisa que a ≤ b (y que un intervalo abierto (a, a) no tiene puntos)."))
+    return r
