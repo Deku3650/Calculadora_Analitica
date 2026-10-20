@@ -1,814 +1,1075 @@
 # pages/1_Geometria.py
 import math
+import matplotlib.pyplot as plt
 import numpy as np
 import streamlit as st
-import sympy as sp
-from matplotlib.figure import Figure
-from matplotlib.patches import Circle, Ellipse, Polygon
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from matplotlib.patches import Circle, Polygon
+from matplotlib.ticker import AutoMinorLocator
 
-# 1. CONFIGURACIÓN DE PÁGINA (SIEMPRE PRIMERO)
-st.set_page_config(page_title="Geometría - MATHESIS", page_icon="📐", layout="wide")
+st.set_page_config(page_title="Geometría Analítica - MATHESIS", page_icon="📐", layout="wide")
 
-from estilos import cargar_estilos_globales  # noqa: E402
-from utils import inicializar_estado  # noqa: E402
+from estilos import cargar_estilos_globales, encabezado_pagina, header_tarjeta, subheader_tarjeta  # noqa: E402
+from utils import inicializar_estado, mostrar_figura_segura  # noqa: E402
 
 cargar_estilos_globales()
 inicializar_estado()
 
-# Paleta institucional unificada (idéntica a calculo_graficas.py)
-AZUL = "#0284c7"
+AZUL = "#0369a1"
 NARANJA = "#ea580c"
-VERDE = "#16a34a"
+VERDE = "#15803d"
 ROJO = "#dc2626"
 MORADO = "#7c3aed"
-GRIS = "#6b7280"
-
-
-def header_tarjeta(texto: str):
-    st.markdown(f'<div class="card-header-title">{texto}</div>', unsafe_allow_html=True)
-
-
-def subheader_tarjeta(texto: str):
-    st.markdown(f'<div class="card-subheader-title">{texto}</div>', unsafe_allow_html=True)
+OSCURO = "#1e293b"
+CLARO = "#cbd5e1"
+FONDO = "#ffffff"
 
 
 # ==============================================================================
-# UTILIDADES GRÁFICAS (ESTILO UNIFICADO CON EL MÓDULO DE CÁLCULO)
+# UTILIDADES DE ESTILO GRÁFICO (LIBRO DE TEXTO)
 # ==============================================================================
-def _fig_2d(w=6.2, h=4.2, titulo=""):
-    fig = Figure(figsize=(w, h), dpi=110, layout="constrained")
-    fig.patch.set_alpha(0.0)
-    ax = fig.add_subplot(111)
-    ax.patch.set_alpha(0.0)
-    ax.grid(True, alpha=0.25, linestyle="--")
-    for lado in ("top", "right"):
-        ax.spines[lado].set_visible(False)
-    for lado in ("left", "bottom"):
-        ax.spines[lado].set_color(GRIS)
-        ax.spines[lado].set_alpha(0.6)
-    ax.axhline(0, color=GRIS, lw=0.8, alpha=0.6)
-    ax.axvline(0, color=GRIS, lw=0.8, alpha=0.6)
-    ax.tick_params(colors=GRIS, labelsize=8.5)
-    if titulo:
-        ax.set_title(titulo, fontsize=10.5, fontweight="bold", color=AZUL, pad=8)
+def _crear_fig_2d(w=6.8, h=5.4):
+    fig, ax = plt.subplots(figsize=(w, h), dpi=110, facecolor=FONDO)
+    ax.set_facecolor("#fbfdff")
+    ax.minorticks_on()
+    ax.xaxis.set_minor_locator(AutoMinorLocator(2))
+    ax.yaxis.set_minor_locator(AutoMinorLocator(2))
+    ax.grid(True, which="major", color=CLARO, lw=0.9, alpha=0.9)
+    ax.grid(True, which="minor", color="#e2e8f0", lw=0.5, alpha=0.8)
+    for s in ("top", "right"):
+        ax.spines[s].set_visible(False)
+    for s in ("left", "bottom"):
+        ax.spines[s].set_color(OSCURO)
+        ax.spines[s].set_linewidth(1.4)
+    ax.tick_params( colors=OSCURO, labelsize=9)
+    ax.set_aspect("equal", adjustable="box")
     return fig, ax
 
 
-def _fig_3d(w=6.0, h=4.8, titulo=""):
-    fig = Figure(figsize=(w, h), dpi=110, layout="constrained")
-    fig.patch.set_alpha(0.0)
+def _anotar_pt(ax, x, y, etiqueta, color=ROJO, dx=10, dy=10):
+    ax.plot([x], [y], "o", color=color, mec="white", mew=1.3, ms=7.5, zorder=7)
+    texto = f"{etiqueta} ({x:.2f}, {y:.2f})"
+    ax.annotate(
+        texto,
+        (x, y),
+        xytext=(dx, dy),
+        textcoords="offset points",
+        fontsize=8.5,
+        color=OSCURO,
+        zorder=9,
+        bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=color, lw=1.0, alpha=0.95),
+    )
+
+
+def _crear_fig_3d(w=6.8, h=5.6, titulo=""):
+    fig = plt.figure(figsize=(w, h), dpi=110, facecolor=FONDO)
     ax = fig.add_subplot(111, projection="3d")
-    ax.patch.set_alpha(0.0)
-    ax.set_box_aspect([1, 1, 1])
-    ax.set_xlabel("x", color=GRIS)
-    ax.set_ylabel("y", color=GRIS)
-    ax.set_zlabel("z", color=GRIS)
-    ax.tick_params(colors=GRIS, labelsize=8)
+    ax.set_xlabel("X", fontweight="bold", labelpad=5)
+    ax.set_ylabel("Y", fontweight="bold", labelpad=5)
+    ax.set_zlabel("Z", fontweight="bold", labelpad=5)
+    ax.tick_params(labelsize=8, colors=OSCURO)
+    ax.view_init(elev=24, azim=-55)
     if titulo:
-        ax.set_title(titulo, fontsize=10.5, fontweight="bold", color=AZUL)
+        ax.set_title(titulo, fontsize=11, fontweight="bold", color=OSCURO, pad=10)
     return fig, ax
 
 
-def renderizar_solido_3d(figura: str, params: dict):
-    fig, ax = _fig_3d(titulo=f"Vista 3D: {figura}")
-    alfa = 0.55
+encabezado_pagina(
+    "📐 Módulo de Geometría Euclidiana y Analítica (ℝ² y ℝ³)",
+    "Análisis de triángulos, recta de Euler, rectas, secciones cónicas con rotación de ejes, planos, rectas en ℝ³ y superficies cuádricas.",
+)
 
-    if figura == "Cilindro":
-        r, h = params["r"], params["h"]
-        z = np.linspace(0, h, 32)
-        theta = np.linspace(0, 2 * np.pi, 32)
-        theta_grid, z_grid = np.meshgrid(theta, z)
-        x_grid = r * np.cos(theta_grid)
-        y_grid = r * np.sin(theta_grid)
-        ax.plot_surface(x_grid, y_grid, z_grid, alpha=alfa, color=AZUL, edgecolor="#0369a1", lw=0.3)
-        lim = max(r, h / 2) * 1.2
-        ax.set_xlim(-lim, lim)
-        ax.set_ylim(-lim, lim)
-        ax.set_zlim(0, h * 1.1)
-
-    elif figura == "Esfera":
-        r = params["r"]
-        u = np.linspace(0, 2 * np.pi, 32)
-        v = np.linspace(0, np.pi, 32)
-        x = r * np.outer(np.cos(u), np.sin(v))
-        y = r * np.outer(np.sin(u), np.sin(v))
-        z = r * np.outer(np.ones(np.size(u)), np.cos(v))
-        ax.plot_surface(x, y, z, color=AZUL, alpha=alfa, edgecolor="#0369a1", lw=0.3)
-        ax.set_xlim(-r * 1.2, r * 1.2)
-        ax.set_ylim(-r * 1.2, r * 1.2)
-        ax.set_zlim(-r * 1.2, r * 1.2)
-
-    elif figura == "Cono":
-        r, h = params["r"], params["h"]
-        z = np.linspace(0, h, 32)
-        theta = np.linspace(0, 2 * np.pi, 32)
-        theta_grid, z_grid = np.meshgrid(theta, z)
-        r_grid = r * (1 - z_grid / h)
-        x_grid = r_grid * np.cos(theta_grid)
-        y_grid = r_grid * np.sin(theta_grid)
-        ax.plot_surface(x_grid, y_grid, z_grid, alpha=alfa, color=AZUL, edgecolor="#0369a1", lw=0.3)
-        lim = max(r, h / 2) * 1.2
-        ax.set_xlim(-lim, lim)
-        ax.set_ylim(-lim, lim)
-        ax.set_zlim(0, h * 1.1)
-
-    elif figura == "Pirámide cuadrangular":
-        b, h = params["b"], params["h"]
-        Z = np.array([[-b / 2, -b / 2, 0], [b / 2, -b / 2, 0], [b / 2, b / 2, 0], [-b / 2, b / 2, 0], [0, 0, h]])
-        caras = [
-            [Z[0], Z[1], Z[2], Z[3]],
-            [Z[0], Z[1], Z[4]],
-            [Z[1], Z[2], Z[4]],
-            [Z[2], Z[3], Z[4]],
-            [Z[3], Z[0], Z[4]],
-        ]
-        ax.add_collection3d(Poly3DCollection(caras, alpha=alfa, facecolors=AZUL, edgecolors="#0369a1", lw=1.0))
-        ax.set_xlim([-b, b])
-        ax.set_ylim([-b, b])
-        ax.set_zlim([0, h * 1.2])
-
-    elif figura == "Prisma rectangular":
-        l, w, h = params["l"], params["w"], params["h"]
-        Z = np.array([
-            [-l / 2, -w / 2, 0], [l / 2, -w / 2, 0], [l / 2, w / 2, 0], [-l / 2, w / 2, 0],
-            [-l / 2, -w / 2, h], [l / 2, -w / 2, h], [l / 2, w / 2, h], [-l / 2, w / 2, h],
-        ])
-        caras = [
-            [Z[0], Z[1], Z[2], Z[3]], [Z[4], Z[5], Z[6], Z[7]],
-            [Z[0], Z[1], Z[5], Z[4]], [Z[2], Z[3], Z[7], Z[6]],
-            [Z[1], Z[2], Z[6], Z[5]], [Z[4], Z[7], Z[3], Z[0]],
-        ]
-        ax.add_collection3d(Poly3DCollection(caras, alpha=alfa, facecolors=AZUL, edgecolors="#0369a1", lw=1.0))
-        lim = max(l, w, h) * 0.8
-        ax.set_xlim([-lim, lim])
-        ax.set_ylim([-lim, lim])
-        ax.set_zlim([0, h * 1.2])
-
-    elif figura == "Prisma triangular":
-        b, h_tri, h = params["b"], params["h_tri"], params["h"]
-        Z = np.array([
-            [-b / 2, -h_tri / 3, 0], [b / 2, -h_tri / 3, 0], [0, 2 * h_tri / 3, 0],
-            [-b / 2, -h_tri / 3, h], [b / 2, -h_tri / 3, h], [0, 2 * h_tri / 3, h],
-        ])
-        caras = [
-            [Z[0], Z[1], Z[2]], [Z[3], Z[4], Z[5]],
-            [Z[0], Z[1], Z[4], Z[3]], [Z[1], Z[2], Z[5], Z[4]], [Z[2], Z[0], Z[3], Z[5]],
-        ]
-        ax.add_collection3d(Poly3DCollection(caras, alpha=alfa, facecolors=AZUL, edgecolors="#0369a1", lw=1.0))
-        lim = max(b, h_tri, h) * 0.8
-        ax.set_xlim([-lim, lim])
-        ax.set_ylim([-lim, lim])
-        ax.set_zlim([0, h * 1.2])
-
-    elif figura == "Toro (Dona)":
-        R_may, r_men = params["R"], params["r"]
-        u = np.linspace(0, 2 * np.pi, 32)
-        v = np.linspace(0, 2 * np.pi, 32)
-        U, V = np.meshgrid(u, v)
-        X = (R_may + r_men * np.cos(V)) * np.cos(U)
-        Y = (R_may + r_men * np.cos(V)) * np.sin(U)
-        Z = r_men * np.sin(V)
-        ax.plot_surface(X, Y, Z, color=AZUL, alpha=alfa, edgecolor="#0369a1", lw=0.25)
-        lim = (R_may + r_men) * 1.15
-        ax.set_xlim(-lim, lim)
-        ax.set_ylim(-lim, lim)
-        ax.set_zlim(-lim, lim)
-
-    return fig
-
-
-# ==============================================================================
-# ENCABEZADO PRINCIPAL
-# ==============================================================================
-st.markdown("""
-    <div class="title-container">
-        <h1 class="title-text">📐 Módulo de Geometría</h1>
-    </div>
-""", unsafe_allow_html=True)
-
-st.markdown("Geometría plana, analítica en $\\mathbb{R}^2$, secciones cónicas y modelado espacial en $\\mathbb{R}^3$.")
-
-tab1, tab2, tab3, tab4 = st.tabs([
-    "📏 1. Figuras Planas 2D",
-    "📈 2. Rectas y Parábolas",
-    "🪐 3. Secciones Cónicas",
-    "🧊 4. Sólidos y Planos 3D",
+tab_2d, tab_analitica_2d, tab_3d = st.tabs([
+    "📐 1. Triángulos y Figuras Planas",
+    "📈 2. Rectas y Cónicas en ℝ²",
+    "🧊 3. Sólidos, Planos, Rectas y Cuádricas en ℝ³",
 ])
 
+
 # ==============================================================================
-# PESTAÑA 1: FIGURAS PLANAS 2D (DISEÑO ESPACIOSO SIN TRUNCAR MÉTRICAS)
+# PESTAÑA 1: TRIÁNGULOS Y FIGURAS PLANAS
 # ==============================================================================
-with tab1:
-    with st.container(border=True):
-        header_tarjeta("📏 Parámetros de la Figura Plana")
+with tab_2d:
+    modo_2d = st.radio(
+        "Seleccione el objeto geométrico a estudiar:",
+        [
+            "Triángulo Completo (Puntos Notables y Recta de Euler)",
+            "Círculo, Corona y Sector Circular",
+            "Polígono Regular de n Lados",
+            "Trapecio y Paralelogramo",
+        ],
+        horizontal=True,
+        key="geo_modo_2d",
+    )
 
-        c_sel, c_metodo = st.columns([1.2, 1.8])
-        with c_sel:
-            figura_2d = st.selectbox(
-                "Seleccione la figura:",
-                [
-                    "Triángulo",
-                    "Polígono Regular (n lados)",
-                    "Círculo y Sector Circular",
-                    "Elipse",
-                    "Cuadrado",
-                    "Rectángulo",
-                    "Trapecio",
-                ],
-            )
+    st.divider()
 
-        fig_plana, ax_p = _fig_2d(w=5.8, h=4.0, titulo=figura_2d)
-        ax_p.set_aspect("equal", adjustable="box")
-        datos_validos = True
-        metricas = []
-        resumen_extra = ""
-        formula_latex = ""
-
-        if figura_2d == "Triángulo":
-            with c_metodo:
-                metodo_tri = st.radio(
-                    "Datos conocidos:",
-                    ["Tres lados (Herón)", "Dos lados y ángulo (LAL)", "Base y Altura"],
-                    horizontal=True,
+    if modo_2d.startswith("Triángulo"):
+        col_in, col_out = st.columns([1, 1.35])
+        with col_in:
+            with st.container(border=True):
+                header_tarjeta("Definición del Triángulo")
+                metodo_tri = st.selectbox(
+                    "Método de entrada:",
+                    [
+                        "1. Tres lados (LLL)",
+                        "2. Dos lados y el ángulo comprendido (LAL)",
+                        "3. Un lado y dos ángulos adyacentes (ALA)",
+                        "4. Coordenadas de los 3 vértices A, B, C",
+                    ],
+                    key="tri_metodo",
                 )
-            st.write("")
-            if metodo_tri == "Base y Altura":
-                c1, c2 = st.columns(2)
-                b_t = c1.number_input("Base ($b$):", min_value=0.01, value=6.0, step=0.5)
-                h_t = c2.number_input("Altura ($h$):", min_value=0.01, value=4.0, step=0.5)
-                area = (b_t * h_t) / 2.0
-                lado_iso = math.hypot(b_t / 2.0, h_t)
-                perim = b_t + 2 * lado_iso
-                metricas = [("Área", f"{area:,.2f}"), ("Perímetro (isósceles)", f"{perim:,.2f}")]
-                formula_latex = r"A = \frac{b \cdot h}{2}"
-                pts = [[-b_t / 2, 0], [b_t / 2, 0], [0, h_t]]
-                ax_p.add_patch(Polygon(pts, closed=True, facecolor=AZUL, alpha=0.22, edgecolor=AZUL, lw=2))
-                lim = max(b_t, h_t) * 0.75
-                ax_p.set_xlim(-lim, lim)
-                ax_p.set_ylim(-0.15 * lim, lim * 1.15)
+
+                valido_tri = True
+                A_pt = B_pt = C_pt = None
+
+                if metodo_tri.startswith("1."):
+                    c1, c2, c3 = st.columns(3)
+                    a = c1.number_input("Lado a (BC):", min_value=0.01, value=5.0, step=0.5, key="tri_a")
+                    b = c2.number_input("Lado b (AC):", min_value=0.01, value=6.0, step=0.5, key="tri_b")
+                    c = c3.number_input("Lado c (AB):", min_value=0.01, value=7.0, step=0.5, key="tri_c")
+                    if a + b <= c or a + c <= b or b + c <= a:
+                        st.error("⛔ Violación de la Desigualdad Triangular: la suma de dos lados debe ser estrictamente mayor que el tercero.")
+                        valido_tri = False
+                    else:
+                        A_pt = np.array([0.0, 0.0])
+                        B_pt = np.array([float(c), 0.0])
+                        cos_A = np.clip((b**2 + c**2 - a**2) / (2 * b * c), -1.0, 1.0)
+                        sin_A = math.sqrt(max(0.0, 1.0 - cos_A**2))
+                        C_pt = np.array([b * cos_A, b * sin_A])
+
+                elif metodo_tri.startswith("2."):
+                    c1, c2, c3 = st.columns(3)
+                    b = c1.number_input("Lado b (AC):", min_value=0.01, value=6.0, step=0.5, key="lal_b")
+                    c = c2.number_input("Lado c (AB):", min_value=0.01, value=8.0, step=0.5, key="lal_c")
+                    ang_A_deg = c3.number_input("Ángulo α (en A, °):", min_value=0.1, max_value=179.9, value=60.0, step=1.0, key="lal_ang")
+                    ang_A = math.radians(ang_A_deg)
+                    A_pt = np.array([0.0, 0.0])
+                    B_pt = np.array([float(c), 0.0])
+                    C_pt = np.array([b * math.cos(ang_A), b * math.sin(ang_A)])
+
+                elif metodo_tri.startswith("3."):
+                    c1, c2, c3 = st.columns(3)
+                    c = c1.number_input("Lado base c (AB):", min_value=0.01, value=8.0, step=0.5, key="ala_c")
+                    ang_A_deg = c2.number_input("Ángulo α (en A, °):", min_value=0.1, max_value=179.0, value=45.0, step=1.0, key="ala_a")
+                    ang_B_deg = c3.number_input("Ángulo β (en B, °):", min_value=0.1, max_value=179.0, value=60.0, step=1.0, key="ala_b")
+                    if ang_A_deg + ang_B_deg >= 180.0:
+                        st.error("⛔ La suma de los ángulos α + β debe ser estrictamente menor que 180°.")
+                        valido_tri = False
+                    else:
+                        ang_C_deg = 180.0 - (ang_A_deg + ang_B_deg)
+                        ang_A = math.radians(ang_A_deg)
+                        ang_C = math.radians(ang_C_deg)
+                        b = c * math.sin(math.radians(ang_B_deg)) / math.sin(ang_C)
+                        A_pt = np.array([0.0, 0.0])
+                        B_pt = np.array([float(c), 0.0])
+                        C_pt = np.array([b * math.cos(ang_A), b * math.sin(ang_A)])
+
+                else:
+                    ca1, ca2 = st.columns(2)
+                    ax_v = ca1.number_input("A_x:", value=0.0, step=1.0, key="v_ax")
+                    ay_v = ca2.number_input("A_y:", value=0.0, step=1.0, key="v_ay")
+                    cb1, cb2 = st.columns(2)
+                    bx_v = cb1.number_input("B_x:", value=6.0, step=1.0, key="v_bx")
+                    by_v = cb2.number_input("B_y:", value=0.0, step=1.0, key="v_by")
+                    cc1, cc2 = st.columns(2)
+                    cx_v = cc1.number_input("C_x:", value=2.0, step=1.0, key="v_cx")
+                    cy_v = cc2.number_input("C_y:", value=4.0, step=1.0, key="v_cy")
+                    A_pt = np.array([ax_v, ay_v], dtype=float)
+                    B_pt = np.array([bx_v, by_v], dtype=float)
+                    C_pt = np.array([cx_v, cy_v], dtype=float)
+                    det_col = abs((B_pt[0] - A_pt[0]) * (C_pt[1] - A_pt[1]) - (C_pt[0] - A_pt[0]) * (B_pt[1] - A_pt[1]))
+                    if det_col < 1e-9:
+                        st.error("⛔ Los tres puntos A, B y C son colineales (están sobre la misma recta): no forman un triángulo.")
+                        valido_tri = False
+
+                subheader_tarjeta("Capas visuales")
+                ver_in = st.checkbox("Mostrar Incentro y Circunferencia Inscrita", value=True, key="tri_chk_in")
+                ver_circ = st.checkbox("Mostrar Circuncentro y Circunscrita", value=True, key="tri_chk_circ")
+                ver_euler = st.checkbox("Mostrar Baricentro, Ortocentro y Recta de Euler", value=True, key="tri_chk_euler")
+
+        if valido_tri and A_pt is not None:
+            a = float(np.linalg.norm(B_pt - C_pt))
+            b = float(np.linalg.norm(A_pt - C_pt))
+            c = float(np.linalg.norm(A_pt - B_pt))
+            perimetro = a + b + c
+            s = perimetro / 2.0
+            area = 0.5 * abs((B_pt[0] - A_pt[0]) * (C_pt[1] - A_pt[1]) - (C_pt[0] - A_pt[0]) * (B_pt[1] - A_pt[1]))
+
+            alpha = math.degrees(math.acos(np.clip((b**2 + c**2 - a**2) / (2 * b * c), -1.0, 1.0)))
+            beta = math.degrees(math.acos(np.clip((a**2 + c**2 - b**2) / (2 * a * c), -1.0, 1.0)))
+            gamma = 180.0 - alpha - beta
+
+            # Alturas, medianas y bisectrices
+            ha, hb, hc = 2 * area / a, 2 * area / b, 2 * area / c
+            ma = 0.5 * math.sqrt(2 * b**2 + 2 * c**2 - a**2)
+            mb = 0.5 * math.sqrt(2 * a**2 + 2 * c**2 - b**2)
+            mc = 0.5 * math.sqrt(2 * a**2 + 2 * b**2 - c**2)
+            ba = (2 * b * c * math.cos(math.radians(alpha / 2))) / (b + c)
+            bb = (2 * a * c * math.cos(math.radians(beta / 2))) / (a + c)
+            bc = (2 * a * b * math.cos(math.radians(gamma / 2))) / (a + b)
+
+            # Radios y puntos notables
+            r_in = area / s
+            R_circ = (a * b * c) / (4.0 * area)
+            G_pt = (A_pt + B_pt + C_pt) / 3.0
+            I_pt = (a * A_pt + b * B_pt + c * C_pt) / perimetro
+
+            # Circuncentro por sistema determinante
+            d_det = 2.0 * (A_pt[0] * (B_pt[1] - C_pt[1]) + B_pt[0] * (C_pt[1] - A_pt[1]) + C_pt[0] * (A_pt[1] - B_pt[1]))
+            ux = (
+                (np.dot(A_pt, A_pt)) * (B_pt[1] - C_pt[1])
+                + (np.dot(B_pt, B_pt)) * (C_pt[1] - A_pt[1])
+                + (np.dot(C_pt, C_pt)) * (A_pt[1] - B_pt[1])
+            ) / d_det
+            uy = (
+                (np.dot(A_pt, A_pt)) * (C_pt[0] - B_pt[0])
+                + (np.dot(B_pt, B_pt)) * (A_pt[0] - C_pt[0])
+                + (np.dot(C_pt, C_pt)) * (B_pt[0] - A_pt[0])
+            ) / d_det
+            O_pt = np.array([ux, uy])
+            # Relación vectorial de Euler: OH = 3*OG - 2*O -> H = A + B + C - 2*O (en coordenadas con origen en O)
+            H_pt = 3.0 * G_pt - 2.0 * O_pt
+
+            # Clasificación
+            if abs(a - b) < 1e-5 and abs(b - c) < 1e-5:
+                tipo_lados = "Equilátero"
+            elif abs(a - b) < 1e-5 or abs(b - c) < 1e-5 or abs(a - c) < 1e-5:
+                tipo_lados = "Isósceles"
             else:
-                c1, c2, c3 = st.columns(3)
-                if metodo_tri == "Tres lados (Herón)":
-                    a_t = c1.number_input("Lado $a$:", min_value=0.01, value=5.0, step=0.5)
-                    b_t = c2.number_input("Lado $b$:", min_value=0.01, value=6.0, step=0.5)
-                    c_t = c3.number_input("Lado $c$:", min_value=0.01, value=7.0, step=0.5)
-                else:
-                    a_t = c1.number_input("Lado $a$:", min_value=0.01, value=5.0, step=0.5, key="lal_a")
-                    b_t = c2.number_input("Lado $b$:", min_value=0.01, value=6.0, step=0.5, key="lal_b")
-                    ang_C = c3.number_input("Ángulo comprendido $\\gamma$ (°):", min_value=0.1, max_value=179.9, value=60.0, step=5.0)
-                    c_t = math.sqrt(a_t**2 + b_t**2 - 2 * a_t * b_t * math.cos(math.radians(ang_C)))
+                tipo_lados = "Escaleno"
 
-                if not ((a_t + b_t > c_t) and (a_t + c_t > b_t) and (b_t + c_t > a_t)):
-                    st.error("⛔ Esos lados violan la Desigualdad Triangular ($a + b > c$). No forman un triángulo cerrado.")
-                    datos_validos = False
-                else:
-                    s = (a_t + b_t + c_t) / 2.0
-                    area = math.sqrt(s * (s - a_t) * (s - b_t) * (s - c_t))
-                    r_in = area / s
-                    R_circ = (a_t * b_t * c_t) / (4.0 * area)
-                    A_deg = math.degrees(math.acos(np.clip((b_t**2 + c_t**2 - a_t**2) / (2 * b_t * c_t), -1.0, 1.0)))
-                    B_deg = math.degrees(math.acos(np.clip((a_t**2 + c_t**2 - b_t**2) / (2 * a_t * c_t), -1.0, 1.0)))
-                    C_deg = 180.0 - A_deg - B_deg
+            max_ang = max(alpha, beta, gamma)
+            if abs(max_ang - 90.0) < 1e-4:
+                tipo_ang = "Rectángulo"
+            elif max_ang > 90.0:
+                tipo_ang = "Obtusángulo"
+            else:
+                tipo_ang = "Acutángulo"
 
-                    metricas = [
-                        ("Área (Herón)", f"{area:,.3f}"),
-                        ("Perímetro", f"{2 * s:,.3f}"),
-                        ("Radio Inscrito (r)", f"{r_in:,.3f}"),
-                        ("Radio Circunscrito (R)", f"{R_circ:,.3f}"),
-                    ]
-                    resumen_extra = (
-                        f"**Ángulos internos:** $\\alpha = {A_deg:.2f}^\\circ$, $\\beta = {B_deg:.2f}^\\circ$, $\\gamma = {C_deg:.2f}^\\circ$  \n"
-                        f"**Lados:** $a = {a_t:.2f}$, $b = {b_t:.2f}$, $c = {c_t:.2f}$"
+            with col_out:
+                with st.container(border=True):
+                    header_tarjeta(f"Triángulo {tipo_lados} y {tipo_ang}")
+                    fig, ax = _crear_fig_2d()
+                    pol = Polygon([A_pt, B_pt, C_pt], closed=True, fc=AZUL, alpha=0.14, ec=AZUL, lw=2.4, zorder=3)
+                    ax.add_patch(pol)
+
+                    _anotar_pt(ax, A_pt[0], A_pt[1], "A", AZUL, -18, -22)
+                    _anotar_pt(ax, B_pt[0], B_pt[1], "B", AZUL, 10, -22)
+                    _anotar_pt(ax, C_pt[0], C_pt[1], "C", AZUL, 0, 12)
+
+                    pts_encuadre = [A_pt, B_pt, C_pt, G_pt]
+
+                    if ver_in:
+                        circ_in = Circle(I_pt, r_in, fc="none", ec=VERDE, lw=1.8, ls="--", label=f"Inscrita (r={r_in:.2f})", zorder=4)
+                        ax.add_patch(circ_in)
+                        _anotar_pt(ax, I_pt[0], I_pt[1], "I", VERDE, 8, 8)
+                        pts_encuadre.append(I_pt)
+
+                    if ver_circ:
+                        circ_out = Circle(O_pt, R_circ, fc="none", ec=NARANJA, lw=1.6, ls=":", label=f"Circunscrita (R={R_circ:.2f})", zorder=2)
+                        ax.add_patch(circ_out)
+                        _anotar_pt(ax, O_pt[0], O_pt[1], "O", NARANJA, -24, 10)
+                        pts_encuadre.extend([O_pt + np.array([R_circ, R_circ]), O_pt - np.array([R_circ, R_circ])])
+
+                    if ver_euler:
+                        _anotar_pt(ax, G_pt[0], G_pt[1], "G", MORADO, 8, -18)
+                        _anotar_pt(ax, H_pt[0], H_pt[1], "H", ROJO, 8, 10)
+                        pts_encuadre.append(H_pt)
+                        if np.linalg.norm(H_pt - O_pt) > 1e-6:
+                            dir_e = H_pt - O_pt
+                            p1_e = O_pt - 0.25 * dir_e
+                            p2_e = H_pt + 0.25 * dir_e
+                            ax.plot([p1_e[0], p2_e[0]], [p1_e[1], p2_e[1]], color=ROJO, lw=1.6, ls="-.", label="Recta de Euler (O-G-H)", zorder=5)
+
+                    arr_pts = np.array(pts_encuadre)
+                    xmin, ymin = arr_pts.min(axis=0)
+                    xmax, ymax = arr_pts.max(axis=0)
+                    margen = max(xmax - xmin, ymax - ymin, 2.0) * 0.22
+                    ax.set_xlim(xmin - margen, xmax + margen)
+                    ax.set_ylim(ymin - margen, ymax + margen)
+                    ax.legend(loc="upper right", fontsize=8.5, framealpha=0.92)
+                    mostrar_figura_segura(fig)
+
+            # Tablas detalladas debajo
+            with st.container(border=True):
+                subheader_tarjeta("Análisis Métrico, Cevianas y Puntos Notables")
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Área (A)", f"{area:.4f}")
+                m2.metric("Perímetro (2s)", f"{perimetro:.4f}")
+                m3.metric("Inradio (r = A/s)", f"{r_in:.4f}")
+                m4.metric("Circunradio (R = abc/4A)", f"{R_circ:.4f}")
+
+                t_c1, t_c2 = st.columns(2)
+                with t_c1:
+                    st.markdown("**Lados, Ángulos y Cevianas:**")
+                    st.markdown(
+                        f"| Elemento | Respecto a $A$ ($a$) | Respecto a $B$ ($b$) | Respecto a $C$ ($c$) |\n"
+                        f"|---|---|---|---|\n"
+                        f"| **Longitud del lado** | $a = {a:.4f}$ | $b = {b:.4f}$ | $c = {c:.4f}$ |\n"
+                        f"| **Ángulo opuesto** | $\\alpha = {alpha:.2f}^\\circ$ | $\\beta = {beta:.2f}^\\circ$ | $\\gamma = {gamma:.2f}^\\circ$ |\n"
+                        f"| **Altura ($h = 2A/\\text{{lado}}$)** | $h_a = {ha:.4f}$ | $h_b = {hb:.4f}$ | $h_c = {hc:.4f}$ |\n"
+                        f"| **Mediana ($m$)** | $m_a = {ma:.4f}$ | $m_b = {mb:.4f}$ | $m_c = {mc:.4f}$ |\n"
+                        f"| **Bisectriz interna ($b$)** | $b_a = {ba:.4f}$ | $b_b = {bb:.4f}$ | $b_c = {bc:.4f}$ |"
                     )
-                    formula_latex = r"s = \frac{a+b+c}{2}, \quad A = \sqrt{s(s-a)(s-b)(s-c)}, \quad r = \frac{A}{s}, \quad R = \frac{abc}{4A}"
+                with t_c2:
+                    st.markdown("**Coordenadas de Puntos Notables y Teorema de Euler:**")
+                    st.markdown(
+                        f"| Punto Notable | Coordenadas $(x, y)$ | Propiedad Geométrica |\n"
+                        f"|---|---|---|\n"
+                        f"| **Baricentro ($G$)** | $({G_pt[0]:.4f},\\, {G_pt[1]:.4f})$ | Intersección de las 3 medianas (centro de masa) |\n"
+                        f"| **Incentro ($I$)** | $({I_pt[0]:.4f},\\, {I_pt[1]:.4f})$ | Intersección de las bisectrices (equidista $r$ de los lados) |\n"
+                        f"| **Circuncentro ($O$)** | $({O_pt[0]:.4f},\\, {O_pt[1]:.4f})$ | Intersección de las mediatrices (equidista $R$ de los vértices) |\n"
+                        f"| **Ortocentro ($H$)** | $({H_pt[0]:.4f},\\, {H_pt[1]:.4f})$ | Intersección de las 3 alturas ($\\overrightarrow{{OH}} = 3\\overrightarrow{{OG}}$) |"
+                    )
+                    st.info("💡 **Teorema de Euler:** En todo triángulo no equilátero, el Circuncentro ($O$), el Baricentro ($G$) y el Ortocentro ($H$) son colineales sobre la **Recta de Euler** y cumplen $d(G, H) = 2\\,d(O, G)$.")
 
-                    xC = b_t * math.cos(math.radians(A_deg))
-                    yC = b_t * math.sin(math.radians(A_deg))
-                    pts = np.array([[0.0, 0.0], [c_t, 0.0], [xC, yC]])
-                    baricentro = pts.mean(axis=0)
-                    ax_p.add_patch(Polygon(pts, closed=True, facecolor=AZUL, alpha=0.22, edgecolor=AZUL, lw=2.2))
-                    ax_p.plot(baricentro[0], baricentro[1], "o", color=NARANJA, ms=7, label=f"Baricentro ({baricentro[0]:.2f}, {baricentro[1]:.2f})")
-                    ax_p.legend(fontsize=8, frameon=False)
-                    lim = max(c_t, abs(xC), yC) * 1.2
-                    ax_p.set_xlim(-0.15 * lim, lim)
-                    ax_p.set_ylim(-0.15 * lim, max(yC * 1.25, lim * 0.6))
-
-        elif figura_2d == "Polígono Regular (n lados)":
-            c1, c2 = st.columns(2)
-            n_lados = int(c1.number_input("Número de lados ($n$):", min_value=3, max_value=30, value=6, step=1))
-            s_lado = c2.number_input("Longitud de cada lado ($L$):", min_value=0.01, value=4.0, step=0.5)
-            perim = n_lados * s_lado
-            apotema = s_lado / (2.0 * math.tan(math.pi / n_lados))
-            r_circun = s_lado / (2.0 * math.sin(math.pi / n_lados))
-            area = (perim * apotema) / 2.0
-            ang_int = ((n_lados - 2) * 180.0) / n_lados
-            diagonales = (n_lados * (n_lados - 3)) // 2
-
-            metricas = [
-                ("Área Total", f"{area:,.3f}"),
-                ("Perímetro", f"{perim:,.3f}"),
-                ("Apotema (r)", f"{apotema:,.3f}"),
-                ("Radio Circunscrito (R)", f"{r_circun:,.3f}"),
-            ]
-            resumen_extra = f"**Ángulo interior:** ${ang_int:.2f}^\\circ$ | **Diagonales totales:** {diagonales}"
-            formula_latex = r"a = \frac{L}{2\tan(\pi/n)}, \quad A = \frac{P \cdot a}{2}, \quad D = \frac{n(n-3)}{2}"
-            angulos = np.linspace(0, 2 * np.pi, n_lados, endpoint=False) + np.pi / 2
-            verts = np.column_stack([r_circun * np.cos(angulos), r_circun * np.sin(angulos)])
-            ax_p.add_patch(Polygon(verts, closed=True, facecolor=AZUL, alpha=0.22, edgecolor=AZUL, lw=2.2))
-            ax_p.set_xlim(-r_circun * 1.25, r_circun * 1.25)
-            ax_p.set_ylim(-r_circun * 1.25, r_circun * 1.25)
-
-        elif figura_2d == "Círculo y Sector Circular":
-            c1, c2 = st.columns(2)
-            r_circ = c1.number_input("Radio ($r$):", min_value=0.01, value=3.0, step=0.5)
-            ang_sec = c2.number_input("Ángulo del sector (°):", min_value=1.0, max_value=360.0, value=90.0, step=15.0)
-            area_tot = math.pi * r_circ**2
-            perim_tot = 2 * math.pi * r_circ
-            area_sec = area_tot * (ang_sec / 360.0)
-            long_arco = perim_tot * (ang_sec / 360.0)
-            metricas = [
-                ("Área del Círculo", f"{area_tot:,.3f}"),
-                ("Circunferencia", f"{perim_tot:,.3f}"),
-                ("Área del Sector", f"{area_sec:,.3f}"),
-                ("Longitud de Arco", f"{long_arco:,.3f}"),
-            ]
-            formula_latex = r"A = \pi r^2, \quad L_{\text{arco}} = r\theta_{\text{rad}}, \quad A_{\text{sector}} = \frac{1}{2}r^2\theta_{\text{rad}}"
-            ax_p.add_patch(Circle((0, 0), r_circ, facecolor=AZUL, alpha=0.15, edgecolor=AZUL, lw=2))
-            th = np.linspace(0, math.radians(ang_sec), 80)
-            pts_sec = np.vstack([[0, 0], np.column_stack([r_circ * np.cos(th), r_circ * np.sin(th)])])
-            ax_p.add_patch(Polygon(pts_sec, closed=True, facecolor=NARANJA, alpha=0.35, edgecolor=NARANJA, lw=1.8))
-            ax_p.set_xlim(-r_circ * 1.25, r_circ * 1.25)
-            ax_p.set_ylim(-r_circ * 1.25, r_circ * 1.25)
-
-        elif figura_2d == "Elipse":
-            c1, c2 = st.columns(2)
-            a_el = c1.number_input("Semieje horizontal ($a$):", min_value=0.01, value=5.0, step=0.5)
-            b_el = c2.number_input("Semieje vertical ($b$):", min_value=0.01, value=3.0, step=0.5)
-            area = math.pi * a_el * b_el
-            h_ram = ((a_el - b_el) ** 2) / ((a_el + b_el) ** 2)
-            perim = math.pi * (a_el + b_el) * (1 + (3 * h_ram) / (10 + math.sqrt(4 - 3 * h_ram)))
-            c_foco = math.sqrt(abs(a_el**2 - b_el**2))
-            exc = c_foco / max(a_el, b_el)
-            metricas = [
-                ("Área", f"{area:,.3f}"),
-                ("Perímetro aprox.", f"{perim:,.3f}"),
-                ("Distancia Focal (c)", f"{c_foco:,.3f}"),
-                ("Excentricidad (e)", f"{exc:,.4f}"),
-            ]
-            formula_latex = r"A = \pi a b, \quad c = \sqrt{|a^2 - b^2|}, \quad e = \frac{c}{\max(a,b)}"
-            ax_p.add_patch(Ellipse((0, 0), 2 * a_el, 2 * b_el, facecolor=AZUL, alpha=0.22, edgecolor=AZUL, lw=2.2))
-            lim = max(a_el, b_el) * 1.25
-            ax_p.set_xlim(-lim, lim)
-            ax_p.set_ylim(-lim, lim)
-
-        elif figura_2d == "Cuadrado":
-            L = st.number_input("Lado del cuadrado ($L$):", min_value=0.01, value=4.0, step=0.5)
-            metricas = [
-                ("Área", f"{L**2:,.3f}"),
-                ("Perímetro", f"{4 * L:,.3f}"),
-                ("Diagonal", f"{L * math.sqrt(2):,.3f}"),
-                ("Radio inscrito", f"{L / 2:,.3f}"),
-            ]
-            formula_latex = r"A = L^2, \quad P = 4L, \quad d = L\sqrt{2}"
-            poly = Polygon([[-L / 2, -L / 2], [L / 2, -L / 2], [L / 2, L / 2], [-L / 2, L / 2]], closed=True, facecolor=AZUL, alpha=0.22, edgecolor=AZUL, lw=2.2)
-            ax_p.add_patch(poly)
-            ax_p.set_xlim(-L * 0.8, L * 0.8)
-            ax_p.set_ylim(-L * 0.8, L * 0.8)
-
-        elif figura_2d == "Rectángulo":
-            c1, c2 = st.columns(2)
-            b_rect = c1.number_input("Base ($b$):", min_value=0.01, value=6.0, step=0.5)
-            h_rect = c2.number_input("Altura ($h$):", min_value=0.01, value=4.0, step=0.5)
-            metricas = [
-                ("Área", f"{b_rect * h_rect:,.3f}"),
-                ("Perímetro", f"{2 * (b_rect + h_rect):,.3f}"),
-                ("Diagonal", f"{math.hypot(b_rect, h_rect):,.3f}"),
-            ]
-            formula_latex = r"A = b \cdot h, \quad P = 2(b + h), \quad d = \sqrt{b^2 + h^2}"
-            poly = Polygon([[-b_rect / 2, -h_rect / 2], [b_rect / 2, -h_rect / 2], [b_rect / 2, h_rect / 2], [-b_rect / 2, h_rect / 2]], closed=True, facecolor=AZUL, alpha=0.22, edgecolor=AZUL, lw=2.2)
-            ax_p.add_patch(poly)
-            lim = max(b_rect, h_rect) * 0.75
-            ax_p.set_xlim(-lim, lim)
-            ax_p.set_ylim(-lim, lim)
-
-        elif figura_2d == "Trapecio":
-            c1, c2, c3 = st.columns(3)
-            B_may = c1.number_input("Base mayor ($B$):", min_value=0.01, value=8.0, step=0.5)
-            b_men = c2.number_input("Base menor ($b$):", min_value=0.01, value=4.0, step=0.5)
-            h_trap = c3.number_input("Altura ($h$):", min_value=0.01, value=3.0, step=0.5)
-            lado_lat = math.hypot((B_may - b_men) / 2.0, h_trap)
-            metricas = [
-                ("Área", f"{((B_may + b_men) * h_trap) / 2.0:,.3f}"),
-                ("Perímetro (isósceles)", f"{B_may + b_men + 2 * lado_lat:,.3f}"),
-                ("Mediana", f"{(B_may + b_men) / 2.0:,.3f}"),
-                ("Lado oblicuo", f"{lado_lat:,.3f}"),
-            ]
-            formula_latex = r"A = \frac{(B + b)\cdot h}{2}"
-            pts_t = [[-B_may / 2, -h_trap / 2], [B_may / 2, -h_trap / 2], [b_men / 2, h_trap / 2], [-b_men / 2, h_trap / 2]]
-            ax_p.add_patch(Polygon(pts_t, closed=True, facecolor=AZUL, alpha=0.22, edgecolor=AZUL, lw=2.2))
-            lim = max(B_may, h_trap) * 0.75
-            ax_p.set_xlim(-lim, lim)
-            ax_p.set_ylim(-lim, lim)
-
-    if datos_validos:
-        st.write("")
-        col_res, col_graf = st.columns([1.05, 1.15], gap="large")
-
-        with col_res:
+    elif modo_2d.startswith("Círculo"):
+        c1, c2 = st.columns([1, 1.3])
+        with c1:
             with st.container(border=True):
-                subheader_tarjeta("📊 Resultados Métricos")
-                # Máximo 2 métricas por renglón para que jamás se corten los números
-                for i in range(0, len(metricas), 2):
-                    par = metricas[i:i + 2]
-                    cols_m = st.columns(2)
-                    for j, (et, val) in enumerate(par):
-                        cols_m[j].metric(et, val)
-                    st.write("")
+                header_tarjeta("Parámetros Circulares")
+                r_ext = st.number_input("Radio exterior (R):", min_value=0.1, value=5.0, step=0.5, key="cir_r")
+                r_int = st.number_input("Radio interior (r, 0 = círculo lleno):", min_value=0.0, max_value=float(r_ext - 0.01) if r_ext > 0.05 else 0.0, value=0.0, step=0.5, key="cir_rint")
+                theta_deg = st.slider("Ángulo del sector θ (grados):", min_value=1.0, max_value=360.0, value=90.0, step=1.0, key="cir_th")
+                theta_rad = math.radians(theta_deg)
 
-                if resumen_extra:
-                    st.info(resumen_extra)
+                area_total = math.pi * (r_ext**2 - r_int**2)
+                perim_total = 2 * math.pi * r_ext
+                area_sector = 0.5 * theta_rad * (r_ext**2 - r_int**2)
+                long_arco = r_ext * theta_rad
+                cuerda = 2 * r_ext * math.sin(theta_rad / 2.0)
+                area_segmento = 0.5 * r_ext**2 * (theta_rad - math.sin(theta_rad))
 
-                if formula_latex:
-                    with st.expander("📖 Ver fórmulas aplicadas", expanded=True):
-                        st.latex(formula_latex)
-
-        with col_graf:
+                st.markdown(
+                    f"| Métrica | Fórmula | Valor |\n"
+                    f"|---|---|---|\n"
+                    f"| **Área total** | $\\pi(R^2 - r^2)$ | **{area_total:.4f}** |\n"
+                    f"| **Circunferencia exterior** | $2\\pi R$ | **{perim_total:.4f}** |\n"
+                    f"| **Área del sector ($\\theta$)** | $\\frac{{1}}{{2}}\\theta(R^2 - r^2)$ | **{area_sector:.4f}** |\n"
+                    f"| **Longitud de arco ($s$)** | $R\\theta$ | **{long_arco:.4f}** |\n"
+                    f"| **Longitud de la cuerda** | $2R\\sin(\\theta/2)$ | **{cuerda:.4f}** |\n"
+                    f"| **Área del segmento circular** | $\\frac{{1}}{{2}}R^2(\\theta - \\sin\\theta)$ | **{area_segmento:.4f}** |"
+                )
+        with c2:
             with st.container(border=True):
-                subheader_tarjeta("🖼️ Representación a Escala")
-                st.pyplot(fig_plana)
+                header_tarjeta("Representación Geométrica")
+                fig, ax = _crear_fig_2d()
+                ts = np.linspace(0, 2 * np.pi, 300)
+                ax.plot(r_ext * np.cos(ts), r_ext * np.sin(ts), color=AZUL, lw=2.2, label=f"R = {r_ext:g}")
+                if r_int > 0:
+                    ax.plot(r_int * np.cos(ts), r_int * np.sin(ts), color=OSCURO, lw=1.6, ls="--", label=f"r = {r_int:g}")
+                ts_sec = np.linspace(0, theta_rad, 120)
+                x_poly = np.concatenate([r_ext * np.cos(ts_sec), r_int * np.cos(ts_sec[::-1])])
+                y_poly = np.concatenate([r_ext * np.sin(ts_sec), r_int * np.sin(ts_sec[::-1])])
+                ax.fill(x_poly, y_poly, color=NARANJA, alpha=0.28, label=f"Sector ({theta_deg:.0f}°)")
+                ax.plot([r_ext, r_ext * math.cos(theta_rad)], [0, r_ext * math.sin(theta_rad)], color=VERDE, lw=1.8, ls=":", label=f"Cuerda = {cuerda:.2f}")
+                lim = r_ext * 1.25
+                ax.set_xlim(-lim, lim)
+                ax.set_ylim(-lim, lim)
+                ax.legend(loc="upper right", fontsize=8.5)
+                mostrar_figura_segura(fig)
+
+    elif modo_2d.startswith("Polígono"):
+        c1, c2 = st.columns([1, 1.3])
+        with c1:
+            with st.container(border=True):
+                header_tarjeta("Polígono Regular de n Lados")
+                n_lados = int(st.number_input("Número de lados (n):", min_value=3, max_value=30, value=6, step=1, key="pol_n"))
+                longitud_l = st.number_input("Longitud del lado (L):", min_value=0.1, value=4.0, step=0.5, key="pol_l")
+
+                ang_central = 360.0 / n_lados
+                ang_interior = 180.0 * (n_lados - 2) / n_lados
+                suma_ang = 180.0 * (n_lados - 2)
+                apotema = longitud_l / (2.0 * math.tan(math.pi / n_lados))
+                circunradio = longitud_l / (2.0 * math.sin(math.pi / n_lados))
+                perim_pol = n_lados * longitud_l
+                area_pol = 0.5 * perim_pol * apotema
+                num_diagonales = n_lados * (n_lados - 3) // 2
+
+                st.markdown(
+                    f"| Propiedad | Valor |\n"
+                    f"|---|---|\n"
+                    f"| **Perímetro ($nL$)** | **{perim_pol:.4f}** |\n"
+                    f"| **Apotema ($a_p$)** | **{apotema:.4f}** |\n"
+                    f"| **Circunradio ($R$)** | **{circunradio:.4f}** |\n"
+                    f"| **Área ($P \\cdot a_p / 2$)** | **{area_pol:.4f}** |\n"
+                    f"| **Ángulo interior / central** | **{ang_interior:.2f}°** / **{ang_central:.2f}°** |\n"
+                    f"| **Suma de ángulos interiores** | **{suma_ang:.1f}°** |\n"
+                    f"| **Total de diagonales ($n(n-3)/2$)** | **{num_diagonales}** |"
+                )
+        with c2:
+            with st.container(border=True):
+                header_tarjeta(f"Polígono Regular (n = {n_lados})")
+                fig, ax = _crear_fig_2d()
+                angulos = np.linspace(0, 2 * np.pi, n_lados, endpoint=False) + np.pi / 2
+                vx = circunradio * np.cos(angulos)
+                vy = circunradio * np.sin(angulos)
+                pol = Polygon(np.column_stack([vx, vy]), closed=True, fc=AZUL, alpha=0.18, ec=AZUL, lw=2.4)
+                ax.add_patch(pol)
+                ax.add_patch(Circle((0, 0), circunradio, fc="none", ec=NARANJA, ls=":", lw=1.4, label=f"Circunscrita (R={circunradio:.2f})"))
+                ax.add_patch(Circle((0, 0), apotema, fc="none", ec=VERDE, ls="--", lw=1.4, label=f"Inscrita (ap={apotema:.2f})"))
+                mx, my = (vx[0] + vx[1]) / 2, (vy[0] + vy[1]) / 2
+                ax.plot([0, mx], [0, my], color=VERDE, lw=2.0)
+                lim = circunradio * 1.25
+                ax.set_xlim(-lim, lim)
+                ax.set_ylim(-lim, lim)
+                ax.legend(loc="upper right", fontsize=8.5)
+                mostrar_figura_segura(fig)
+
+    else:
+        c1, c2 = st.columns([1, 1.3])
+        with c1:
+            with st.container(border=True):
+                header_tarjeta("Trapecio Simétrico")
+                B_may = st.number_input("Base mayor (B):", min_value=0.1, value=8.0, step=0.5, key="trap_B")
+                b_men = st.number_input("Base menor (b):", min_value=0.1, value=4.0, step=0.5, key="trap_b")
+                h_trap = st.number_input("Altura (h):", min_value=0.1, value=3.5, step=0.5, key="trap_h")
+
+                voladizo = (B_may - b_men) / 2.0
+                lado_lat = math.hypot(voladizo, h_trap)
+                perim_t = B_may + b_men + 2 * lado_lat
+                area_t = 0.5 * (B_may + b_men) * h_trap
+                mediana_t = 0.5 * (B_may + b_men)
+                diag_t = math.hypot(B_may - voladizo, h_trap)
+
+                st.markdown(
+                    f"| Métrica | Valor |\n"
+                    f"|---|---|\n"
+                    f"| **Área ($\\frac{{B+b}}{{2}}h$)** | **{area_t:.4f}** |\n"
+                    f"| **Perímetro** | **{perim_t:.4f}** |\n"
+                    f"| **Lado oblicuo ($l$)** | **{lado_lat:.4f}** |\n"
+                    f"| **Paralela media ($m$)** | **{mediana_t:.4f}** |\n"
+                    f"| **Diagonal ($d$)** | **{diag_t:.4f}** |"
+                )
+        with c2:
+            with st.container(border=True):
+                header_tarjeta("Gráfica del Trapecio")
+                fig, ax = _crear_fig_2d()
+                pts_t = np.array([
+                    [-B_may / 2, 0.0],
+                    [B_may / 2, 0.0],
+                    [b_men / 2, h_trap],
+                    [-b_men / 2, h_trap],
+                ])
+                ax.add_patch(Polygon(pts_t, closed=True, fc=AZUL, alpha=0.18, ec=AZUL, lw=2.4))
+                ax.plot([-mediana_t / 2, mediana_t / 2], [h_trap / 2, h_trap / 2], color=NARANJA, ls="--", lw=1.8, label=f"Paralela media = {mediana_t:.2f}")
+                ax.plot([0, 0], [0, h_trap], color=ROJO, ls=":", lw=1.8, label=f"Altura h = {h_trap:.2f}")
+                margen = max(B_may, h_trap) * 0.25 + 1.0
+                ax.set_xlim(-B_may / 2 - margen, B_may / 2 + margen)
+                ax.set_ylim(-1.0, h_trap + margen)
+                ax.legend(loc="upper right", fontsize=8.5)
+                mostrar_figura_segura(fig)
 
 
 # ==============================================================================
-# PESTAÑA 2: GEOMETRÍA ANALÍTICA EN R² (RECTAS Y PARÁBOLAS)
+# PESTAÑA 2: GEOMETRÍA ANALÍTICA PLANA (RECTAS Y CÓNICAS EN R^2)
 # ==============================================================================
-with tab2:
-    with st.container(border=True):
-        header_tarjeta("📈 Herramientas de Geometría Analítica")
-        herramienta = st.radio(
-            "Seleccione el análisis:",
-            [
-                "📍 Recta por 2 Puntos y Distancia",
-                "⚔️ Intersección de 2 Rectas",
-                "📐 Parábola / Ecuación Cuadrática",
-            ],
-            horizontal=True,
-        )
-        st.divider()
+with tab_analitica_2d:
+    sub_modo_a2 = st.radio(
+        "Seleccione el tema de Geometría Analítica Plana:",
+        [
+            "📏 La Recta en ℝ² (Formas, Distancia Punto-Recta e Intersección)",
+            "🎯 Secciones Cónicas Canónicas (Parábola, Elipse, Hipérbola)",
+            "🔄 Ecuación General de 2.º Grado con Rotación de Ejes (Ax² + Bxy + Cy² + Dx + Ey + F = 0)",
+        ],
+        horizontal=True,
+        key="geo_a2_modo",
+    )
 
-        if "Recta por 2 Puntos" in herramienta:
-            c1, c2, c3 = st.columns(3, gap="medium")
-            with c1:
-                st.markdown("**Punto $A(x_1, y_1)$**")
-                x1 = st.number_input("x₁:", value=-2.0, step=1.0)
-                y1 = st.number_input("y₁:", value=1.0, step=1.0)
-            with c2:
-                st.markdown("**Punto $B(x_2, y_2)$**")
-                x2 = st.number_input("x₂:", value=4.0, step=1.0)
-                y2 = st.number_input("y₂:", value=5.0, step=1.0)
-            with c3:
-                st.markdown("**Punto Externo $P_0(x_0, y_0)$**")
-                x0 = st.number_input("x₀:", value=2.0, step=1.0)
-                y0 = st.number_input("y₀:", value=-1.0, step=1.0)
+    st.divider()
 
-            dx, dy = x2 - x1, y2 - y1
-            dist_ab = math.hypot(dx, dy)
-            xm, ym = (x1 + x2) / 2.0, (y1 + y2) / 2.0
+    if sub_modo_a2.startswith("📏"):
+        c_izq, c_der = st.columns([1.05, 1.25])
+        with c_izq:
+            with st.container(border=True):
+                header_tarjeta("Recta Principal L₁ y Punto de Prueba P₀")
+                st.caption("Forma general: $Ax + By + C = 0$")
+                ca, cb, cc = st.columns(3)
+                A1 = ca.number_input("A₁:", value=3.0, step=1.0, key="r1_A")
+                B1 = cb.number_input("B₁:", value=-4.0, step=1.0, key="r1_B")
+                C1 = cc.number_input("C₁:", value=-6.0, step=1.0, key="r1_C")
 
-            if dist_ab < 1e-12:
-                st.error("Los puntos $A$ y $B$ son idénticos: no definen una única recta.")
-            else:
-                A_r, B_r, C_r = dy, -dx, dx * y1 - dy * x1
-                dist_p0 = abs(A_r * x0 + B_r * y0 + C_r) / math.hypot(A_r, B_r)
-                factor_p = (A_r * x0 + B_r * y0 + C_r) / (A_r**2 + B_r**2)
-                xp, yp = x0 - A_r * factor_p, y0 - B_r * factor_p
+                subheader_tarjeta("Punto P₀(x₀, y₀) para distancia y proyección")
+                cp1, cp2 = st.columns(2)
+                x0_p = cp1.number_input("x₀:", value=2.0, step=0.5, key="r1_x0")
+                y0_p = cp2.number_input("y₀:", value=4.0, step=0.5, key="r1_y0")
 
-                st.write("")
-                col_r, col_g = st.columns([1.05, 1.15], gap="large")
-                with col_r:
-                    m1, m2 = st.columns(2)
-                    m1.metric("Distancia d(A, B)", f"{dist_ab:,.3f}")
-                    m2.metric("Punto Medio M", f"({xm:.2f}, {ym:.2f})")
-                    st.write("")
-                    m3, m4 = st.columns(2)
-                    m3.metric("Distancia d(P₀, Recta)", f"{dist_p0:,.3f}")
-                    if abs(dx) > 1e-12:
-                        m_pend = dy / dx
-                        ang_inc = math.degrees(math.atan(m_pend))
-                        if ang_inc < 0:
-                            ang_inc += 180.0
-                        b_ord = y1 - m_pend * x1
-                        m4.metric("Pendiente (m)", f"{m_pend:,.3f}")
-                        signo_b = "+" if b_ord >= 0 else "-"
-                        st.latex(rf"y = {m_pend:.4g}x {signo_b} {abs(b_ord):.4g} \quad (\theta = {ang_inc:.2f}^\circ)")
-                    else:
-                        m4.metric("Pendiente (m)", "Indefinida (90°)")
-                        st.latex(rf"x = {x1:.4g}")
-                    st.latex(rf"\text{{Forma General: }} ({A_r:.4g})x + ({B_r:.4g})y + ({C_r:.4g}) = 0")
+                comp_l2 = st.checkbox("Comparar con una segunda recta L₂ (A₂x + B₂y + C₂ = 0)", value=True, key="r2_chk")
+                if comp_l2:
+                    d1, d2, d3 = st.columns(3)
+                    A2 = d1.number_input("A₂:", value=1.0, step=1.0, key="r2_A")
+                    B2 = d2.number_input("B₂:", value=2.0, step=1.0, key="r2_B")
+                    C2 = d3.number_input("C₂:", value=-4.0, step=1.0, key="r2_C")
 
-                with col_g:
-                    fig_r, ax_r = _fig_2d(titulo="Recta AB y proyección desde P₀")
-                    xmin, xmax = min(x1, x2, x0, xp) - 2.5, max(x1, x2, x0, xp) + 2.5
-                    if abs(dx) > 1e-12:
-                        xx = np.linspace(xmin, xmax, 200)
-                        ax_r.plot(xx, m_pend * (xx - x1) + y1, color=AZUL, lw=2.2, label="Recta AB")
-                    else:
-                        ax_r.axvline(x1, color=AZUL, lw=2.2, label="Recta AB")
-                    ax_r.plot([x0, xp], [y0, yp], ls="--", color=ROJO, lw=1.6, label=f"d = {dist_p0:.2f}")
-                    ax_r.plot([x1, x2], [y1, y2], "o", color=AZUL, ms=6)
-                    ax_r.plot([xm], [ym], "s", color=VERDE, ms=6, label="Punto Medio")
-                    ax_r.plot([x0], [y0], "o", color=ROJO, ms=6, label="P₀")
-                    ax_r.legend(fontsize=8, frameon=False)
-                    st.pyplot(fig_r)
-
-        elif "Intersección de 2 Rectas" in herramienta:
-            c1, c2 = st.columns(2, gap="large")
-            with c1:
-                st.markdown("**Recta $L_1: A_1x + B_1y + C_1 = 0$**")
-                a1 = st.number_input("A₁:", value=2.0, step=1.0)
-                b1 = st.number_input("B₁:", value=-1.0, step=1.0)
-                c1_v = st.number_input("C₁:", value=-1.0, step=1.0)
-            with c2:
-                st.markdown("**Recta $L_2: A_2x + B_2y + C_2 = 0$**")
-                a2 = st.number_input("A₂:", value=1.0, step=1.0)
-                b2 = st.number_input("B₂:", value=1.0, step=1.0)
-                c2_v = st.number_input("C₂:", value=-5.0, step=1.0)
-
-            n1, n2 = math.hypot(a1, b1), math.hypot(a2, b2)
-            if n1 < 1e-12 or n2 < 1e-12:
-                st.error("Los coeficientes $A$ y $B$ de cada recta no pueden ser ambos cero.")
-            else:
-                det_sis = a1 * b2 - a2 * b1
-                cos_ang = abs(a1 * a2 + b1 * b2) / (n1 * n2)
-                ang_agudo = math.degrees(math.acos(np.clip(cos_ang, 0.0, 1.0)))
-
-                st.write("")
-                if abs(det_sis) < 1e-12:
-                    if abs(a1 * c2_v - a2 * c1_v) < 1e-12 and abs(b1 * c2_v - b2 * c1_v) < 1e-12:
-                        st.info("Las dos rectas son **COINCIDENTES**.")
-                    else:
-                        st.warning("Las dos rectas son **PARALELAS** (no se cortan).")
-                else:
-                    xi = (b1 * c2_v - b2 * c1_v) / det_sis
-                    yi = (c1_v * a2 - c2_v * a1) / det_sis
-                    col_r, col_g = st.columns([1, 1.2], gap="large")
-                    with col_r:
-                        m1, m2 = st.columns(2)
-                        m1.metric("Intersección (x, y)", f"({xi:.2f}, {yi:.2f})")
-                        m2.metric("Ángulo entre rectas", f"{ang_agudo:.2f}°")
-                        st.success("Rectas **Perpendiculares**" if abs(ang_agudo - 90.0) < 1e-5 else "Rectas **Secantes**")
-                    with col_g:
-                        fig_l, ax_l = _fig_2d(titulo=f"Intersección en ({xi:.2f}, {yi:.2f})")
-                        xx = np.linspace(xi - 5, xi + 5, 200)
-                        for ai, bi, ci, col, lab in ((a1, b1, c1_v, AZUL, "L₁"), (a2, b2, c2_v, NARANJA, "L₂")):
-                            if abs(bi) > 1e-12:
-                                ax_l.plot(xx, (-ai * xx - ci) / bi, color=col, lw=2.2, label=lab)
-                            else:
-                                ax_l.axvline(-ci / ai, color=col, lw=2.2, label=lab)
-                        ax_l.plot([xi], [yi], "o", color=ROJO, ms=7, zorder=6)
-                        ax_l.set_xlim(xi - 5, xi + 5)
-                        ax_l.set_ylim(yi - 5, yi + 5)
-                        ax_l.legend(fontsize=8, frameon=False)
-                        st.pyplot(fig_l)
-
+        norm1 = math.hypot(A1, B1)
+        if norm1 < 1e-12:
+            st.error("⛔ Los coeficientes A₁ y B₁ no pueden ser ambos cero.")
         else:
-            st.markdown("Ecuación cuadrática de la forma: $y = Ax^2 + Bx + C$")
-            c1, c2, c3 = st.columns(3, gap="medium")
-            a_coef = c1.number_input("Coeficiente $A$:", value=1.0, step=0.5)
-            b_coef = c2.number_input("Coeficiente $B$:", value=-4.0, step=0.5)
-            c_coef = c3.number_input("Coeficiente $C$:", value=3.0, step=0.5)
+            # Cálculos exactos de L1 y P0
+            val_eval = A1 * x0_p + B1 * y0_p + C1
+            dist_p0 = abs(val_eval) / norm1
+            # Proyección ortogonal (pie de la perpendicular H) y reflejo P'
+            factor_proy = val_eval / (norm1**2)
+            hx = x0_p - A1 * factor_proy
+            hy = y0_p - B1 * factor_proy
+            rx = 2 * hx - x0_p
+            ry = 2 * hy - y0_p
 
-            if a_coef == 0 and b_coef == 0:
-                st.warning("No es una ecuación válida ($A = 0$ y $B = 0$).")
-            elif a_coef == 0:
-                st.info(f"Es una función lineal con raíz en $x = {-c_coef / b_coef:.4f}$.")
-            else:
-                disc = b_coef**2 - 4 * a_coef * c_coef
-                xv = -b_coef / (2.0 * a_coef)
-                yv = a_coef * xv**2 + b_coef * xv + c_coef
-                p_focal = 1.0 / (4.0 * a_coef)
-                yf = yv + p_focal
-                y_dir = yv - p_focal
+            with c_der:
+                with st.container(border=True):
+                    header_tarjeta("Gráfica de L₁, Proyección Ortogonal y L₂")
+                    fig, ax = _crear_fig_2d()
+                    cx_graf = hx
+                    cy_graf = hy
+                    span = max(dist_p0 * 2.2, 6.0)
+                    xs_l = np.linspace(cx_graf - span, cx_graf + span, 400)
 
-                st.write("")
-                col_r, col_g = st.columns([1.05, 1.15], gap="large")
-                with col_r:
-                    m1, m2 = st.columns(2)
-                    m1.metric("Vértice V(h, k)", f"({xv:.2f}, {yv:.2f})")
-                    m2.metric("Foco F", f"({xv:.2f}, {yf:.2f})")
-                    st.write("")
-                    m3, m4 = st.columns(2)
-                    m3.metric("Directriz", f"y = {y_dir:.2f}")
-                    m4.metric("Discriminante (Δ)", f"{disc:.2f}")
-
-                    if disc >= 0:
-                        x1 = (-b_coef + math.sqrt(disc)) / (2 * a_coef)
-                        x2 = (-b_coef - math.sqrt(disc)) / (2 * a_coef)
-                        st.success(f"**Raíces Reales:** $x_1 = {x1:.3f}$, $x_2 = {x2:.3f}$")
+                    if abs(B1) > 1e-9:
+                        ys_l1 = (-A1 * xs_l - C1) / B1
+                        ax.plot(xs_l, ys_l1, color=AZUL, lw=2.4, label=f"L₁: {A1:g}x + ({B1:g})y + ({C1:g}) = 0")
                     else:
-                        re_p = -b_coef / (2 * a_coef)
-                        im_p = abs(math.sqrt(-disc) / (2 * a_coef))
-                        st.warning(f"**Raíces Complejas:** $x = {re_p:.3f} \\pm {im_p:.3f}i$")
+                        x_ fijo = -C1 / A1
+                        ax.axvline(x_fijo, color=AZUL, lw=2.4, label=f"L₁: x = {x_fijo:.2f}")
 
-                with col_g:
-                    ancho = max(5.0, abs(math.sqrt(abs(disc)) / a_coef) * 1.4)
-                    xx = np.linspace(xv - ancho, xv + ancho, 400)
-                    yy = a_coef * xx**2 + b_coef * xx + c_coef
-                    fig_q, ax_q = _fig_2d(titulo="Parábola f(x) = Ax² + Bx + C")
-                    ax_q.plot(xx, yy, color=AZUL, lw=2.3, label="f(x)")
-                    ax_q.axhline(y_dir, color=ROJO, ls=":", lw=1.4, label=f"Directriz y={y_dir:.2f}")
-                    ax_q.plot([xv], [yv], "o", color=VERDE, ms=7, label="Vértice")
-                    ax_q.plot([xv], [yf], "*", color=NARANJA, ms=8, label="Foco")
-                    if disc >= 0:
-                        ax_q.plot([x1, x2], [0, 0], "o", color=ROJO, ms=6, label="Raíces")
-                    ax_q.legend(fontsize=8, frameon=False)
-                    st.pyplot(fig_q)
+                    # Segmento perpendicular P0 -> H y reflejo P'
+                    ax.plot([x0_p, rx], [y0_p, ry], color=ROJO, ls="--", lw=1.6, label=f"d(P₀, L₁) = {dist_p0:.3f}")
+                    _anotar_pt(ax, x0_p, y0_p, "P₀", ROJO, 10, 10)
+                    _anotar_pt(ax, hx, hy, "Pie H", VERDE, 10, -20)
+                    _anotar_pt(ax, rx, ry, "Reflejo P′", MORADO, 10, -18)
 
+                    if comp_l2 and math.hypot(A2, B2) > 1e-12:
+                        if abs(B2) > 1e-9:
+                            ys_l2 = (-A2 * xs_l - C2) / B2
+                            ax.plot(xs_l, ys_l2, color=NARANJA, lw=2.0, label=f"L₂: {A2:g}x + ({B2:g})y + ({C2:g}) = 0")
+                        else:
+                            ax.axvline(-C2 / A2, color=NARANJA, lw=2.0, label="L₂")
+                        det_l = A1 * B2 - A2 * B1
+                        if abs(det_l) > 1e-9:
+                            ix = (B1 * C2 - B2 * C1) / det_l
+                            iy = (C1 * A2 - C2 * A1) / det_l
+                            _anotar_pt(ax, ix, iy, "Intersección", NARANJA, -30, 14)
 
-# ==============================================================================
-# PESTAÑA 3: SECCIONES CÓNICAS (Ax² + Bxy + Cy² + Dx + Ey + F = 0)
-# ==============================================================================
-with tab3:
-    with st.container(border=True):
-        header_tarjeta("🪐 Clasificador de Secciones Cónicas y Rotación de Ejes")
-        st.caption("Ingrese los coeficientes de la ecuación general $Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0$:")
+                    ax.set_xlim(cx_graf - span, cx_graf + span)
+                    ax.set_ylim(cy_graf - span, cy_graf + span)
+                    ax.legend(loc="upper right", fontsize=8.0)
+                    mostrar_figura_segura(fig)
 
-        c1, c2, c3 = st.columns(3, gap="medium")
-        A_c = c1.number_input("Coeficiente $A$ ($x^2$):", value=5.0, step=1.0)
-        B_c = c2.number_input("Coeficiente $B$ ($xy$):", value=4.0, step=1.0)
-        C_c = c3.number_input("Coeficiente $C$ ($y^2$):", value=2.0, step=1.0)
+            with st.container(border=True):
+                subheader_tarjeta("Formas de la Recta L₁ y Resultados Analíticos")
+                pendiente_str = f"{-A1 / B1:.4f}" if abs(B1) > 1e-9 else "∞ (vertical)"
+                ang_inc = math.degrees(math.atan2(-A1, B1)) % 180.0
+                corte_x = f"({-C1 / A1:.4f}, 0)" if abs(A1) > 1e-9 else "No corta"
+                corte_y = f"(0, {-C1 / B1:.4f})" if abs(B1) > 1e-9 else "No corta"
 
-        c4, c5, c6 = st.columns(3, gap="medium")
-        D_c = c4.number_input("Coeficiente $D$ ($x$):", value=0.0, step=1.0)
-        E_c = c5.number_input("Coeficiente $E$ ($y$):", value=0.0, step=1.0)
-        F_c = c6.number_input("Término independiente $F$:", value=-6.0, step=1.0)
+                st.markdown(
+                    f"| Concepto | Valor / Ecuación |\n"
+                    f"|---|---|\n"
+                    f"| **Pendiente ($m$) y Ángulo de inclinación ($\\alpha$)** | $m = {pendiente_str}$ · $\\alpha = {ang_inc:.2f}^\\circ$ |\n"
+                    f"| **Vector normal $\\mathbf{{n}}$ y Vector director $\\mathbf{{v}}$** | $\\mathbf{{n}} = ({A1:g}, {B1:g})$ · $\\mathbf{{v}} = ({-B1:g}, {A1:g})$ |\n"
+                    f"| **Intersecciones con los ejes** | Eje X: `{corte_x}` · Eje Y: `{corte_y}` |\n"
+                    f"| **Distancia de $P_0({x0_p:g}, {y0_p:g})$ a $L_1$** | $d(P_0, L_1) = \\dfrac{{|A_1x_0 + B_1y_0 + C_1|}}{{\\sqrt{{A_1^2+B_1^2}}}} = \\mathbf{{{dist_p0:.4f}}}$ |\n"
+                    f"| **Pie de la perpendicular (Proyección $H$)** | $H = ({hx:.4f},\\, {hy:.4f})$ |\n"
+                    f"| **Punto simétrico de $P_0$ respecto a $L_1$ ($P'$)** | $P' = ({rx:.4f},\\, {ry:.4f})$ |"
+                )
 
-        if abs(A_c) < 1e-12 and abs(B_c) < 1e-12 and abs(C_c) < 1e-12:
-            st.warning("Al menos uno de los coeficientes cuadráticos ($A, B, C$) debe ser distinto de cero.")
-        else:
-            inv_I = B_c**2 - 4 * A_c * C_c
-            M_3 = np.array([
-                [A_c, B_c / 2.0, D_c / 2.0],
-                [B_c / 2.0, C_c, E_c / 2.0],
-                [D_c / 2.0, E_c / 2.0, F_c],
-            ])
-            det_3 = float(np.linalg.det(M_3))
+                if comp_l2 and math.hypot(A2, B2) > 1e-12:
+                    det_l = A1 * B2 - A2 * B1
+                    prod_n = A1 * A2 + B1 * B2
+                    norm2 = math.hypot(A2, B2)
+                    cos_th = min(1.0, abs(prod_n) / (norm1 * norm2))
+                    ang_entre = math.degrees(math.acos(cos_th))
+                    if abs(det_l) < 1e-9:
+                        dist_par = abs(C1 / norm1 - (C2 * (A1 / A2 if abs(A2) > 1e-9 else B1 / B2)) / norm1)
+                        st.info(f"**Relación con $L_2$:** Las rectas son **PARALELAS** ($\\theta = 0^\\circ$). Distancia entre ellas: **{dist_par:.4f}**.")
+                    else:
+                        ix = (B1 * C2 - B2 * C1) / det_l
+                        iy = (C1 * A2 - C2 * A1) / det_l
+                        tipo_sec = "**PERPENDICULARES (Ortogonales)**" if abs(prod_n) < 1e-9 else "**SECANTES**"
+                        st.success(f"**Relación con $L_2$:** Son {tipo_sec}. Se cortan en $I = ({ix:.4f}, {iy:.4f})$ formando un ángulo agudo de **{ang_entre:.2f}°**.")
 
-            if abs(inv_I) < 1e-10:
-                tipo_con = "Parábola" if abs(det_3) > 1e-10 else "Parábola Degenerada"
-            elif inv_I < 0:
-                if abs(det_3) < 1e-10:
-                    tipo_con = "Punto Único"
-                elif det_3 * (A_c + C_c) > 0:
-                    tipo_con = "Conjunto Vacío en ℝ²"
-                elif abs(A_c - C_c) < 1e-10 and abs(B_c) < 1e-10:
-                    tipo_con = "Circunferencia"
+    elif sub_modo_a2.startswith("🎯"):
+        c_izq, c_der = st.columns([1.05, 1.25])
+        with c_izq:
+            with st.container(border=True):
+                header_tarjeta("Parámetros de la Sección Cónica")
+                tipo_con = st.selectbox(
+                    "Seleccione la cónica:",
+                    ["Elipse", "Hipérbola", "Parábola"],
+                    key="con_tipo",
+                )
+                orient = st.radio("Eje focal:", ["Horizontal (paralelo a X)", "Vertical (paralelo a Y)"], horizontal=True, key="con_ori")
+                ch1, ch2 = st.columns(2)
+                h_c = ch1.number_input("Centro / Vértice h (en X):", value=1.0, step=0.5, key="con_h")
+                k_c = ch2.number_input("Centro / Vértice k (en Y):", value=-1.0, step=0.5, key="con_k")
+
+                if tipo_con in ("Elipse", "Hipérbola"):
+                    ca, cb = st.columns(2)
+                    a_c = ca.number_input("Semieje principal (a):", min_value=0.2, value=4.0, step=0.5, key="con_a")
+                    b_c = cb.number_input("Semieje secundario (b):", min_value=0.2, value=2.5, step=0.5, key="con_b")
+                    if tipo_con == "Elipse" and b_c > a_c:
+                        a_c, b_c = b_c, a_c
+                        st.caption("ℹ️ Se intercambió $a$ y $b$ para mantener $a \\ge b$ en la elipse.")
                 else:
-                    tipo_con = "Elipse"
-            else:
-                tipo_con = "Hipérbola" if abs(det_3) > 1e-10 else "Dos Rectas que se Cortan"
+                    p_par = st.number_input("Parámetro focal p (distancia Vértice-Foco, ≠ 0):", value=2.0, step=0.5, key="con_p")
+                    if abs(p_par) < 1e-6:
+                        p_par = 1.0
 
-            if abs(B_c) < 1e-12:
-                theta_rad = 0.0
-            elif abs(A_c - C_c) < 1e-12:
-                theta_rad = math.pi / 4.0
-            else:
-                theta_rad = 0.5 * math.atan2(B_c, A_c - C_c)
-            theta_deg = math.degrees(theta_rad)
+        with c_der:
+            with st.container(border=True):
+                header_tarjeta(f"Gráfica de la {tipo_con} y Elementos Notables")
+                fig, ax = _crear_fig_2d()
+                es_horiz = orient.startswith("Horizontal")
 
-            cx_c, cy_c = 0.0, 0.0
-            if abs(inv_I) > 1e-10:
-                sol_c = np.linalg.solve([[2 * A_c, B_c], [B_c, 2 * C_c]], [-D_c, -E_c])
-                cx_c, cy_c = float(sol_c[0]), float(sol_c[1])
+                if tipo_con == "Elipse":
+                    c_foc = math.sqrt(max(0.0, a_c**2 - b_c**2))
+                    exc = c_foc / a_c
+                    lr = 2 * (b_c**2) / a_c
+                    t_p = np.linspace(0, 2 * np.pi, 400)
+                    rx = a_c if es_horiz else b_c
+                    ry = b_c if es_horiz else a_c
+                    ax.plot(h_c + rx * np.cos(t_p), k_c + ry * np.sin(t_p), color=AZUL, lw=2.5, label="Elipse")
+                    f1 = (h_c - c_foc, k_c) if es_horiz else (h_c, k_c - c_foc)
+                    f2 = (h_c + c_foc, k_c) if es_horiz else (h_c, k_c + c_foc)
+                    _anotar_pt(ax, h_c, k_c, "C", OSCURO, 6, 8)
+                    _anotar_pt(ax, f1[0], f1[1], "F₁", ROJO, -20, -18)
+                    _anotar_pt(ax, f2[0], f2[1], "F₂", ROJO, 8, -18)
+                    m_v = max(rx, ry) * 1.4
+                    ax.set_xlim(h_c - m_v, h_c + m_v)
+                    ax.set_ylim(k_c - m_v, k_c + m_v)
+                    resumen_con = (
+                        f"* **Centro:** $C({h_c:g}, {k_c:g})$ · **Semiejes:** $a={a_c:g},\\, b={b_c:g}$ · **Distancia focal:** $c = \\sqrt{{a^2-b^2}} = {c_foc:.4f}$\n"
+                        f"* **Focos:** $F_1({f1[0]:.3f}, {f1[1]:.3f})$ y $F_2({f2[0]:.3f}, {f2[1]:.3f})$\n"
+                        f"* **Excentricidad:** $e = c/a = {exc:.4f}$ · **Lado Recto:** $LR = 2b^2/a = {lr:.4f}$ · **Área:** $\\pi a b = {math.pi * a_c * b_c:.4f}$"
+                    )
 
-            st.write("")
-            col_r, col_g = st.columns([1.05, 1.15], gap="large")
-            with col_r:
-                m1, m2 = st.columns(2)
-                m1.metric("Tipo de Cónica", tipo_con)
-                m2.metric("Ángulo de Rotación θ", f"{theta_deg:.2f}°")
-                st.write("")
-                m3, m4 = st.columns(2)
-                m3.metric("Discriminante B²-4AC", f"{inv_I:.2f}")
-                m4.metric("Centro", f"({cx_c:.2f}, {cy_c:.2f})" if abs(inv_I) > 1e-10 else "No central")
+                elif tipo_con == "Hipérbola":
+                    c_foc = math.hypot(a_c, b_c)
+                    exc = c_foc / a_c
+                    lr = 2 * (b_c**2) / a_c
+                    u_p = np.linspace(-2.0, 2.0, 300)
+                    if es_horiz:
+                        ax.plot(h_c + a_c * np.cosh(u_p), k_c + b_c * np.sinh(u_p), color=AZUL, lw=2.5, label="Hipérbola")
+                        ax.plot(h_c - a_c * np.cosh(u_p), k_c + b_c * np.sinh(u_p), color=AZUL, lw=2.5)
+                        xs_as = np.linspace(h_c - 3 * a_c, h_c + 3 * a_c, 100)
+                        ax.plot(xs_as, k_c + (b_c / a_c) * (xs_as - h_c), color=ROJO, ls="--", lw=1.4, label="Asíntotas")
+                        ax.plot(xs_as, k_c - (b_c / a_c) * (xs_as - h_c), color=ROJO, ls="--", lw=1.4)
+                        f1, f2 = (h_c - c_foc, k_c), (h_c + c_foc, k_c)
+                    else:
+                        ax.plot(h_c + b_c * np.sinh(u_p), k_c + a_c * np.cosh(u_p), color=AZUL, lw=2.5, label="Hipérbola")
+                        ax.plot(h_c + b_c * np.sinh(u_p), k_c - a_c * np.cosh(u_p), color=AZUL, lw=2.5)
+                        xs_as = np.linspace(h_c - 3 * b_c, h_c + 3 * b_c, 100)
+                        ax.plot(xs_as, k_c + (a_c / b_c) * (xs_as - h_c), color=ROJO, ls="--", lw=1.4, label="Asíntotas")
+                        ax.plot(xs_as, k_c - (a_c / b_c) * (xs_as - h_c), color=ROJO, ls="--", lw=1.4)
+                        f1, f2 = (h_c, k_c - c_foc), (h_c, k_c + c_foc)
+                    _anotar_pt(ax, h_c, k_c, "C", OSCURO, 6, 8)
+                    _anotar_pt(ax, f1[0], f1[1], "F₁", ROJO, -22, -16)
+                    _anotar_pt(ax, f2[0], f2[1], "F₂", ROJO, 8, 8)
+                    m_v = c_foc * 1.8
+                    ax.set_xlim(h_c - m_v, h_c + m_v)
+                    ax.set_ylim(k_c - m_v, k_c + m_v)
+                    pend_as = f"\\pm {b_c / a_c:.4f}" if es_horiz else f"\\pm {a_c / b_c:.4f}"
+                    resumen_con = (
+                        f"* **Centro:** $C({h_c:g}, {k_c:g})$ · **Semiejes:** $a={a_c:g},\\, b={b_c:g}$ · **Distancia focal:** $c = \\sqrt{{a^2+b^2}} = {c_foc:.4f}$\n"
+                        f"* **Focos:** $F_1({f1[0]:.3f}, {f1[1]:.3f})$ y $F_2({f2[0]:.3f}, {f2[1]:.3f})$\n"
+                        f"* **Excentricidad:** $e = c/a = {exc:.4f}$ · **Lado Recto:** $LR = 2b^2/a = {lr:.4f}$ · **Pendiente de asíntotas:** ${pend_as}$"
+                    )
 
-            with col_g:
-                fig_c, ax_c = _fig_2d(titulo=f"Lugar Geométrico: {tipo_con}")
-                ax_c.set_aspect("equal", adjustable="box")
-                r_vent = max(5.0, abs(cx_c) + 4.5, abs(cy_c) + 4.5)
-                Xg, Yg = np.meshgrid(np.linspace(cx_c - r_vent, cx_c + r_vent, 300), np.linspace(cy_c - r_vent, cy_c + r_vent, 300))
-                Zg = A_c * Xg**2 + B_c * Xg * Yg + C_c * Yg**2 + D_c * Xg + E_c * Yg + F_c
-                if np.nanmin(Zg) <= 0 <= np.nanmax(Zg):
-                    ax_c.contour(Xg, Yg, Zg, levels=[0], colors=[AZUL], linewidths=2.3)
-                if abs(B_c) > 1e-10:
-                    tt = np.linspace(-r_vent, r_vent, 100)
-                    ax_c.plot(cx_c + tt * math.cos(theta_rad), cy_c + tt * math.sin(theta_rad), ls="--", color=NARANJA, lw=1.2, label=f"Eje rotado ({theta_deg:.1f}°)")
-                    ax_c.legend(fontsize=8, frameon=False)
-                st.pyplot(fig_c)
+                else:
+                    lr = abs(4.0 * p_par)
+                    s_p = np.linspace(-2.5 * lr, 2.5 * lr, 300)
+                    if es_horiz:
+                        xs_p = h_c + (s_p**2) / (4.0 * p_par)
+                        ys_p = k_c + s_p
+                        foco = (h_c + p_par, k_c)
+                        dir_val = h_c - p_par
+                        ax.plot(xs_p, ys_p, color=AZUL, lw=2.5, label="Parábola")
+                        ax.axvline(dir_val, color=VERDE, ls="--", lw=1.8, label=f"Directriz x = {dir_val:.2f}")
+                    else:
+                        xs_p = h_c + s_p
+                        ys_p = k_c + (s_p**2) / (4.0 * p_par)
+                        foco = (h_c, k_c + p_par)
+                        dir_val = k_c - p_par
+                        ax.plot(xs_p, ys_p, color=AZUL, lw=2.5, label="Parábola")
+                        ax.axhline(dir_val, color=VERDE, ls="--", lw=1.8, label=f"Directriz y = {dir_val:.2f}")
+                    _anotar_pt(ax, h_c, k_c, "V", OSCURO, 8, -18)
+                    _anotar_pt(ax, foco[0], foco[1], "Foco", ROJO, 8, 10)
+                    m_v = max(abs(p_par) * 4.5, 5.0)
+                    ax.set_xlim(h_c - m_v, h_c + m_v)
+                    ax.set_ylim(k_c - m_v, k_c + m_v)
+                    resumen_con = (
+                        f"* **Vértice:** $V({h_c:g}, {k_c:g})$ · **Parámetro:** $p = {p_par:g}$ · **Foco:** $F({foco[0]:.3f}, {foco[1]:.3f})$\n"
+                        f"* **Directriz:** `{'x' if es_horiz else 'y'} = {dir_val:.4f}` · **Excentricidad:** $e = 1$ · **Lado Recto:** $|4p| = {lr:.4f}$"
+                    )
+
+                ax.legend(loc="upper right", fontsize=8.5)
+                mostrar_figura_segura(fig)
+
+        with st.container(border=True):
+            subheader_tarjeta("Propiedades Analíticas de la Cónica")
+            st.markdown(resumen_con)
+
+    else:
+        # Ecuación general Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0
+        c_izq, c_der = st.columns([1.05, 1.25])
+        with c_izq:
+            with st.container(border=True):
+                header_tarjeta("Coeficientes de Ax² + Bxy + Cy² + Dx + Ey + F = 0")
+                c1, c2, c3 = st.columns(3)
+                Ag = c1.number_input("A (x²):", value=5.0, step=1.0, key="cg_A")
+                Bg = c2.number_input("B (xy):", value=4.0, step=1.0, key="cg_B")
+                Cg = c3.number_input("C (y²):", value=2.0, step=1.0, key="cg_C")
+                c4, c5, c6 = st.columns(3)
+                Dg = c4.number_input("D (x):", value=0.0, step=1.0, key="cg_D")
+                Eg = c5.number_input("E (y):", value=0.0, step=1.0, key="cg_E")
+                Fg = c6.number_input("F (indep.):", value=-6.0, step=1.0, key="cg_F")
+
+                inv_I = Ag + Cg
+                disc_2 = Bg**2 - 4 * Ag * Cg
+                mat_3 = np.array([
+                    [Ag, Bg / 2.0, Dg / 2.0],
+                    [Bg / 2.0, Cg, Eg / 2.0],
+                    [Dg / 2.0, Eg / 2.0, Fg],
+                ])
+                det_3 = float(np.linalg.det(mat_3))
+
+                if abs(Bg) < 1e-12:
+                    theta_rot = 0.0
+                else:
+                    theta_rot = 0.5 * math.atan2(Bg, Ag - Cg)
+                theta_deg = math.degrees(theta_rot)
+                c_t, s_t = math.cos(theta_rot), math.sin(theta_rot)
+                Ap = Ag * c_t**2 + Bg * c_t * s_t + Cg * s_t**2
+                Cp = Ag * s_t**2 - Bg * c_t * s_t + Cg * c_t**2
+                Dp = Dg * c_t + Eg * s_t
+                Ep = -Dg * s_t + Eg * c_t
+
+                if disc_2 < -1e-9:
+                    genero = "Tipo Elíptico (Elipse, Circunferencia o Punto/Vacío)"
+                elif disc_2 > 1e-9:
+                    genero = "Tipo Hiperbólico (Hipérbola o Par de Rectas Secantes)"
+                else:
+                    genero = "Tipo Parabólico (Parábola o Rectas Paralelas)"
+
+                st.markdown(
+                    f"| Invariante / Parámetro | Valor |\n"
+                    f"|---|---|\n"
+                    f"| **Traza cuadrática ($I = A + C$)** | `{inv_I:.4f}` |\n"
+                    f"| **Discriminante ($\\Delta_2 = B^2 - 4AC$)** | `{disc_2:.4f}` ({genero}) |\n"
+                    f"| **Determinante cúbico ($\\Delta_3$)** | `{det_3:.4f}` ({'No degenerada' if abs(det_3) > 1e-7 else 'Degenerada'}) |\n"
+                    f"| **Ángulo de rotación ($\\theta$)** | **{theta_deg:.2f}°** ($\\theta = \\frac{{1}}{{2}}\\operatorname{{atan2}}(B, A-C)$) |\n"
+                    f"| **Nuevos coeficientes sin término $x'y'$** | $A' = {Ap:.4f},\\; C' = {Cp:.4f},\\; D' = {Dp:.4f},\\; E' = {Ep:.4f}$ |"
+                )
+
+        with c_der:
+            with st.container(border=True):
+                header_tarjeta("Curva y Ejes Rotados (x′, y′)")
+                fig, ax = _crear_fig_2d()
+                xs_m = np.linspace(-6.0, 6.0, 300)
+                X, Y = np.meshgrid(xs_m, xs_m)
+                Z = Ag * X**2 + Bg * X * Y + Cg * Y**2 + Dg * X + Eg * Y + Fg
+                if np.nanmin(Z) <= 0 <= np.nanmax(Z):
+                    ax.contour(X, Y, Z, levels=[0], colors=[AZUL], linewidths=2.5)
+                    ax.plot([], [], color=AZUL, lw=2.5, label="Cónica (lugar geométrico)")
+                else:
+                    ax.text(0, 0, "Lugar geométrico vacío en [-6, 6]²", ha="center", color=ROJO)
+
+                # Dibujar ejes rotados x' y y'
+                L_eje = 5.5
+                ax.plot([-L_eje * c_t, L_eje * c_t], [-L_eje * s_t, L_eje * s_t], color=ROJO, ls="--", lw=1.4, label=f"Eje x′ (θ = {theta_deg:.1f}°)")
+                ax.plot([L_eje * s_t, -L_eje * s_t], [-L_eje * c_t, L_eje * c_t], color=VERDE, ls=":", lw=1.4, label="Eje y′")
+                ax.set_xlim(-6, 6)
+                ax.set_ylim(-6, 6)
+                ax.legend(loc="upper right", fontsize=8.5)
+                mostrar_figura_segura(fig)
 
 
 # ==============================================================================
-# PESTAÑA 4: SÓLIDOS 3D Y COORDENADAS ESPACIALES
+# PESTAÑA 3: SÓLIDOS, PLANOS, RECTAS ALABEADAS Y CUÁDRICAS EN R^3
 # ==============================================================================
-with tab4:
-    with st.container(border=True):
-        header_tarjeta("🧊 Cálculo de Sólidos en ℝ³")
-        figura_3d = st.selectbox(
-            "Seleccione el sólido:",
-            [
-                "Cilindro",
-                "Esfera",
-                "Cono",
-                "Pirámide cuadrangular",
-                "Prisma rectangular",
-                "Prisma triangular",
-                "Toro (Dona)",
-            ],
-        )
+with tab_3d:
+    modo_3d = st.radio(
+        "Seleccione la herramienta de Geometría en el Espacio (ℝ³):",
+        [
+            "🧊 1. Sólidos Geométricos (con Tapas y Áreas/Volúmenes)",
+            "🛩️ 2. Planos y Distancia entre Rectas en ℝ³ (Secantes, Paralelas, Alabeadas)",
+            "🌐 3. Conversor Cartesiano ↔ Cilíndrico ↔ Esférico y Superficies Cuádricas",
+        ],
+        horizontal=True,
+        key="geo_3d_modo",
+    )
 
-        params_3d = {}
-        vol = area_lat = area_tot = 0.0
-        valido_3d = True
+    st.divider()
 
-        if figura_3d == "Cilindro":
-            c1, c2 = st.columns(2)
-            r = c1.number_input("Radio ($r$):", min_value=0.01, value=2.0, step=0.5, key="cil_r")
-            h = c2.number_input("Altura ($h$):", min_value=0.01, value=4.0, step=0.5, key="cil_h")
-            params_3d = {"r": r, "h": h}
-            vol = math.pi * r**2 * h
-            area_lat = 2 * math.pi * r * h
-            area_tot = area_lat + 2 * math.pi * r**2
+    if modo_3d.startswith("🧊"):
+        c1, c2 = st.columns([1, 1.3])
+        with c1:
+            with st.container(border=True):
+                header_tarjeta("Selección de Sólido 3D")
+                solido = st.selectbox(
+                    "Cuerpo geométrico:",
+                    ["Cilindro Circular Recto", "Cono Circular Recto", "Esfera", "Toroide (Dona)", "Ortoedro (Caja Rectangular)"],
+                    key="sol_tipo",
+                )
 
-        elif figura_3d == "Esfera":
-            r = st.number_input("Radio ($r$):", min_value=0.01, value=3.0, step=0.5, key="esf_r")
-            params_3d = {"r": r}
-            vol = (4.0 / 3.0) * math.pi * r**3
-            area_lat = 4 * math.pi * r**2
-            area_tot = area_lat
+                if solido in ("Cilindro Circular Recto", "Cono Circular Recto"):
+                    r_s = st.number_input("Radio de la base (r):", min_value=0.2, value=3.0, step=0.5, key="sol_r")
+                    h_s = st.number_input("Altura (h):", min_value=0.2, value=5.0, step=0.5, key="sol_h")
+                    if solido.startswith("Cilindro"):
+                        a_base = math.pi * r_s**2
+                        a_lat = 2 * math.pi * r_s * h_s
+                        a_tot = 2 * a_base + a_lat
+                        vol = a_base * h_s
+                        st.markdown(
+                            f"* **Área de una base:** $\\pi r^2 = {a_base:.4f}$\n"
+                            f"* **Área lateral:** $2\\pi r h = {a_lat:.4f}$\n"
+                            f"* **Área total (con 2 tapas):** $2\\pi r(r + h) = \\mathbf{{{a_tot:.4f}}}$\n"
+                            f"* **Volumen:** $\\pi r^2 h = \\mathbf{{{vol:.4f}}}$"
+                        )
+                    else:
+                        gen = math.hypot(r_s, h_s)
+                        a_base = math.pi * r_s**2
+                        a_lat = math.pi * r_s * gen
+                        a_tot = a_base + a_lat
+                        vol = (a_base * h_s) / 3.0
+                        st.markdown(
+                            f"* **Generatriz ($g = \\sqrt{{r^2+h^2}}$):** `{gen:.4f}`\n"
+                            f"* **Área de la base:** $\\pi r^2 = {a_base:.4f}$\n"
+                            f"* **Área lateral:** $\\pi r g = {a_lat:.4f}$\n"
+                            f"* **Área total:** $\\pi r(r + g) = \\mathbf{{{a_tot:.4f}}}$\n"
+                            f"* **Volumen:** $\\frac{{1}}{{3}}\\pi r^2 h = \\mathbf{{{vol:.4f}}}$"
+                        )
+                elif solido == "Esfera":
+                    r_s = st.number_input("Radio (r):", min_value=0.2, value=3.5, step=0.5, key="esf_r")
+                    a_tot = 4 * math.pi * r_s**2
+                    vol = (4.0 / 3.0) * math.pi * r_s**3
+                    st.markdown(
+                        f"* **Área superficial:** $4\\pi r^2 = \\mathbf{{{a_tot:.4f}}}$\n"
+                        f"* **Volumen:** $\\frac{{4}}{{3}}\\pi r^3 = \\mathbf{{{vol:.4f}}}$"
+                    )
+                elif solido.startswith("Toroide"):
+                    R_may = st.number_input("Radio mayor (R):", min_value=1.0, value=4.0, step=0.5, key="tor_R")
+                    r_men = st.number_input("Radio del tubo (r < R):", min_value=0.2, max_value=float(R_may - 0.1), value=1.2, step=0.2, key="tor_r")
+                    a_tot = 4 * (math.pi**2) * R_may * r_men
+                    vol = 2 * (math.pi**2) * R_may * (r_men**2)
+                    st.markdown(
+                        f"* **Área superficial (Pappus):** $4\\pi^2 R r = \\mathbf{{{a_tot:.4f}}}$\n"
+                        f"* **Volumen (Pappus):** $2\\pi^2 R r^2 = \\mathbf{{{vol:.4f}}}$"
+                    )
+                else:
+                    lx_o = st.number_input("Largo (a):", min_value=0.2, value=4.0, step=0.5, key="ort_a")
+                    ly_o = st.number_input("Ancho (b):", min_value=0.2, value=3.0, step=0.5, key="ort_b")
+                    lz_o = st.number_input("Alto (c):", min_value=0.2, value=2.5, step=0.5, key="ort_c")
+                    a_tot = 2 * (lx_o * ly_o + lx_o * lz_o + ly_o * lz_o)
+                    vol = lx_o * ly_o * lz_o
+                    diag_esp = math.sqrt(lx_o**2 + ly_o**2 + lz_o**2)
+                    st.markdown(
+                        f"* **Área total (6 caras):** $2(ab+ac+bc) = \\mathbf{{{a_tot:.4f}}}$\n"
+                        f"* **Volumen:** $abc = \\mathbf{{{vol:.4f}}}$\n"
+                        f"* **Diagonal espacial:** $\\sqrt{{a^2+b^2+c^2}} = \\mathbf{{{diag_esp:.4f}}}$"
+                    )
 
-        elif figura_3d == "Cono":
-            c1, c2 = st.columns(2)
-            r = c1.number_input("Radio ($r$):", min_value=0.01, value=3.0, step=0.5, key="cono_r")
-            h = c2.number_input("Altura ($h$):", min_value=0.01, value=4.0, step=0.5, key="cono_h")
-            s = math.hypot(r, h)
-            params_3d = {"r": r, "h": h}
-            vol = (math.pi * r**2 * h) / 3.0
-            area_lat = math.pi * r * s
-            area_tot = area_lat + math.pi * r**2
+        with c2:
+            with st.container(border=True):
+                header_tarjeta(f"Visualización 3D: {solido}")
+                fig, ax = _crear_fig_3d(titulo=solido)
+                u = np.linspace(0, 2 * np.pi, 45)
+                if solido.startswith("Cilindro"):
+                    z_v = np.linspace(0, h_s, 25)
+                    U, Z = np.meshgrid(u, z_v)
+                    ax.plot_surface(r_s * np.cos(U), r_s * np.sin(U), Z, color=AZUL, alpha=0.65)
+                    # Tapas inferior y superior
+                    rad_m, ang_m = np.meshgrid(np.linspace(0, r_s, 12), u)
+                    X_t = rad_m * np.cos(ang_m)
+                    Y_t = rad_m * np.sin(ang_m)
+                    ax.plot_surface(X_t, Y_t, np.zeros_like(X_t), color=NARANJA, alpha=0.75)
+                    ax.plot_surface(X_t, Y_t, np.full_like(X_t, h_s), color=NARANJA, alpha=0.75)
+                    m_lim = max(r_s, h_s / 2) * 1.2
+                    ax.set_xlim(-m_lim, m_lim)
+                    ax.set_ylim(-m_lim, m_lim)
+                    ax.set_zlim(0, h_s * 1.15)
+                elif solido.startswith("Cono"):
+                    v_c = np.linspace(0, 1, 25)
+                    U, V = np.meshgrid(u, v_c)
+                    ax.plot_surface(r_s * (1 - V) * np.cos(U), r_s * (1 - V) * np.sin(U), h_s * V, color=AZUL, alpha=0.68)
+                    # Tapa de la base en z = 0
+                    rad_m, ang_m = np.meshgrid(np.linspace(0, r_s, 12), u)
+                    ax.plot_surface(rad_m * np.cos(ang_m), rad_m * np.sin(ang_m), np.zeros_like(rad_m), color=NARANJA, alpha=0.75)
+                    m_lim = max(r_s, h_s / 2) * 1.2
+                    ax.set_xlim(-m_lim, m_lim)
+                    ax.set_ylim(-m_lim, m_lim)
+                    ax.set_zlim(0, h_s * 1.15)
+                elif solido == "Esfera":
+                    v_e = np.linspace(0, np.pi, 30)
+                    U, V = np.meshgrid(u, v_e)
+                    ax.plot_surface(r_s * np.cos(U) * np.sin(V), r_s * np.sin(U) * np.sin(V), r_s * np.cos(V), color=AZUL, alpha=0.7)
+                    ax.set_box_aspect((1, 1, 1))
+                elif solido.startswith("Toroide"):
+                    U, V = np.meshgrid(u, u)
+                    X = (R_may + r_men * np.cos(V)) * np.cos(U)
+                    Y = (R_may + r_men * np.cos(V)) * np.sin(U)
+                    Z = r_men * np.sin(V)
+                    ax.plot_surface(X, Y, Z, color=AZUL, alpha=0.75, cmap="viridis")
+                    lim_t = R_may + r_men
+                    ax.set_xlim(-lim_t, lim_t)
+                    ax.set_ylim(-lim_t, lim_t)
+                    ax.set_zlim(-lim_t, lim_t)
+                else:
+                    # Ortoedro por caras
+                    X_c, Y_c = np.meshgrid([0, lx_o], [0, ly_o])
+                    ax.plot_surface(X_c, Y_c, np.zeros_like(X_c), color=AZUL, alpha=0.55)
+                    ax.plot_surface(X_c, Y_c, np.full_like(X_c, lz_o), color=AZUL, alpha=0.55)
+                    X_c2, Z_c2 = np.meshgrid([0, lx_o], [0, lz_o])
+                    ax.plot_surface(X_c2, np.zeros_like(X_c2), Z_c2, color=NARANJA, alpha=0.55)
+                    ax.plot_surface(X_c2, np.full_like(X_c2, ly_o), Z_c2, color=NARANJA, alpha=0.55)
+                    Y_c3, Z_c3 = np.meshgrid([0, ly_o], [0, lz_o])
+                    ax.plot_surface(np.zeros_like(Y_c3), Y_c3, Z_c3, color=VERDE, alpha=0.55)
+                    ax.plot_surface(np.full_like(Y_c3, lx_o), Y_c3, Z_c3, color=VERDE, alpha=0.55)
+                mostrar_figura_segura(fig)
 
-        elif figura_3d == "Pirámide cuadrangular":
-            c1, c2 = st.columns(2)
-            b = c1.number_input("Lado de la base ($b$):", min_value=0.01, value=4.0, step=0.5, key="pir_b")
-            h = c2.number_input("Altura ($h$):", min_value=0.01, value=4.0, step=0.5, key="pir_h")
-            s = math.hypot(b / 2.0, h)
-            params_3d = {"b": b, "h": h}
-            vol = (b**2 * h) / 3.0
-            area_lat = 2 * b * s
-            area_tot = area_lat + b**2
+    elif modo_3d.startswith("🛩️"):
+        c_izq, c_der = st.columns([1.05, 1.25])
+        with c_izq:
+            with st.container(border=True):
+                header_tarjeta("Posición Relativa y Distancia entre 2 Rectas en ℝ³")
+                st.caption("Recta $L_1: \\mathbf{p}_1 + t\\,\\mathbf{v}_1$ y Recta $L_2: \\mathbf{p}_2 + s\\,\\mathbf{v}_2$")
+                p1_str = st.text_input("Punto P₁ de L₁ (x, y, z):", value="1, 0, -1", key="l3_p1")
+                v1_str = st.text_input("Vector director v₁ de L₁:", value="2, 1, 1", key="l3_v1")
+                p2_str = st.text_input("Punto P₂ de L₂ (x, y, z):", value="0, 2, 1", key="l3_p2")
+                v2_str = st.text_input("Vector director v₂ de L₂:", value="1, -1, 2", key="l3_v2")
 
-        elif figura_3d == "Prisma rectangular":
-            c1, c2, c3 = st.columns(3)
-            l = c1.number_input("Largo ($l$):", min_value=0.01, value=4.0, step=0.5, key="prect_l")
-            w = c2.number_input("Ancho ($w$):", min_value=0.01, value=3.0, step=0.5, key="prect_w")
-            h = c3.number_input("Altura ($h$):", min_value=0.01, value=5.0, step=0.5, key="prect_h")
-            params_3d = {"l": l, "w": w, "h": h}
-            vol = l * w * h
-            area_lat = 2 * (l + w) * h
-            area_tot = area_lat + 2 * l * w
+        try:
+            P1 = np.array([float(x.strip()) for x in p1_str.split(",")], dtype=float)
+            V1 = np.array([float(x.strip()) for x in v1_str.split(",")], dtype=float)
+            P2 = np.array([float(x.strip()) for x in p2_str.split(",")], dtype=float)
+            V2 = np.array([float(x.strip()) for x in v2_str.split(",")], dtype=float)
+            if len(P1) != 3 or len(V1) != 3 or len(P2) != 3 or len(V2) != 3:
+                raise ValueError("Cada punto y vector debe tener exactamente 3 coordenadas.")
+            if np.linalg.norm(V1) < 1e-12 or np.linalg.norm(V2) < 1e-12:
+                raise ValueError("Los vectores directores no pueden ser el vector cero.")
 
-        elif figura_3d == "Prisma triangular":
-            c1, c2, c3 = st.columns(3)
-            b = c1.number_input("Base triángulo ($b$):", min_value=0.01, value=4.0, step=0.5, key="ptri_b")
-            h_tri = c2.number_input("Altura triángulo ($h_t$):", min_value=0.01, value=3.0, step=0.5, key="ptri_l")
-            h = c3.number_input("Altura prisma ($H$):", min_value=0.01, value=5.0, step=0.5, key="ptri_h")
-            params_3d = {"b": b, "h_tri": h_tri, "h": h}
-            lado_iso = math.hypot(b / 2.0, h_tri)
-            area_base = (b * h_tri) / 2.0
-            vol = area_base * h
-            area_lat = (b + 2 * lado_iso) * h
-            area_tot = area_lat + 2 * area_base
+            cruz_v = np.cross(V1, V2)
+            norm_cruz = float(np.linalg.norm(cruz_v))
+            dif_p = P2 - P1
+            cos_ang = np.clip(abs(np.dot(V1, V2)) / (np.linalg.norm(V1) * np.linalg.norm(V2)), 0.0, 1.0)
+            ang_rectas = math.degrees(math.acos(cos_ang))
 
-        elif figura_3d == "Toro (Dona)":
-            c1, c2 = st.columns(2)
-            R_may = c1.number_input("Radio Mayor ($R$):", min_value=0.1, value=4.0, step=0.5)
-            r_men = c2.number_input("Radio del Tubo ($r < R$):", min_value=0.05, value=1.5, step=0.25)
-            if r_men >= R_may:
-                st.error("⛔ El radio del tubo $r$ debe ser menor que el radio mayor $R$.")
-                valido_3d = False
+            if norm_cruz < 1e-9:
+                # Paralelas o coincidentes
+                dist_min = float(np.linalg.norm(np.cross(dif_p, V1)) / np.linalg.norm(V1))
+                pos_rel = "COINCIDENTES" if dist_min < 1e-9 else "PARALELAS"
+                Q1, Q2 = P1, P2 - (np.dot(dif_p, V1) / np.dot(V1, V1)) * V1
             else:
-                params_3d = {"R": R_may, "r": r_men}
-                vol = 2 * (math.pi**2) * R_may * (r_men**2)
-                area_lat = 4 * (math.pi**2) * R_may * r_men
-                area_tot = area_lat
+                prod_mixto = float(np.dot(dif_p, cruz_v))
+                dist_min = abs(prod_mixto) / norm_cruz
+                pos_rel = "SECANTES (se cortan en un punto)" if dist_min < 1e-8 else "ALABEADAS (se cruzan en el espacio sin cortarse)"
+                # Puntos más cercanos Q1 en L1 y Q2 en L2
+                n1 = np.cross(V1, cruz_v)
+                n2 = np.cross(V2, cruz_v)
+                t_opt = np.dot(dif_p, n2) / np.dot(V1, n2)
+                s_opt = np.dot(-dif_p, n1) / np.dot(V2, n1)
+                Q1 = P1 + t_opt * V1
+                Q2 = P2 + s_opt * V2
 
-        if valido_3d:
-            st.write("")
-            col_r3d, col_g3d = st.columns([1, 1.15], gap="large")
-            with col_r3d:
-                m1, m2 = st.columns(2)
-                m1.metric("Volumen (V)", f"{vol:,.3f}")
-                m2.metric("Área Total (A_T)", f"{area_tot:,.3f}")
-                st.write("")
-                st.metric("Área Lateral (A_L)", f"{area_lat:,.3f}")
-            with col_g3d:
-                st.pyplot(renderizar_solido_3d(figura_3d, params_3d))
+            with c_izq:
+                with st.container(border=True):
+                    subheader_tarjeta("Diagnóstico Espacial")
+                    st.success(f"**Posición relativa:** {pos_rel}")
+                    st.markdown(
+                        f"* **Distancia mínima $d(L_1, L_2)$:** `{dist_min:.4f}`\n"
+                        f"* **Ángulo entre directores:** `{ang_rectas:.2f}°`\n"
+                        f"* **Punto más cercano en $L_1$ ($Q_1$):** `({Q1[0]:.3f}, {Q1[1]:.3f}, {Q1[2]:.3f})`\n"
+                        f"* **Punto más cercano en $L_2$ ($Q_2$):** `({Q2[0]:.3f}, {Q2[1]:.3f}, {Q2[2]:.3f})`"
+                    )
+
+            with c_der:
+                with st.container(border=True):
+                    header_tarjeta("Gráfica 3D de L₁, L₂ y Segmento Perpendicular Mínimo")
+                    fig, ax = _crear_fig_3d(titulo=f"Rectas {pos_rel.split()[0]}")
+                    ts = np.linspace(-3.5, 3.5, 100)
+                    l1_pts = Q1[:, None] + V1[:, None] * ts
+                    l2_pts = Q2[:, None] + V2[:, None] * ts
+                    ax.plot(l1_pts[0], l1_pts[1], l1_pts[2], color=AZUL, lw=2.5, label="Recta L₁")
+                    ax.plot(l2_pts[0], l2_pts[1], l2_pts[2], color=NARANJA, lw=2.5, label="Recta L₂")
+                    ax.plot([Q1[0], Q2[0]], [Q1[1], Q2[1]], [Q1[2], Q2[2]], color=ROJO, ls="--", lw=2.2, label=f"d mín = {dist_min:.3f}")
+                    ax.scatter([Q1[0], Q2[0]], [Q1[1], Q2[1]], [Q1[2], Q2[2]], color=ROJO, s=50)
+                    ax.legend(loc="upper left", fontsize=8.5)
+                    mostrar_figura_segura(fig)
+        except Exception as err_l3:
+            st.error(f"Error en los datos: {err_l3}")
+
+    else:
+        c_conv, c_cuad = st.columns(2)
+        with c_conv:
+            with st.container(border=True):
+                header_tarjeta("Conversor de Coordenadas en ℝ³")
+                sis_origen = st.selectbox(
+                    "Sistema de entrada:",
+                    ["Cartesianas (x, y, z)", "Cilíndricas (ρ, θ°, z)", "Esféricas (r, θ°, φ°)"],
+                    key="conv_sis",
+                )
+                k1, k2, k3 = st.columns(3)
+                if sis_origen.startswith("Cart"):
+                    x_c = k1.number_input("x:", value=3.0, step=0.5, key="cx_x")
+                    y_c = k2.number_input("y:", value=4.0, step=0.5, key="cx_y")
+                    z_c = k3.number_input("z:", value=5.0, step=0.5, key="cx_z")
+                elif sis_origen.startswith("Cil"):
+                    rho_in = k1.number_input("ρ (≥ 0):", min_value=0.0, value=5.0, step=0.5, key="cl_rho")
+                    th_in = k2.number_input("θ (grados):", value=53.13, step=5.0, key="cl_th")
+                    z_c = k3.number_input("z:", value=5.0, step=0.5, key="cl_z")
+                    x_c = rho_in * math.cos(math.radians(th_in))
+                    y_c = rho_in * math.sin(math.radians(th_in))
+                else:
+                    r_in = k1.number_input("r (≥ 0):", min_value=0.0, value=7.071, step=0.5, key="es_r")
+                    th_in = k2.number_input("θ acimutal (°):", value=53.13, step=5.0, key="es_th")
+                    phi_in = k3.number_input("φ colatitud (0°..180°):", min_value=0.0, max_value=180.0, value=45.0, step=5.0, key="es_phi")
+                    x_c = r_in * math.sin(math.radians(phi_in)) * math.cos(math.radians(th_in))
+                    y_c = r_in * math.sin(math.radians(phi_in)) * math.sin(math.radians(th_in))
+                    z_c = r_in * math.cos(math.radians(phi_in))
+
+                rho_f = math.hypot(x_c, y_c)
+                r_f = math.sqrt(x_c**2 + y_c**2 + z_c**2)
+                theta_f = math.degrees(math.atan2(y_c, x_c))
+                phi_f = math.degrees(math.acos(z_c / r_f)) if r_f > 1e-12 else 0.0
+
+                st.markdown(
+                    f"| Sistema | Coordenadas Equivalentes |\n"
+                    f"|---|---|\n"
+                    f"| **Cartesianas $(x, y, z)$** | `({x_c:.4f}, {y_c:.4f}, {z_c:.4f})` |\n"
+                    f"| **Cilíndricas $(\\rho, \\theta, z)$** | `$\\rho = {rho_f:.4f}$, $\\theta = {theta_f:.2f}^\\circ$, $z = {z_c:.4f}$` |\n"
+                    f"| **Esféricas $(r, \\theta, \\varphi)$** | `$r = {r_f:.4f}$, $\\theta = {theta_f:.2f}^\\circ$, $\\varphi = {phi_f:.2f}^\\circ$` |"
+                )
+
+        with c_cuad:
+            with st.container(border=True):
+                header_tarjeta("Explorador de Superficies Cuádricas en ℝ³")
+                cuadrica = st.selectbox(
+                    "Superficie cuádrica:",
+                    [
+                        "Paraboloide Hiperbólico (Silla de montar: z = x²/a² − y²/b²)",
+                        "Paraboloide Elíptico (z = x²/a² + y²/b²)",
+                        "Hiperboloide de Una Hoja (x²/a² + y²/b² − z²/c² = 1)",
+                        "Cono Elíptico (z² = x²/a² + y²/b²)",
+                    ],
+                    key="cuad_sel",
+                )
+                fig, ax = _crear_fig_3d(titulo=cuadrica.split("(")[0].strip())
+                u_m = np.linspace(-2.5, 2.5, 45)
+                X_q, Y_q = np.meshgrid(u_m, u_m)
+                if cuadrica.startswith("Paraboloide Hiperbólico"):
+                    Z_q = X_q**2 - Y_q**2
+                    ax.plot_surface(X_q, Y_q, Z_q, cmap="coolwarm", alpha=0.85)
+                elif cuadrica.startswith("Paraboloide Elíptico"):
+                    Z_q = X_q**2 + Y_q**2
+                    ax.plot_surface(X_q, Y_q, Z_q, cmap="viridis", alpha=0.85)
+                elif cuadrica.startswith("Hiperboloide"):
+                    th_q = np.linspace(0, 2 * np.pi, 45)
+                    z_q = np.linspace(-2.0, 2.0, 30)
+                    TH, Z_m = np.meshgrid(th_q, z_q)
+                    R_m = np.sqrt(1.0 + Z_m**2)
+                    ax.plot_surface(R_m * np.cos(TH), R_m * np.sin(TH), Z_m, cmap="plasma", alpha=0.82)
+                else:
+                    th_q = np.linspace(0, 2 * np.pi, 45)
+                    z_q = np.linspace(-2.5, 2.5, 35)
+                    TH, Z_m = np.meshgrid(th_q, z_q)
+                    ax.plot_surface(np.abs(Z_m) * np.cos(TH), np.abs(Z_m) * np.sin(TH), Z_m, cmap="viridis", alpha=0.82)
+                mostrar_figura_segura(fig)
