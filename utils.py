@@ -1,11 +1,13 @@
 # utils.py
-# Programa: Calculadora_Avanzada / Mathesis V0.2
-# Objetivo: Funciones compartidas para Álgebra Lineal, Geometría y Análisis
+# Programa: Mathesis V0.3 — Núcleo de Utilidades, Parser Seguro y Constructores UI
 # Autores: José Alberto Fernández Cendejas e Ingrid Rebeca Ortega Flores
-# ---------------------------------------------------------- #
+# -------------------------------------------------------------------------------- #
 
 import multiprocessing
 import re
+from types import MappingProxyType
+
+import matplotlib.pyplot as plt
 import numpy as np
 import streamlit as st
 import sympy as sp
@@ -16,6 +18,8 @@ from sympy.parsing.sympy_parser import (
     standard_transformations,
 )
 
+from estilos import subheader_tarjeta
+
 try:
     from teclado_matematico import teclado_matematico
     from interprete_latex import latex_a_sympy, ErrorLatex
@@ -25,10 +29,20 @@ except Exception:
 
 
 # ==============================================================================
-# 1. INICIALIZACIÓN DE MEMORIA (SESSION STATE)
+# 1. INICIALIZACIÓN DE MEMORIA (SESSION STATE SEGURO PARA PYTEST)
 # ==============================================================================
+def _en_ejecucion_streamlit() -> bool:
+    """Devuelve True solo si hay una sesión activa de Streamlit (evita errores en pytest)."""
+    try:
+        return bool(st.runtime.exists())
+    except Exception:
+        return False
+
+
 def inicializar_estado():
     """Inicializa de forma segura todas las estructuras persistentes en st.session_state."""
+    if not _en_ejecucion_streamlit():
+        return
     defaults = {
         "mis_matrices": {},
         "mis_vectores": {},
@@ -44,14 +58,14 @@ def inicializar_estado():
             st.session_state[clave] = valor_inicial.copy() if isinstance(valor_inicial, dict) else valor_inicial
 
 
-# Se ejecuta al importar para proteger páginas que no llamen explícitamente a inicializar_estado()
-inicializar_estado()
+if _en_ejecucion_streamlit():
+    inicializar_estado()
 
 
 # ==============================================================================
-# 2. FUNCIONES DE APOYO Y PARSER SEGURO
+# 2. LÓGICA PURA: PARSER SEGURO, TIMEOUTS Y EVALUACIÓN NUMÉRICA
 # ==============================================================================
-_SAFE_GLOBALS = {
+_SAFE_GLOBALS = MappingProxyType({
     "__builtins__": {},
     "Integer": sp.Integer,
     "Float": sp.Float,
@@ -81,7 +95,9 @@ _SAFE_GLOBALS = {
     "Abs": sp.Abs,
     "abs": sp.Abs,
     "factorial": sp.factorial,
-}
+})
+
+_TRANSFORMACIONES_ESTANDAR = standard_transformations + (implicit_multiplication_application, convert_xor)
 
 
 def parse_seguro(entrada_str, transformaciones=None, local_dict=None):
@@ -108,7 +124,7 @@ def parse_seguro(entrada_str, transformaciones=None, local_dict=None):
         raise ValueError("Uso de comandos de sistema no permitidos.")
 
     if transformaciones is None:
-        transformaciones = standard_transformations + (implicit_multiplication_application, convert_xor)
+        transformaciones = _TRANSFORMACIONES_ESTANDAR
 
     if local_dict is None:
         local_dict = {}
@@ -116,7 +132,7 @@ def parse_seguro(entrada_str, transformaciones=None, local_dict=None):
     return parse_expr(
         entrada_str,
         transformations=transformaciones,
-        global_dict=_SAFE_GLOBALS.copy(),
+        global_dict=dict(_SAFE_GLOBALS),
         local_dict=local_dict,
     )
 
@@ -154,8 +170,8 @@ def calcular_con_limite(func, args=(), kwargs=None, timeout=5):
         pool.terminate()
         pool.join()
         raise TimeoutError(
-            f"El cálculo matemático superó el tiempo máximo de {timeout} segundos. "
-            "Simplifique la matriz o evalúela numéricamente."
+            "El cálculo matemático superó el tiempo máximo de " + str(timeout) + " segundos. "
+            "Simplifique la expresión o evalúela numéricamente."
         )
     except Exception as e:
         pool.terminate()
@@ -163,10 +179,55 @@ def calcular_con_limite(func, args=(), kwargs=None, timeout=5):
         raise e
 
 
+def parsear_base_matricial(texto: str, dim: int):
+    """
+    Convierte una cadena de vectores como '[1, 0], [0, 1]' en una matriz de base por columnas.
+    Lanza ValueError con mensaje explicativo si el formato o la dimensión son incorrectos o si no es L.I.
+    """
+    if not texto or not texto.strip():
+        return sp.eye(dim)
+    bloques = re.findall(r"\[(.*?)\]", texto)
+    if not bloques:
+        raise ValueError("Formato inválido: encierre cada vector entre corchetes, por ejemplo [1, 0], [0, 1].")
+    if len(bloques) != dim:
+        raise ValueError("Se requieren exactamente " + str(dim) + " vectores para formar la base (ingresaste " + str(len(bloques)) + ").")
+
+    filas = []
+    for idx, b in enumerate(bloques):
+        partes = [p.strip() for p in b.split(",") if p.strip()]
+        if len(partes) != dim:
+            raise ValueError("El vector " + str(idx + 1) + " tiene " + str(len(partes)) + " componentes, pero debe tener " + str(dim) + ".")
+        vec_parsed = []
+        for c in partes:
+            expr = parse_seguro(c, local_dict={"i": sp.I, "j": sp.I, "I": sp.I})
+            if expr is None or not isinstance(expr, sp.Expr):
+                raise ValueError("Componente inválida '" + str(c) + "' en el vector " + str(idx + 1) + ".")
+            vec_parsed.append(expr)
+        filas.append(vec_parsed)
+
+    M_base = sp.Matrix(filas).T
+    if sp.simplify(M_base.det()) == 0:
+        raise ValueError("Los vectores ingresados son linealmente dependientes (Determinante = 0): no forman una base.")
+    return M_base
+
+
+# ==============================================================================
+# 3. UTILIDADES DE INTERFAZ Y GRÁFICAS (STREAMLIT)
+# ==============================================================================
 def imprimir_matriz_simbolica(matriz_sp):
     """Renderiza una matriz de SymPy usando LaTeX nativo de Streamlit."""
     if matriz_sp is not None:
         st.latex(sp.latex(matriz_sp))
+
+
+def mostrar_figura_segura(fig):
+    """Muestra una figura de Matplotlib en Streamlit y la cierra inmediatamente para evitar memory leaks."""
+    if fig is not None:
+        st.pyplot(fig)
+        try:
+            plt.close(fig)
+        except Exception:
+            pass
 
 
 def leer_expresion_st(entrada_str, solo_reales=False):
@@ -177,18 +238,17 @@ def leer_expresion_st(entrada_str, solo_reales=False):
     if entrada_str is None or not str(entrada_str).strip():
         return None
 
-    transformaciones = standard_transformations + (implicit_multiplication_application, convert_xor)
     diccionario_imaginario = {"i": sp.I, "j": sp.I, "I": sp.I}
 
     try:
         expresion = parse_seguro(
             entrada_str,
-            transformaciones=transformaciones,
+            transformaciones=_TRANSFORMACIONES_ESTANDAR,
             local_dict=diccionario_imaginario,
         )
 
         if not isinstance(expresion, sp.Expr):
-            st.error(f"'{entrada_str}' no es una expresión matemática válida.")
+            st.error("'" + str(entrada_str) + "' no es una expresión matemática válida.")
             return None
         if solo_reales and expresion.has(sp.I):
             st.error("Esta operación requiere números reales.")
@@ -198,40 +258,109 @@ def leer_expresion_st(entrada_str, solo_reales=False):
             return None
 
         return expresion
-    except ValueError as ve:
+    except (SyntaxError, ValueError, TypeError) as ve:
         st.error(str(ve))
         return None
     except Exception:
-        st.error(f"La expresión '{entrada_str}' no es válida matemáticamente.")
+        st.error("La expresión '" + str(entrada_str) + "' no es válida matemáticamente.")
         return None
+
+
+def gestionar_inventario_sidebar(
+    clave_estado: str,
+    titulo: str,
+    etiqueta_item: str,
+    claves_temporales: tuple = (),
+    render_fn=None,
+):
+    """
+    Renderiza en st.sidebar un inventario interactivo con renombrado y eliminación individual.
+    """
+    with st.sidebar:
+        subheader_tarjeta(titulo)
+        inventario = st.session_state.get(clave_estado, {})
+
+        if inventario:
+            for nombre, obj in list(inventario.items()):
+                sub_info = ""
+                if isinstance(obj, sp.MatrixBase):
+                    sub_info = " (" + str(obj.shape[0]) + "×" + str(obj.shape[1]) + ")"
+                elif isinstance(obj, dict) and "dim_V" in obj and "dim_W" in obj:
+                    sub_info = " (dim " + str(obj["dim_V"]) + " → " + str(obj["dim_W"]) + ")"
+
+                with st.expander(etiqueta_item + " " + str(nombre) + sub_info):
+                    if render_fn is not None:
+                        render_fn(nombre, obj)
+                    elif isinstance(obj, sp.MatrixBase):
+                        imprimir_matriz_simbolica(obj)
+                    elif isinstance(obj, dict) and "matriz_asociada" in obj:
+                        st.caption("Matriz asociada:")
+                        imprimir_matriz_simbolica(obj["matriz_asociada"])
+                    else:
+                        st.latex(str(nombre) + " = " + sp.latex(obj))
+
+                    nuevo_nom = st.text_input(
+                        "Renombrar a:",
+                        value=str(nombre),
+                        key="ren_in_" + clave_estado + "_" + str(nombre),
+                    ).upper().strip()
+
+                    c_ren, c_del = st.columns(2)
+                    with c_ren:
+                        if st.button("✏️ Nombre", key="btn_ren_" + clave_estado + "_" + str(nombre), use_container_width=True):
+                            if not nuevo_nom:
+                                st.error("Nombre vacío.")
+                            elif nuevo_nom == nombre:
+                                st.info("Mismo nombre.")
+                            elif nuevo_nom in inventario:
+                                st.error("Ya existe.")
+                            else:
+                                nuevo_dict = {}
+                                for k, v in inventario.items():
+                                    nuevo_dict[nuevo_nom if k == nombre else k] = v
+                                st.session_state[clave_estado] = nuevo_dict
+                                st.rerun()
+                    with c_del:
+                        if st.button("🗑️ Borrar", key="btn_del_" + clave_estado + "_" + str(nombre), use_container_width=True):
+                            st.session_state[clave_estado].pop(nombre, None)
+                            st.rerun()
+        else:
+            st.info("No hay elementos guardados en memoria.")
+
+        st.divider()
+        if st.button("🗑️ Vaciar inventario", key="btn_clear_" + clave_estado, use_container_width=True):
+            st.session_state[clave_estado].clear()
+            for k_tmp in claves_temporales:
+                st.session_state.pop(k_tmp, None)
+            st.rerun()
 
 
 def _etiqueta_espacio(tipo: str, dim: int, grado: int = 0, m: int = 0, n: int = 0) -> str:
     if tipo == "R^n":
-        return rf"\mathbb{{R}}^{{{dim}}}"
+        return r"\mathbb{R}^{" + str(dim) + "}"
     if tipo == "C^n":
-        return rf"\mathbb{{C}}^{{{dim}}}"
+        return r"\mathbb{C}^{" + str(dim) + "}"
     if tipo == "Polinomios (Pn)":
-        return rf"P_{{{grado}}}(\mathbb{{R}})"
-    return rf"M_{{{m}\times {n}}}(\mathbb{{R}})"
+        return r"P_{" + str(grado) + r"}(\mathbb{R})"
+    return r"M_{" + str(m) + r"\times " + str(n) + r"}(\mathbb{R})"
 
 
 # ==============================================================================
-# 3. MÓDULOS DE CREACIÓN DE MATRICES Y TRANSFORMACIONES
+# 4. CONSTRUCTORES DE INTERFAZ (MATRICES Y TRANSFORMACIONES LINEALES)
 # ==============================================================================
-def Crear_Matriz_Simbolica_UI(nombre_matriz=""):
+def crear_matriz_simbolica_ui(nombre_matriz=""):
     """Crea una matriz simbólica celda por celda dentro de un contenedor con borde."""
     if not nombre_matriz:
         st.info("Escriba un nombre para la matriz arriba para comenzar.")
         return None
 
-    st.markdown(f"### Crear Matriz: {nombre_matriz}")
+    st.markdown("### Crear Matriz: " + str(nombre_matriz))
 
     col_m, col_n = st.columns(2)
     with col_m:
-        filas = st.number_input("Renglones", min_value=1, max_value=6, value=3, step=1, key=f"f_{nombre_matriz}")
+        filas = int(st.number_input("Renglones", min_value=1, max_value=6, value=3, step=1, key="f_" + str(nombre_matriz)))
     with col_n:
-        columnas = st.number_input("Columnas", min_value=1, max_value=6, value=3, step=1, key=f"c_{nombre_matriz}")
+        columnas = int(st.number_input("Columnas", min_value=1, max_value=6, value=3, step=1, key="c_" + str(nombre_matriz)))
 
     st.caption("Ingrese las componentes individuales de la matriz (admite números, fracciones y variables como 'x', '2*y'):")
 
@@ -247,15 +376,15 @@ def Crear_Matriz_Simbolica_UI(nombre_matriz=""):
             for j in range(columnas):
                 with cols[j]:
                     val_str = st.text_input(
-                        f"Componente ({i+1}, {j+1}):",
+                        "Componente (" + str(i + 1) + ", " + str(j + 1) + "):",
                         value="0",
-                        key=f"celda_{nombre_matriz}_{i}_{j}_{filas}_{columnas}",
+                        key="celda_" + str(nombre_matriz) + "_" + str(i) + "_" + str(j) + "_" + str(filas) + "_" + str(columnas),
                     ).strip()
 
                     try:
                         val_sym = parse_seguro(
                             val_str,
-                            transformaciones=standard_transformations + (implicit_multiplication_application, convert_xor),
+                            transformaciones=_TRANSFORMACIONES_ESTANDAR,
                             local_dict={"i": sp.I, "j": sp.I, "I": sp.I},
                         )
                         if val_sym is None:
@@ -274,23 +403,23 @@ def Crear_Matriz_Simbolica_UI(nombre_matriz=""):
         matriz_temp = sp.Matrix(matriz_elementos)
 
         st.markdown("**Vista previa:**")
-        st.latex(f"{nombre_matriz} = {sp.latex(matriz_temp)}")
+        st.latex(str(nombre_matriz) + " = " + sp.latex(matriz_temp))
 
-        if st.button("💾 Guardar Matriz", key=f"btn_save_{nombre_matriz}", use_container_width=True):
+        if st.button("💾 Guardar Matriz", key="btn_save_" + str(nombre_matriz), use_container_width=True):
             return matriz_temp
 
     return None
 
 
-def Crear_Transformacion_UI():
-    st.subheader("1. Dominio ($V$) y Codominio ($W$)")
+def crear_transformacion_ui():
+    st.subheader("1. Dominio (V) y Codominio (W)")
     col_dom, col_cod = st.columns(2)
 
     grado_dom = m_dom = n_dom = 0
     grado_cod = m_cod = n_cod = 0
 
     with col_dom:
-        st.markdown("**Dominio ($V$)**")
+        st.markdown("**Dominio (V)**")
         tipo_dom = st.selectbox(
             "Espacio Vectorial del Dominio",
             ["R^n", "C^n", "Polinomios (Pn)", "Matrices (mxn)"],
@@ -307,7 +436,7 @@ def Crear_Transformacion_UI():
             dim_v = m_dom * n_dom
 
     with col_cod:
-        st.markdown("**Codominio ($W$)**")
+        st.markdown("**Codominio (W)**")
         tipo_cod = st.selectbox(
             "Espacio Vectorial del Codominio",
             ["R^n", "C^n", "Polinomios (Pn)", "Matrices (mxn)"],
@@ -328,15 +457,13 @@ def Crear_Transformacion_UI():
 
     st.divider()
 
-    # ==============================================================================
     # 2. CAPTURA PREVIA DE VARIABLES
-    # ==============================================================================
     st.subheader("2. Variables del Dominio (Coordenadas)")
 
     if tipo_dom == "Polinomios (Pn)":
         if dim_v == 3:
             default_vars = "a, b, c"
-            poly_ejemplo = "ax^2 + bx + c"
+            poly_ejemplo = "ax² + bx + c"
         elif dim_v == 2:
             default_vars = "m, b"
             poly_ejemplo = "mx + b"
@@ -344,47 +471,46 @@ def Crear_Transformacion_UI():
             default_vars = "c"
             poly_ejemplo = "c"
         else:
-            default_vars = ", ".join([f"a{i}" for i in range(dim_v - 1, -1, -1)])
+            default_vars = ", ".join(["a" + str(i) for i in range(dim_v - 1, -1, -1)])
             vars_list = [v.strip() for v in default_vars.split(",")]
-            poly_ejemplo = f"{vars_list[0]}x^{dim_v-1} + {vars_list[1]}x^{dim_v-2} + \\dots + {vars_list[-1]}"
+            poly_ejemplo = vars_list[0] + "x^" + str(dim_v - 1) + " + ... + " + vars_list[-1]
 
         st.info(
-            rf"💡 **Notación Polinomial:** Cada variable representa un coeficiente ordenado de mayor a menor grado. "
-            rf"Para `{default_vars}`, el polinomio es $p(x) = {poly_ejemplo}$."
+            "💡 **Notación Polinomial:** Cada variable representa un coeficiente ordenado de mayor a menor grado. "
+            "Para `" + default_vars + "`, el polinomio es p(x) = " + poly_ejemplo + "."
         )
     else:
         if dim_v <= 4:
             default_vars = ", ".join(["x", "y", "z", "w"][:dim_v])
         else:
-            default_vars = ", ".join([f"x{i+1}" for i in range(dim_v)])
-        st.caption(f"Defina las {dim_v} variables de su vector de entrada.")
+            default_vars = ", ".join(["x" + str(i + 1) for i in range(dim_v)])
+        st.caption("Defina las " + str(dim_v) + " variables de su vector de entrada.")
 
     vars_str = st.text_input("Ingrese las variables separadas por comas:", value=default_vars, key="tl_vars_input")
     lista_vars = [v.strip() for v in vars_str.split(",") if v.strip()]
 
     if len(lista_vars) != dim_v or len(set(lista_vars)) != dim_v:
-        st.warning(f"Por favor ingrese exactamente {dim_v} variables distintas para continuar.")
+        st.warning("Por favor ingrese exactamente " + str(dim_v) + " variables distintas para continuar.")
         return
 
     variables_simbolicas = tuple(sp.Symbol(v) for v in lista_vars)
 
     st.divider()
 
-    # ==============================================================================
-    # 3. ENTRADA DIRECTA DE BASES NO CANÓNICAS
-    # ==============================================================================
+    # 3. ENTRADA DIRECTA DE BASES NO CANÓNICAS (SIN FALLBACK SILENCIOSO)
     st.subheader("3. Bases del Dominio y Codominio")
     Base1 = sp.eye(dim_v)
     Base2 = sp.eye(dim_w)
+    bases_validas = True
 
     with st.expander("¿Desea ingresar bases no canónicas explícitas?"):
-        st.markdown(r"""
-        💡 **¿Cómo introducir los vectores de la base?**
-        Todo elemento debe ingresarse como su **vector de coordenadas** encerrado en corchetes `[...]` y separado por comas:
-        * **Para $\mathbb{R}^n$:** Ej. en $\mathbb{R}^2$: `[1, 2], [-1, 1]`
-        * **Para Polinomios ($P_n$):** Coeficientes de mayor a menor grado. Ej. en $P_2$ ($ax^2+bx+c$), $\{x^2+1, x, 1\}$ se ingresa como: `[1,0,1], [0,1,0], [0,0,1]`
-        * **Para Matrices ($M_{m \times n}$):** Aplane la matriz fila por fila.
-        """)
+        st.markdown(
+            "💡 **¿Cómo introducir los vectores de la base?**\n"
+            "Todo elemento debe ingresarse como su **vector de coordenadas** encerrado en corchetes `[...]` y separado por comas:\n"
+            "* **Para ℝⁿ:** Ej. en ℝ²: `[1, 2], [-1, 1]`\n"
+            "* **Para Polinomios (Pₙ):** Coeficientes de mayor a menor grado. Ej. en P₂: `[1,0,1], [0,1,0], [0,0,1]`\n"
+            "* **Para Matrices:** Aplane la matriz fila por fila."
+        )
 
         col_b1, col_b2 = st.columns(2)
         with col_b1:
@@ -392,34 +518,30 @@ def Crear_Transformacion_UI():
         with col_b2:
             b2_input = st.text_area("Base Codominio (W):", value="", placeholder="Vacío = base canónica", key="base_w")
 
-        try:
-            vecs_b1 = re.findall(r"\[(.*?)\]", b1_input)
-            if vecs_b1:
-                B1_cand = sp.Matrix([[leer_expresion_st(c) for c in v.split(",")] for v in vecs_b1]).T
-                if B1_cand.shape != (dim_v, dim_v) or B1_cand.det() == 0:
-                    st.error(f"Error: La base del dominio debe tener {dim_v} vectores de dimensión {dim_v} linealmente independientes.")
-                else:
-                    Base1 = B1_cand
+        if b1_input.strip():
+            try:
+                Base1 = parsear_base_matricial(b1_input, dim_v)
+            except ValueError as err_b1:
+                st.error("⛔ Error en Base del Dominio: " + str(err_b1))
+                bases_validas = False
 
-            vecs_b2 = re.findall(r"\[(.*?)\]", b2_input)
-            if vecs_b2:
-                B2_cand = sp.Matrix([[leer_expresion_st(c) for c in v.split(",")] for v in vecs_b2]).T
-                if B2_cand.shape != (dim_w, dim_w) or B2_cand.det() == 0:
-                    st.error(f"Error: La base del codominio debe tener {dim_w} vectores de dimensión {dim_w} linealmente independientes.")
-                else:
-                    Base2 = B2_cand
+        if b2_input.strip():
+            try:
+                Base2 = parsear_base_matricial(b2_input, dim_w)
+            except ValueError as err_b2:
+                st.error("⛔ Error en Base del Codominio: " + str(err_b2))
+                bases_validas = False
 
-            if vecs_b1 or vecs_b2:
-                st.success("Bases procesadas correctamente.")
-        except Exception:
-            st.error("Error en formato de vectores de base. Usando bases canónicas.")
-            Base1, Base2 = sp.eye(dim_v), sp.eye(dim_w)
+        if bases_validas and (b1_input.strip() or b2_input.strip()):
+            st.success("✅ Bases no canónicas validadas (son linealmente independientes).")
+
+    if not bases_validas:
+        st.warning("Corrija los errores en las bases ingresadas arriba antes de definir la regla de la transformación.")
+        return
 
     st.divider()
 
-    # ==============================================================================
     # 4. MÉTODOS DE DEFINICIÓN
-    # ==============================================================================
     st.subheader("4. Configuración de la Regla")
     metodo = st.radio(
         "Seleccione el método para definir la transformación:",
@@ -446,10 +568,7 @@ def Crear_Transformacion_UI():
             p_poly = sum(variables_simbolicas[i] * x_sym ** (dim_v - 1 - i) for i in range(dim_v))
 
             if usar_teclado:
-                st.info(
-                    "💡 Escriba el operador usando la letra **`p`** para el polinomio y **`x`** como variable "
-                    "(ej. pulse la tecla $\\frac{d}{dx}$ y escriba $\\frac{d}{dx}p + x\\cdot p$)."
-                )
+                st.info("💡 Escriba el operador usando **`p`** para el polinomio y **`x`** como variable (ej. pulse d/dx y escriba d/dx p + x·p).")
                 latex_op = teclado_matematico(
                     "tl_op_poly_kb",
                     valor_inicial=r"\frac{\mathrm{d}}{\mathrm{d}x}p",
@@ -458,11 +577,11 @@ def Crear_Transformacion_UI():
                 )
                 ejecutar_op = st.button("🧮 Construir desde Teclado Matemático", use_container_width=True)
             else:
-                st.markdown("""
-                💡 **Sintaxis de texto:** Use **`p`** para el polinomio y **`x`** como variable:
-                * **Derivada:** `diff(p, x)` | **Segunda derivada:** `diff(p, x, 2)`
-                * **Integral Indefinida:** `integrate(p, x)`
-                """)
+                st.markdown(
+                    "💡 **Sintaxis de texto:** Use **`p`** para el polinomio y **`x`** como variable:\n"
+                    "* **Derivada:** `diff(p, x)` | **Segunda derivada:** `diff(p, x, 2)`\n"
+                    "* **Integral Indefinida:** `integrate(p, x)`"
+                )
                 regla_str = st.text_input("Ingrese el operador T(p) =", value="diff(p, x)", key="tl_regla_op")
                 ejecutar_op = st.button("🧮 Construir desde Operador", use_container_width=True)
 
@@ -487,8 +606,8 @@ def Crear_Transformacion_UI():
                     poly_obj = sp.Poly(expr_evaluada, x_sym)
                     if poly_obj.degree() >= dim_w:
                         st.error(
-                            f"Error Matemático: El polinomio resultante tiene grado {poly_obj.degree()}, "
-                            f"que excede el grado máximo del codominio ({dim_w - 1})."
+                            "Error Matemático: El polinomio resultante tiene grado " + str(poly_obj.degree()) + ", "
+                            "que excede el grado máximo del codominio (" + str(dim_w - 1) + ")."
                         )
                         return
 
@@ -505,8 +624,8 @@ def Crear_Transformacion_UI():
                         st.error("Error Matemático: El operador definido NO es lineal.")
                     else:
                         st.success("Operador lineal evaluado con éxito:")
-                        st.latex(f"T(p(x)) = {sp.latex(expr_evaluada)}")
-                        M_asociada = sp.simplify(Base2.inv() * A_can * Base1)
+                        st.latex("T(p(x)) = " + sp.latex(expr_evaluada))
+                        M_asociada = calcular_con_limite(lambda: sp.simplify(Base2.inv() * A_can * Base1), timeout=6)
                         st.session_state.temp_tl_mat = M_asociada
                         st.session_state.temp_tl_reg = matriz_regla
                         st.session_state.temp_b1 = Base1
@@ -514,10 +633,10 @@ def Crear_Transformacion_UI():
                         st.session_state.temp_dom_str = etiqueta_dom
                         st.session_state.temp_cod_str = etiqueta_cod
                 except Exception as e:
-                    st.error(f"Error al construir el operador: {e}")
+                    st.error("Error al construir el operador: " + str(e))
 
         else:
-            st.write(f"Defina cada una de las {dim_w} componentes de salida en términos de `{', '.join(lista_vars)}`:")
+            st.write("Defina cada una de las " + str(dim_w) + " componentes de salida en términos de `" + ", ".join(lista_vars) + "`:")
             eqs_parsed = []
             error_parsing = False
 
@@ -525,9 +644,9 @@ def Crear_Transformacion_UI():
                 st.caption("Escriba cada componente en su campo y pulse **↵** (o salga del recuadro) antes de procesar:")
                 for i in range(dim_w):
                     lat_i = teclado_matematico(
-                        f"tl_comp_kb_{dim_v}_{dim_w}_{i}",
+                        "tl_comp_kb_" + str(dim_v) + "_" + str(dim_w) + "_" + str(i),
                         valor_inicial=lista_vars[i] if i < len(lista_vars) else "0",
-                        placeholder=f"Componente {i+1}",
+                        placeholder="Componente " + str(i + 1),
                         acoplado=True,
                         en_vivo=True,
                     )
@@ -535,7 +654,7 @@ def Crear_Transformacion_UI():
                         try:
                             eqs_parsed.append(latex_a_sympy(lat_i, reales=(tipo_dom != "C^n"), i_imaginaria=True))
                         except ErrorLatex as err_l:
-                            st.error(f"Componente {i+1}: {err_l}")
+                            st.error("Componente " + str(i + 1) + ": " + str(err_l))
                             error_parsing = True
                     else:
                         eqs_parsed.append(sp.Integer(0))
@@ -544,9 +663,9 @@ def Crear_Transformacion_UI():
                 with st.form("form_regla_tl"):
                     eqs_input = [
                         st.text_input(
-                            f"Componente {i+1}:",
+                            "Componente " + str(i + 1) + ":",
                             value=lista_vars[i] if i < len(lista_vars) else "0",
-                            key=f"comp_val_{i}",
+                            key="comp_val_" + str(i),
                         )
                         for i in range(dim_w)
                     ]
@@ -561,7 +680,6 @@ def Crear_Transformacion_UI():
 
             if submit_regla and not error_parsing:
                 try:
-                    # Normalizar símbolos por nombre para que coincidan con variables_simbolicas
                     mapa_syms = {s.name: s for s in variables_simbolicas}
                     eqs_norm = []
                     vars_extra = set()
@@ -576,8 +694,8 @@ def Crear_Transformacion_UI():
 
                     if vars_extra:
                         st.error(
-                            f"Error: Usaste variables que no pertenecen al dominio ({', '.join(sorted(vars_extra))}). "
-                            f"Variables válidas: {', '.join(lista_vars)}."
+                            "Error: Usaste variables que no pertenecen al dominio (" + ", ".join(sorted(vars_extra)) + "). "
+                            "Variables válidas: " + ", ".join(lista_vars) + "."
                         )
                     else:
                         matriz_regla = sp.Matrix(eqs_norm)
@@ -588,14 +706,11 @@ def Crear_Transformacion_UI():
                         es_jacobiano_constante = A_can.free_symbols.isdisjoint(set(variables_simbolicas))
 
                         if not es_cero_en_origen:
-                            st.error("Error Matemático: La transformación NO es lineal porque $T(\\mathbf{0}) \\neq \\mathbf{0}$ (tiene términos constantes).")
+                            st.error("Error Matemático: La transformación NO es lineal porque T(0) ≠ 0 (tiene términos constantes).")
                         elif not es_jacobiano_constante:
-                            st.error(
-                                "Error Matemático: La transformación NO es lineal (contiene potencias, productos entre variables "
-                                "o funciones no lineales, por lo que su matriz Jacobiana no es constante)."
-                            )
+                            st.error("Error Matemático: La transformación NO es lineal (su matriz Jacobiana no es constante).")
                         else:
-                            M_asociada = sp.simplify(Base2.inv() * A_can * Base1)
+                            M_asociada = calcular_con_limite(lambda: sp.simplify(Base2.inv() * A_can * Base1), timeout=6)
                             st.session_state.temp_tl_mat = M_asociada
                             st.session_state.temp_tl_reg = matriz_regla
                             st.session_state.temp_b1 = Base1
@@ -604,10 +719,10 @@ def Crear_Transformacion_UI():
                             st.session_state.temp_cod_str = etiqueta_cod
                             st.rerun()
                 except Exception as e:
-                    st.error(f"Error matemático al construir la matriz: {e}")
+                    st.error("Error matemático al construir la matriz: " + str(e))
 
     elif "2. Definir una Matriz Nueva" in metodo:
-        st.write(f"Construya la matriz asociada $[T]_\\beta^\\gamma$ de dimensiones ({dim_w}×{dim_v}):")
+        st.write("Construya la matriz asociada de dimensiones (" + str(dim_w) + "×" + str(dim_v) + "):")
         with st.form("form_nueva_matriz_tl"):
             matriz_elementos = []
             for i in range(dim_w):
@@ -615,7 +730,7 @@ def Crear_Transformacion_UI():
                 fila_actual = []
                 for j in range(dim_v):
                     with cols_input[j]:
-                        valor = st.text_input(f"M({i+1},{j+1})", value="0", key=f"mat_tl_{i}_{j}")
+                        valor = st.text_input("M(" + str(i + 1) + "," + str(j + 1) + ")", value="0", key="mat_tl_" + str(i) + "_" + str(j))
                         fila_actual.append(valor)
                 matriz_elementos.append(fila_actual)
             submit_mat = st.form_submit_button("Generar Transformación desde Matriz", use_container_width=True)
@@ -627,7 +742,7 @@ def Crear_Transformacion_UI():
                     st.error("Corrija las celdas con expresiones inválidas.")
                 else:
                     matriz_asoc = sp.Matrix(filas_parsed)
-                    A_can = sp.simplify(Base2 * matriz_asoc * Base1.inv())
+                    A_can = calcular_con_limite(lambda: sp.simplify(Base2 * matriz_asoc * Base1.inv()), timeout=6)
                     regla_canonica = sp.simplify(A_can * sp.Matrix(variables_simbolicas))
 
                     st.session_state.temp_tl_mat = matriz_asoc
@@ -638,7 +753,7 @@ def Crear_Transformacion_UI():
                     st.session_state.temp_cod_str = etiqueta_cod
                     st.rerun()
             except Exception as e:
-                st.error(f"Error al procesar los elementos de la matriz: {e}")
+                st.error("Error al procesar los elementos de la matriz: " + str(e))
 
     elif "3. Importar una Matriz Preexistente" in metodo:
         if st.session_state.mis_matrices:
@@ -647,12 +762,12 @@ def Crear_Transformacion_UI():
 
             if M_imp.shape != (dim_w, dim_v):
                 st.error(
-                    f"Incompatibilidad de dimensiones: La matriz mide {M_imp.shape[0]}×{M_imp.shape[1]}, "
-                    f"pero el espacio requiere {dim_w}×{dim_v}."
+                    "Incompatibilidad de dimensiones: La matriz mide " + str(M_imp.shape[0]) + "×" + str(M_imp.shape[1]) + ", "
+                    "pero el espacio requiere " + str(dim_w) + "×" + str(dim_v) + "."
                 )
             else:
                 if st.button("🔗 Vincular Matriz Seleccionada", use_container_width=True):
-                    A_can = sp.simplify(Base2 * M_imp * Base1.inv())
+                    A_can = calcular_con_limite(lambda: sp.simplify(Base2 * M_imp * Base1.inv()), timeout=6)
                     regla_canonica = sp.simplify(A_can * sp.Matrix(variables_simbolicas))
 
                     st.session_state.temp_tl_mat = M_imp
@@ -665,15 +780,13 @@ def Crear_Transformacion_UI():
         else:
             st.warning("No hay matrices guardadas en el inventario actual.")
 
-    # ==============================================================================
     # 5. BLOQUE DE CONFIRMACIÓN Y GUARDADO PERSISTENTE
-    # ==============================================================================
     if "temp_tl_mat" in st.session_state:
         st.divider()
         st.subheader("Resultados Previos a Guardar")
         c_prev1, c_prev2 = st.columns(2)
         with c_prev1:
-            st.write("**Matriz Asociada ($[T]_\\beta^\\gamma$):**")
+            st.write("**Matriz Asociada:**")
             imprimir_matriz_simbolica(st.session_state.temp_tl_mat)
         with c_prev2:
             st.write("**Regla de correspondencia en coordenadas canónicas:**")
@@ -688,8 +801,8 @@ def Crear_Transformacion_UI():
                     st.session_state.mis_transformaciones[nombre_tl] = {
                         "dim_V": dim_v,
                         "dim_W": dim_w,
-                        "espacio_V": st.session_state.get("temp_dom_str", rf"\mathbb{{R}}^{{{dim_v}}}"),
-                        "espacio_W": st.session_state.get("temp_cod_str", rf"\mathbb{{R}}^{{{dim_w}}}"),
+                        "espacio_V": st.session_state.get("temp_dom_str", r"\mathbb{R}^{" + str(dim_v) + "}"),
+                        "espacio_W": st.session_state.get("temp_cod_str", r"\mathbb{R}^{" + str(dim_w) + "}"),
                         "variables": variables_simbolicas,
                         "matriz_asociada": st.session_state.temp_tl_mat,
                         "regla": st.session_state.temp_tl_reg,
@@ -698,7 +811,7 @@ def Crear_Transformacion_UI():
                     }
                     for temp_var in ["temp_tl_mat", "temp_tl_reg", "temp_b1", "temp_b2", "temp_dom_str", "temp_cod_str"]:
                         st.session_state.pop(temp_var, None)
-                    st.success(f"¡Transformación '{nombre_tl}' guardada con éxito!")
+                    st.success("¡Transformación '" + str(nombre_tl) + "' guardada con éxito!")
                     st.rerun()
                 else:
                     st.error("Por favor proporcione un nombre válido antes de guardar.")
@@ -711,21 +824,28 @@ def Crear_Transformacion_UI():
 
 def mostrar_detalle_tl(nombre, tl_data):
     """Muestra un resumen formal de la transformación lineal."""
-    esp_v = tl_data.get("espacio_V", rf"\mathbb{{R}}^{{{tl_data['dim_V']}}}")
-    esp_w = tl_data.get("espacio_W", rf"\mathbb{{R}}^{{{tl_data['dim_W']}}}")
+    esp_v = tl_data.get("espacio_V", r"\mathbb{R}^{" + str(tl_data["dim_V"]) + "}")
+    esp_w = tl_data.get("espacio_W", r"\mathbb{R}^{" + str(tl_data["dim_W"]) + "}")
 
-    st.info(f"### Transformación Lineal: {nombre}")
+    st.info("### Transformación Lineal: " + str(nombre))
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown(f"**Dominio ($V$):** ${esp_v}$ (dim $= {tl_data['dim_V']}$)")
-        st.markdown(f"**Codominio ($W$):** ${esp_w}$ (dim $= {tl_data['dim_W']}$)")
+        st.write("**Dominio (V):** (dim = " + str(tl_data["dim_V"]) + ")")
+        st.latex(esp_v)
+        st.write("**Codominio (W):** (dim = " + str(tl_data["dim_W"]) + ")")
+        st.latex(esp_w)
     with col2:
-        st.markdown(f"**Coordenadas de entrada:** `{', '.join([str(v) for v in tl_data['variables']])}`")
+        st.markdown("**Coordenadas de entrada:** `" + ", ".join([str(v) for v in tl_data["variables"]]) + "`")
 
     c_r, c_m = st.columns(2)
     with c_r:
         st.write("**Regla de Correspondencia Canónica:**")
         st.latex(sp.latex(tl_data["regla"]))
     with c_m:
-        st.write("**Matriz Asociada ($[T]_\\beta^\\gamma$):**")
+        st.write("**Matriz Asociada:**")
         imprimir_matriz_simbolica(tl_data["matriz_asociada"])
+
+
+# Alias retrocompatibles con páginas anteriores
+Crear_Matriz_Simbolica_UI = crear_matriz_simbolica_ui
+Crear_Transformacion_UI = crear_transformacion_ui
