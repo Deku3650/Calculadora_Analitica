@@ -753,7 +753,7 @@ with tab_analitica_2d:
                         f"| **Vértice $V(h, k)$** | `({h_c:g}, {k_c:g})` |\n"
                         f"| **Foco $F$** | `({foco[0]:.3f}, {foco[1]:.3f})` |\n"
                         f"| **Recta Directriz** | `{'x' if es_horiz else 'y'} = {dir_val:.4f}` |\n"
-                        f"| **Lado Recto ($\vert{}4p\vert{}$)** | `{lr:.4f}` |"
+                        f"| **Lado Recto (|4p|)** | `{lr:.4f}` |"
                     )
 
                 ax.legend(loc="upper right", fontsize=8.5)
