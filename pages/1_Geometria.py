@@ -528,7 +528,7 @@ with tab_analitica_2d:
                         ys_l1 = (-A1 * xs_l - C1) / B1
                         ax.plot(xs_l, ys_l1, color=AZUL, lw=2.4, label=f"L₁: {A1:g}x + ({B1:g})y + ({C1:g}) = 0")
                     else:
-                        x_ fijo = -C1 / A1
+                        x_fijo = -C1 / A1
                         ax.axvline(x_fijo, color=AZUL, lw=2.4, label=f"L₁: x = {x_fijo:.2f}")
 
                     # Segmento perpendicular P0 -> H y reflejo P'
