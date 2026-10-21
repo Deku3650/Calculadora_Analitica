@@ -61,9 +61,9 @@ gestionar_inventario_sidebar(
 # ==============================================================================
 tab_gestion, tab_ops, tab_graficas, tab_sistemas, tab_analisis_conjunto = st.tabs([
     "📥 1. Gestión y Creación",
-    "⚙️ 2. Operaciones y Producto Mixto",
+    "⚙️ 2. Operaciones",
     "📈 3. Graficación (ℝ² y ℝ³)",
-    "📐 4. Sistemas Lineales (Rouché-Frobenius)",
+    "📐 4. Sistemas de ecuaciones",
     "🔍 5. Bases, Gram-Schmidt y Proyección en Subespacios",
 ])
 
