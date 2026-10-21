@@ -1039,7 +1039,7 @@ with tab_edo2:
                 layout="edo",
                 valor_inicial="0",
                 placeholder="Escribe g(t) y pulsa ↵",
-                acoplado=False,
+                acoplado=True,
             )
 
             if abs(a_o2) < 1e-12:
@@ -1091,7 +1091,7 @@ with tab_edo2:
                     layout="edo",
                     valor_inicial=r"\exponentialE^{-2t}\cos\left(3t\right)",
                     placeholder="Escribe f(t) y pulsa ↵",
-                    acoplado=False,
+                    acoplado=True,
                 )
                 if lat_f_lap:
                     try:
