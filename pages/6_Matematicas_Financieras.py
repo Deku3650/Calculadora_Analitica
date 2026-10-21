@@ -306,7 +306,7 @@ with tab_tasas:
             pi_inf = inflacion_pct / 100.0
             tasa_real = (1.0 + tea) / (1.0 + pi_inf) - 1.0
 
-             sustantivo_or = NOMBRE_PERIODO[frec_origen][0]
+            sustantivo_or = NOMBRE_PERIODO[frec_origen][0]
             sustantivo_de = NOMBRE_PERIODO[frec_destino][0]
 
             st.markdown(
