@@ -32,7 +32,7 @@ SIMB_PESO = chr(36)
 
 
 def _moneda(valor: float) -> str:
-    return f"{SIMB_PESO}{valor:,.2f}"
+    return f"{SIMB_PESO}{float(valor):,.2f}"
 
 
 # Periodos por año para frecuencias de tasas y unidades de tiempo
@@ -62,7 +62,7 @@ UNIDADES_TIEMPO = {
     "Días (Base 365)": 365.0,
 }
 
-# Diccionario limpio para textos explicativos (corrige bug "Semono" / "Diori")
+# Diccionario explícito para explicaciones limpias (evita el bug "Semono" / "Diori")
 INFO_FRECUENCIA = {
     "Anual": ("año", "años", "anual"),
     "Semestral": ("semestre", "semestres", "semestral"),
@@ -75,6 +75,51 @@ INFO_FRECUENCIA = {
     "Diaria (Base 360)": ("día comercial", "días comerciales", "diaria (base 360)"),
     "Diaria (Base 365)": ("día natural", "días naturales", "diaria (base 365)"),
 }
+
+
+def _normalizar_inversion(datos: dict) -> dict:
+    """
+    Garantiza que cualquier diccionario guardado en st.session_state.mis_inversiones
+    (incluso de versiones anteriores de la sesión) tenga todas las llaves necesarias sin lanzar KeyError.
+    """
+    if not isinstance(datos, dict):
+        return {
+            "tipo": "Interés Compuesto",
+            "C": 10000.0,
+            "M": 10000.0,
+            "I": 0.0,
+            "tasa": 0.0,
+            "m_tasa": 1.0,
+            "frec_tasa": "Anual",
+            "n": 1.0,
+            "t_anios": 1.0,
+            "tea": 0.0,
+        }
+    tipo = str(datos.get("tipo", datos.get("regimen", "Interés Compuesto")))
+    c_val = float(datos.get("C", datos.get("capital", 10000.0)))
+    m_val = float(datos.get("M", datos.get("monto", c_val)))
+    i_gen = float(datos.get("I", datos.get("interes", m_val - c_val)))
+    tasa = float(datos.get("tasa", datos.get("i", 0.0)))
+    m_tasa = float(datos.get("m_tasa", 1.0)) or 1.0
+    frec_tasa = str(datos.get("frec_tasa", datos.get("unidad", "Anual")))
+    n_per = float(datos.get("n", datos.get("plazo", 1.0)))
+    t_anios = float(datos.get("t_anios", n_per / m_tasa))
+    if "tea" in datos:
+        tea = float(datos["tea"])
+    else:
+        tea = ((1.0 + tasa) ** m_tasa - 1.0) if "Compuesto" in tipo else (tasa * m_tasa)
+    return {
+        "tipo": tipo,
+        "C": c_val,
+        "M": m_val,
+        "I": i_gen,
+        "tasa": tasa,
+        "m_tasa": m_tasa,
+        "frec_tasa": frec_tasa,
+        "n": n_per,
+        "t_anios": t_anios,
+        "tea": tea,
+    }
 
 
 def _dias_30_360_isda(d1: datetime.date, d2: datetime.date) -> int:
@@ -121,18 +166,19 @@ def _crear_grafica_amplia(w=10.5, h=4.3, titulo="", xlabel="Tiempo (Años)", yla
     return fig, ax
 
 
-def _render_inversion_sidebar(nombre, datos):
+def _render_inversion_sidebar(nombre, datos_raw):
+    d = _normalizar_inversion(datos_raw)
     st.markdown(
-        f"**Régimen:** {datos['tipo']}  \n"
-        f"**Capital (C):** `{_moneda(datos['C'])}`  \n"
-        f"**Monto (M):** `{_moneda(datos['M'])}`  \n"
-        f"**Tasa Efectiva Anual:** `{datos['tea'] * 100:.2f}%`  \n"
-        f"**Plazo:** `{datos['t_anios']:.2f}` años"
+        f"**Régimen:** {d['tipo']}  \n"
+        f"**Capital (C):** `{_moneda(d['C'])}`  \n"
+        f"**Monto (M):** `{_moneda(d['M'])}`  \n"
+        f"**Tasa Efectiva Anual:** `{d['tea'] * 100:.2f}%`  \n"
+        f"**Plazo:** `{d['t_anios']:.2f}` años"
     )
 
 
 # ==============================================================================
-# ENCABEZADO Y BARRA LATERAL
+# ENCABEZADO Y BARRA LATERAL (CONECTADOS A ESTILOS.PY Y UTILS.PY)
 # ==============================================================================
 encabezado_pagina(
     "📈 Módulo de Matemáticas Financieras",
@@ -251,7 +297,6 @@ with tab_interes:
     calculo_valido = True
     mensaje_error = ""
 
-    # Convertir tiempo a años y al número de periodos de la tasa (n_per)
     if incognita != "Tiempo / Plazo (n)":
         t_anios = tiempo_val / m_tiempo
         n_per = t_anios * m_tasa
@@ -259,7 +304,6 @@ with tab_interes:
         t_anios = 0.0
         n_per = 0.0
 
-    # Convertir la tasa ingresada a tasa efectiva por periodo de capitalización (i_per)
     if incognita != "Tasa de Interés (i)":
         r_dec = tasa_pct / 100.0
         if regimen == "Interés Compuesto" and tipo_tasa == "Nominal Anual Capitalizable":
@@ -269,7 +313,6 @@ with tab_interes:
     else:
         i_per = 0.0
 
-    # Resolver la incógnita seleccionada
     if incognita == "Monto Futuro / Valor Final (M)":
         if regimen == "Interés Compuesto":
             M_val = C_val * ((1.0 + i_per) ** n_per)
@@ -393,7 +436,8 @@ with tab_comparador:
 
             if seleccion_inv:
                 factor_x = 12.0 if eje_x_uni == "Meses" else 1.0
-                max_anios = max(max(float(st.session_state.mis_inversiones[k]["t_anios"]) for k in seleccion_inv), 0.1)
+                datos_norm = {k: _normalizar_inversion(st.session_state.mis_inversiones[k]) for k in seleccion_inv}
+                max_anios = max(max(d["t_anios"] for d in datos_norm.values()), 0.1)
 
                 fig_comp, ax_comp = _crear_grafica_amplia(
                     w=11.0,
@@ -406,9 +450,9 @@ with tab_comparador:
                 filas_comp = []
 
                 for idx, nom_k in enumerate(seleccion_inv):
-                    d_k = st.session_state.mis_inversiones[nom_k]
-                    t_anios_vec = np.linspace(0, float(d_k["t_anios"]), 200)
-                    n_per_vec = t_anios_vec * float(d_k.get("m_tasa", 1.0))
+                    d_k = datos_norm[nom_k]
+                    t_anios_vec = np.linspace(0, d_k["t_anios"], 200)
+                    n_per_vec = t_anios_vec * d_k["m_tasa"]
 
                     if d_k["tipo"] == "Interés Compuesto":
                         y_vec = d_k["C"] * ((1.0 + d_k["tasa"]) ** n_per_vec)
@@ -424,7 +468,7 @@ with tab_comparador:
                         "Inversión": nom_k,
                         "Régimen": d_k["tipo"],
                         "Capital Inicial (C)": d_k["C"],
-                        "Tasa Periódica": f"{d_k['tasa'] * 100:.4f}% ({d_k.get('frec_tasa', 'Anual')})",
+                        "Tasa Periódica": f"{d_k['tasa'] * 100:.4f}% ({d_k['frec_tasa']})",
                         "Plazo (Años)": f"{d_k['t_anios']:.2f}",
                         "Interés Generado (I)": d_k["I"],
                         "Monto Final (M)": d_k["M"],
@@ -546,7 +590,7 @@ with tab_plazos:
             d3.metric("Años Equivalentes (Exacto/365 vs 30/360)", f"{dias_exactos / 365.0:.4f}  |  {dias_360 / 360.0:.4f}")
 
             st.markdown(
-                f"| Convención | Días Contabilizados | Base Anual | Fracción de Año ($t$) |\n"
+                f"| Convención | Días Contabilizados | Base Anual | Fracción de Año (t) |\n"
                 f"|---|---|---|---|\n"
                 f"| **Exacto / Exacto (Actual/365)** | `{dias_exactos}` días reales | `365` días | `{dias_exactos / 365.0:.6f}` |\n"
                 f"| **Bancario / Comercial (Actual/360)** | `{dias_exactos}` días reales | `360` días | `{dias_exactos / 360.0:.6f}` |\n"
@@ -601,7 +645,6 @@ with tab_anualidades:
             i_an = (tasa_an_pct / 100.0 / m_an) if tipo_tasa_an.startswith("Nominal") else (tasa_an_pct / 100.0)
             factor_ant = (1.0 + i_an) if modalidad_an.startswith("Anticipada") else 1.0
 
-            # Soporte exacto para tasa = 0% (Fix de auditoría)
             if abs(i_an) < 1e-12:
                 if incog_an.startswith("Valor Presente"):
                     R_calc = R_in
@@ -638,7 +681,6 @@ with tab_anualidades:
             m3.metric("Valor Futuro / Monto (VF)", _moneda(vf_calc))
             m4.metric("Tasa Efectiva por Periodo", f"{i_an * 100:.4f}%")
 
-            # Tabla de amortización automática sobre el Valor Presente
             subheader_tarjeta("Tabla de Amortización de la Deuda (VP)")
             filas_am = [{
                 "Periodo": 0,
