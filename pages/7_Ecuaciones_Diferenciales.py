@@ -356,7 +356,7 @@ def _retrato_3d_resorte_complejo(a_re, b_im, l3, Q_mat=None, titulo=""):
 
     # 3. Parametrizar el resorte con 4.5 vueltas completas bien definidas
     n_vueltas = 4.5
-    s_ param = np.linspace(0.0, 1.0, 550)
+    s_param = np.linspace(0.0, 1.0, 550)
     signo_giro = 1.0 if b_im >= 0 else -1.0
     theta = signo_giro * (2.0 * np.pi * n_vueltas) * s_param
 
