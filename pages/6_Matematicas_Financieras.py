@@ -28,22 +28,42 @@ MORADO = "#7c3aed"
 OSCURO = "#1e293b"
 CLARO = "#cbd5e1"
 FONDO = "#ffffff"
+SIMB_PESO = chr(36)
 
-FRECUENCIAS = {
-    "Anual": 1,
-    "Semestral": 2,
-    "Cuatrimestral": 3,
-    "Trimestral": 4,
-    "Bimestral": 6,
-    "Mensual": 12,
-    "Quincenal": 24,
-    "Semanal": 52,
-    "Diaria (360)": 360,
-    "Diaria (365)": 365,
+
+def _moneda(valor: float) -> str:
+    return f"{SIMB_PESO}{valor:,.2f}"
+
+
+# Periodos por año para frecuencias de tasas y unidades de tiempo
+FRECUENCIAS_TASA = {
+    "Anual": 1.0,
+    "Semestral": 2.0,
+    "Cuatrimestral": 3.0,
+    "Trimestral": 4.0,
+    "Bimestral": 6.0,
+    "Mensual": 12.0,
+    "Quincenal": 24.0,
+    "Semanal": 52.0,
+    "Diaria (Base 360)": 360.0,
+    "Diaria (Base 365)": 365.0,
 }
 
-# Diccionario explícito para evitar textos corruptos ("Semono", "Diori")
-NOMBRE_PERIODO = {
+UNIDADES_TIEMPO = {
+    "Años": 1.0,
+    "Semestres": 2.0,
+    "Cuatrimestres": 3.0,
+    "Trimestres": 4.0,
+    "Bimestres": 6.0,
+    "Meses": 12.0,
+    "Quincenas": 24.0,
+    "Semanas": 52.0,
+    "Días (Base 360)": 360.0,
+    "Días (Base 365)": 365.0,
+}
+
+# Diccionario limpio para textos explicativos (corrige bug "Semono" / "Diori")
+INFO_FRECUENCIA = {
     "Anual": ("año", "años", "anual"),
     "Semestral": ("semestre", "semestres", "semestral"),
     "Cuatrimestral": ("cuatrimestre", "cuatrimestres", "cuatrimestral"),
@@ -52,13 +72,13 @@ NOMBRE_PERIODO = {
     "Mensual": ("mes", "meses", "mensual"),
     "Quincenal": ("quincena", "quincenas", "quincenal"),
     "Semanal": ("semana", "semanas", "semanal"),
-    "Diaria (360)": ("día comercial", "días comerciales", "diaria (base 360)"),
-    "Diaria (365)": ("día natural", "días naturales", "diaria (base 365)"),
+    "Diaria (Base 360)": ("día comercial", "días comerciales", "diaria (base 360)"),
+    "Diaria (Base 365)": ("día natural", "días naturales", "diaria (base 365)"),
 }
 
 
 def _dias_30_360_isda(d1: datetime.date, d2: datetime.date) -> int:
-    """Calcula días bajo la convención estándar 30/360 (ISDA / US Bond Basis)."""
+    """Conteo de días bajo la convención estándar 30/360 (ISDA / US Bond Basis)."""
     y1, m1, day1 = d1.year, d1.month, d1.day
     y2, m2, day2 = d2.year, d2.month, d2.day
 
@@ -79,8 +99,7 @@ def _dias_30_360_isda(d1: datetime.date, d2: datetime.date) -> int:
     return (y2 - y1) * 360 + (m2 - m1) * 30 + (day2 - day1)
 
 
-def _crear_grafica_amplia(w=10.5, h=4.2, titulo="", xlabel="Periodo", ylabel="Monto ($)"):
-    """Crea una figura amplia de ancho completo con formato monetario legible."""
+def _crear_grafica_amplia(w=10.5, h=4.3, titulo="", xlabel="Tiempo (Años)", ylabel="Monto"):
     fig, ax = plt.subplots(figsize=(w, h), dpi=110, facecolor=FONDO)
     ax.set_facecolor("#fbfdff")
     ax.minorticks_on()
@@ -96,7 +115,7 @@ def _crear_grafica_amplia(w=10.5, h=4.2, titulo="", xlabel="Periodo", ylabel="Mo
     ax.tick_params(colors=OSCURO, labelsize=9)
     ax.set_xlabel(xlabel, color=OSCURO, fontweight="bold", fontsize=10)
     ax.set_ylabel(ylabel, color=OSCURO, fontweight="bold", fontsize=10)
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda x, _: f"${x:,.0f}"))
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda x, _: f"{SIMB_PESO}{x:,.0f}"))
     if titulo:
         ax.set_title(titulo, color=OSCURO, fontweight="bold", fontsize=11.5, pad=12)
     return fig, ax
@@ -105,302 +124,353 @@ def _crear_grafica_amplia(w=10.5, h=4.2, titulo="", xlabel="Periodo", ylabel="Mo
 def _render_inversion_sidebar(nombre, datos):
     st.markdown(
         f"**Régimen:** {datos['tipo']}  \n"
-        f"**Capital ($C$):** `${datos['C']:,.2f}`  \n"
-        f"**Monto ($M$):** `${datos['M']:,.2f}`  \n"
-        f"**Tasa ($i$):** `{datos['tasa'] * 100:.2f}%`  \n"
-        f"**Plazo ($n$):** `{datos['n']:.2f}` periodos"
+        f"**Capital (C):** `{_moneda(datos['C'])}`  \n"
+        f"**Monto (M):** `{_moneda(datos['M'])}`  \n"
+        f"**Tasa Efectiva Anual:** `{datos['tea'] * 100:.2f}%`  \n"
+        f"**Plazo:** `{datos['t_anios']:.2f}` años"
     )
 
 
 # ==============================================================================
-# ENCABEZADO Y BARRA LATERAL (INVENTARIO CON RENOMBRADO Y BORRADO INDIVIDUAL)
+# ENCABEZADO Y BARRA LATERAL
 # ==============================================================================
 encabezado_pagina(
-    "📈 Módulo de Matemáticas Financieras y Valuación Actuarial",
-    "Interés simple, compuesto y continuo, comparador de inversiones, conversión de tasas, conteo 30/360, anualidades, amortización, bonos y VPN/TIR.",
+    "📈 Módulo de Matemáticas Financieras",
+    "Interés simple y compuesto con homologación automática de tasas y plazos, comparador gráfico, conversión de tasas, conteo 30/360, anualidades, amortización y bonos.",
 )
 
 gestionar_inventario_sidebar(
     clave_estado="mis_inversiones",
-    titulo="💼 Escenarios Guardados",
+    titulo="💼 Inversiones Guardadas",
     etiqueta_item="Inversión:",
-    claves_temporales=("ult_fin_res",),
     render_fn=_render_inversion_sidebar,
 )
 
 # ==============================================================================
-# PESTAÑAS PRINCIPALES (DISEÑO AMPLIO DE ANCHO COMPLETO)
+# PESTAÑAS PRINCIPALES
 # ==============================================================================
 tab_interes, tab_comparador, tab_tasas, tab_plazos, tab_anualidades, tab_bonos = st.tabs([
     "💰 1. Interés Simple y Compuesto",
     "📊 2. Comparador Gráfico",
     "🔄 3. Conversión de Tasas",
-    "📅 4. Plazos y Fechas (30/360)",
+    "📅 4. Cálculo de Plazos",
     "🏦 5. Anualidades y Amortización",
     "📜 6. Bonos y Proyectos (VPN / TIR)",
 ])
 
 # ------------------------------------------------------------------------------
-# PESTAÑA 1: INTERÉS SIMPLE, COMPUESTO Y CONTINUO (ANCHO COMPLETO)
+# PESTAÑA 1: INTERÉS SIMPLE Y COMPUESTO (REACTIVO Y CON UNIDADES DE TASA Y TIEMPO)
 # ------------------------------------------------------------------------------
 with tab_interes:
     with st.container(border=True):
-        header_tarjeta("Calculadora del Valor del Dinero en el Tiempo")
+        header_tarjeta("Configuración de la Operación Financiera")
 
-        col_reg, col_inc = st.columns(2, gap="large")
-        with col_reg:
+        c_reg, c_inc = st.columns(2, gap="large")
+        with c_reg:
             regimen = st.radio(
-                "Seleccione el régimen de capitalización:",
-                ["Interés Compuesto", "Interés Simple", "Capitalización Continua (Fuerza δ)"],
+                "Régimen de Interés:",
+                ["Interés Compuesto", "Interés Simple"],
                 horizontal=True,
-                key="fin_regimen",
+                key="int_regimen",
             )
-        with col_inc:
+        with c_inc:
             incognita = st.selectbox(
-                "Seleccione la variable a calcular:",
+                "Variable a calcular (se actualiza automáticamente):",
                 [
-                    "Monto Futuro (M)",
+                    "Monto Futuro / Valor Final (M)",
                     "Capital Inicial / Valor Presente (C)",
-                    "Tasa de Interés por periodo (i / δ)",
-                    "Número de periodos (n)",
+                    "Tasa de Interés (i)",
+                    "Tiempo / Plazo (n)",
                 ],
-                key="fin_incog",
+                key="int_incognita",
             )
 
         st.divider()
-        subheader_tarjeta("Parámetros de la Operación")
+        subheader_tarjeta("Datos de Capital, Tasa y Plazo")
 
-        c1, c2, c3 = st.columns(3, gap="large")
-        C_val = M_val = i_val = n_val = 0.0
+        col_cap, col_tasa, col_tiempo = st.columns(3, gap="large")
 
-        if incognita == "Monto Futuro (M)":
-            with c1:
-                C_val = st.number_input("Capital Inicial C ($):", min_value=0.01, value=10000.0, step=500.0, format="%.2f")
-            with c2:
-                i_pct = st.number_input("Tasa por periodo (%):", min_value=0.0, value=8.0, step=0.5, format="%.4f")
-                i_val = i_pct / 100.0
-            with c3:
-                n_val = st.number_input("Número de periodos (n):", min_value=0.01, value=6.0, step=1.0, format="%.2f")
-
-        elif incognita == "Capital Inicial / Valor Presente (C)":
-            with c1:
-                M_val = st.number_input("Monto Futuro M ($):", min_value=0.01, value=16000.0, step=500.0, format="%.2f")
-            with c2:
-                i_pct = st.number_input("Tasa por periodo (%):", min_value=0.0, value=8.0, step=0.5, format="%.4f")
-                i_val = i_pct / 100.0
-            with c3:
-                n_val = st.number_input("Número de periodos (n):", min_value=0.01, value=6.0, step=1.0, format="%.2f")
-
-        elif incognita == "Tasa de Interés por periodo (i / δ)":
-            with c1:
-                C_val = st.number_input("Capital Inicial C ($):", min_value=0.01, value=10000.0, step=500.0, format="%.2f")
-            with c2:
-                M_val = st.number_input("Monto Futuro M ($):", min_value=0.01, value=16000.0, step=500.0, format="%.2f")
-            with c3:
-                n_val = st.number_input("Número de periodos (n):", min_value=0.01, value=6.0, step=1.0, format="%.2f")
-
-        else:
-            with c1:
-                C_val = st.number_input("Capital Inicial C ($):", min_value=0.01, value=10000.0, step=500.0, format="%.2f")
-            with c2:
-                M_val = st.number_input("Monto Futuro M ($):", min_value=0.01, value=16000.0, step=500.0, format="%.2f")
-            with c3:
-                i_pct = st.number_input("Tasa por periodo (%):", min_value=0.01, value=8.0, step=0.5, format="%.4f")
-                i_val = i_pct / 100.0
-
-        if st.button("🧮 Calcular Operación Financiera", use_container_width=True, key="btn_calc_int"):
-            error_fin = False
-            if incognita == "Monto Futuro (M)":
-                if regimen == "Interés Compuesto":
-                    M_val = C_val * ((1.0 + i_val) ** n_val)
-                elif regimen == "Interés Simple":
-                    M_val = C_val * (1.0 + i_val * n_val)
-                else:
-                    M_val = C_val * math.exp(i_val * n_val)
-
-            elif incognita == "Capital Inicial / Valor Presente (C)":
-                if regimen == "Interés Compuesto":
-                    C_val = M_val / ((1.0 + i_val) ** n_val)
-                elif regimen == "Interés Simple":
-                    C_val = M_val / (1.0 + i_val * n_val)
-                else:
-                    C_val = M_val * math.exp(-i_val * n_val)
-
-            elif incognita == "Tasa de Interés por periodo (i / δ)":
-                if M_val < C_val:
-                    st.error("El Monto Futuro M debe ser mayor o igual al Capital Inicial C.")
-                    error_fin = True
-                else:
-                    if regimen == "Interés Compuesto":
-                        i_val = (M_val / C_val) ** (1.0 / n_val) - 1.0
-                    elif regimen == "Interés Simple":
-                        i_val = (M_val / C_val - 1.0) / n_val
-                    else:
-                        i_val = math.log(M_val / C_val) / n_val
-
+        with col_cap:
+            st.markdown("**1. Capitales**")
+            if incognita != "Capital Inicial / Valor Presente (C)":
+                C_val = st.number_input("Capital Inicial C:", min_value=0.01, value=10000.0, step=500.0, format="%.2f", key="in_C")
             else:
-                if i_val <= 0 or M_val <= C_val:
-                    st.error("Para despejar el plazo n se requiere una tasa positiva y un Monto M mayor al Capital C.")
-                    error_fin = True
-                else:
-                    if regimen == "Interés Compuesto":
-                        n_val = math.log(M_val / C_val) / math.log(1.0 + i_val)
-                    elif regimen == "Interés Simple":
-                        n_val = (M_val / C_val - 1.0) / i_val
-                    else:
-                        n_val = math.log(M_val / C_val) / i_val
+                C_val = 0.0
+                st.info("El **Capital Inicial (C)** se calculará automáticamente.")
 
-            if not error_fin:
-                st.session_state["ult_fin_res"] = {
-                    "tipo": regimen,
-                    "C": C_val,
-                    "M": M_val,
-                    "tasa": i_val,
-                    "n": n_val,
-                    "I": M_val - C_val,
-                }
+            if incognita != "Monto Futuro / Valor Final (M)":
+                M_val = st.number_input("Monto Futuro M:", min_value=0.01, value=15000.0, step=500.0, format="%.2f", key="in_M")
+            else:
+                M_val = 0.0
+                st.info("El **Monto Futuro (M)** se calculará automáticamente.")
 
-    if "ult_fin_res" in st.session_state:
-        r_f = st.session_state["ult_fin_res"]
-        with st.container(border=True):
-            subheader_tarjeta("🎯 Resultados de la Operación")
-
-            # Métricas distribuidas a todo lo ancho para que jamás se trunquen los números
-            m1, m2, m3, m4 = st.columns(4, gap="medium")
-            m1.metric("Capital Inicial (C)", f"${r_f['C']:,.2f}")
-            m2.metric("Monto Futuro (M)", f"${r_f['M']:,.2f}")
-            m3.metric("Interés Generado (I = M − C)", f"${r_f['I']:,.2f}")
-            m4.metric("Tasa / Plazo", f"{r_f['tasa'] * 100:.2f}%  ·  {r_f['n']:.2f} per.")
-
-            if r_f["tipo"] == "Interés Compuesto":
-                st.latex(
-                    "M = C(1 + i)^n = "
-                    + f"{r_f['C']:,.2f}(1 + {r_f['tasa']:.6f})^{{{r_f['n']:.2f}}} = \\mathbf{{\\${r_f['M']:,.2f}}}"
-                )
-            elif r_f["tipo"] == "Interés Simple":
-                st.latex(
-                    "M = C(1 + i \\cdot n) = "
-                    + f"{r_f['C']:,.2f}(1 + {r_f['tasa']:.6f} \\times {r_f['n']:.2f}) = \\mathbf{{\\${r_f['M']:,.2f}}}"
+        with col_tasa:
+            st.markdown("**2. Tasa de Interés**")
+            if regimen == "Interés Compuesto":
+                tipo_tasa = st.selectbox(
+                    "Tipo de tasa:",
+                    ["Efectiva", "Nominal Anual Capitalizable"],
+                    key="in_tipo_tasa",
                 )
             else:
-                st.latex(
-                    "M = C \\cdot e^{\\delta n} = "
-                    + f"{r_f['C']:,.2f} \\cdot e^{{{r_f['tasa']:.6f} \\times {r_f['n']:.2f}}} = \\mathbf{{\\${r_f['M']:,.2f}}}"
-                )
+                tipo_tasa = "Simple Proporcional"
+                st.caption("En Interés Simple toda tasa es proporcional a su periodo.")
 
-            st.divider()
-            subheader_tarjeta("📈 Evolución Temporal del Capital (Simple vs. Compuesto vs. Continuo)")
-            ts = np.linspace(0, max(float(r_f["n"]), 1.0), 200)
-            c0, i0 = r_f["C"], r_f["tasa"]
-            fig_ev, ax_ev = _crear_grafica_amplia(
-                titulo=f"Crecimiento del Capital (C = ${c0:,.2f}, Tasa = {i0 * 100:.2f}%, Plazo = {r_f['n']:.2f} periodos)"
+            frec_tasa = st.selectbox(
+                "Periodo / Capitalización de la tasa:",
+                list(FRECUENCIAS_TASA.keys()),
+                index=0,
+                key="in_frec_tasa",
             )
-            ax_ev.plot(ts, c0 * (1.0 + i0 * ts), color=VERDE, lw=2.0, ls="--", label="Interés Simple: C(1 + i·t)")
-            ax_ev.plot(ts, c0 * ((1.0 + i0) ** ts), color=AZUL, lw=2.6, label="Interés Compuesto: C(1 + i)ᵗ")
-            ax_ev.plot(ts, c0 * np.exp(i0 * ts), color=NARANJA, lw=2.0, ls=":", label="Capitalización Continua: C·e^(δt)")
-            ax_ev.legend(fontsize=9.5, loc="upper left")
-            mostrar_figura_segura(fig_ev)
+
+            if incognita != "Tasa de Interés (i)":
+                tasa_pct = st.number_input("Valor de la tasa (%):", min_value=0.0, value=12.0, step=0.5, format="%.4f", key="in_tasa_val")
+            else:
+                tasa_pct = 0.0
+                st.info("La **Tasa de Interés** se calculará en el periodo seleccionado.")
+
+        with col_tiempo:
+            st.markdown("**3. Plazo / Tiempo**")
+            unidad_tiempo = st.selectbox(
+                "Unidad de tiempo del plazo:",
+                list(UNIDADES_TIEMPO.keys()),
+                index=0,
+                key="in_uni_tiempo",
+            )
+            if incognita != "Tiempo / Plazo (n)":
+                tiempo_val = st.number_input(f"Cantidad de {unidad_tiempo.lower()}:", min_value=0.0001, value=3.0, step=1.0, format="%.4f", key="in_tiempo_val")
+            else:
+                tiempo_val = 0.0
+                st.info(f"El **Plazo** se calculará en **{unidad_tiempo.lower()}**.")
+
+    # --- CÁLCULO AUTOMÁTICO Y HOMOLOGACIÓN DE UNIDADES ---
+    m_tasa = FRECUENCIAS_TASA[frec_tasa]
+    m_tiempo = UNIDADES_TIEMPO[unidad_tiempo]
+    sust_tasa, plur_tasa, adj_tasa = INFO_FRECUENCIA[frec_tasa]
+
+    calculo_valido = True
+    mensaje_error = ""
+
+    # Convertir tiempo a años y al número de periodos de la tasa (n_per)
+    if incognita != "Tiempo / Plazo (n)":
+        t_anios = tiempo_val / m_tiempo
+        n_per = t_anios * m_tasa
+    else:
+        t_anios = 0.0
+        n_per = 0.0
+
+    # Convertir la tasa ingresada a tasa efectiva por periodo de capitalización (i_per)
+    if incognita != "Tasa de Interés (i)":
+        r_dec = tasa_pct / 100.0
+        if regimen == "Interés Compuesto" and tipo_tasa == "Nominal Anual Capitalizable":
+            i_per = r_dec / m_tasa
+        else:
+            i_per = r_dec
+    else:
+        i_per = 0.0
+
+    # Resolver la incógnita seleccionada
+    if incognita == "Monto Futuro / Valor Final (M)":
+        if regimen == "Interés Compuesto":
+            M_val = C_val * ((1.0 + i_per) ** n_per)
+        else:
+            M_val = C_val * (1.0 + i_per * n_per)
+
+    elif incognita == "Capital Inicial / Valor Presente (C)":
+        if regimen == "Interés Compuesto":
+            C_val = M_val / ((1.0 + i_per) ** n_per)
+        else:
+            C_val = M_val / (1.0 + i_per * n_per)
+
+    elif incognita == "Tasa de Interés (i)":
+        if M_val < C_val:
+            calculo_valido = False
+            mensaje_error = "⛔ El Monto Futuro (M) debe ser mayor o igual al Capital Inicial (C) para obtener una tasa no negativa."
+        else:
+            if regimen == "Interés Compuesto":
+                i_per = (M_val / C_val) ** (1.0 / n_per) - 1.0
+                tasa_pct = (i_per * m_tasa * 100.0) if tipo_tasa == "Nominal Anual Capitalizable" else (i_per * 100.0)
+            else:
+                i_per = (M_val / C_val - 1.0) / n_per
+                tasa_pct = i_per * 100.0
+
+    elif incognita == "Tiempo / Plazo (n)":
+        if i_per <= 0:
+            calculo_valido = False
+            mensaje_error = "⛔ Para despejar el plazo (n) la tasa de interés debe ser mayor que 0%."
+        elif M_val < C_val:
+            calculo_valido = False
+            mensaje_error = "⛔ El Monto Futuro (M) debe ser mayor o igual al Capital Inicial (C)."
+        else:
+            if regimen == "Interés Compuesto":
+                n_per = math.log(M_val / C_val) / math.log(1.0 + i_per)
+            else:
+                n_per = (M_val / C_val - 1.0) / i_per
+            t_anios = n_per / m_tasa
+            tiempo_val = t_anios * m_tiempo
+
+    if not calculo_valido:
+        st.error(mensaje_error)
+    else:
+        I_generado = M_val - C_val
+        tea_equiv = ((1.0 + i_per) ** m_tasa - 1.0) if regimen == "Interés Compuesto" else (i_per * m_tasa)
+
+        with st.container(border=True):
+            header_tarjeta("Resultados y Homologación de Unidades")
+
+            m1, m2, m3, m4 = st.columns(4, gap="medium")
+            m1.metric("Capital Inicial (C)", _moneda(C_val))
+            m2.metric("Monto Futuro (M)", _moneda(M_val))
+            m3.metric("Interés Generado (I)", _moneda(I_generado))
+            if incognita == "Tiempo / Plazo (n)":
+                m4.metric(f"Plazo en {unidad_tiempo}", f"{tiempo_val:,.4f}")
+            else:
+                m4.metric(f"Tasa ({tipo_tasa[:8]}. {frec_tasa})", f"{tasa_pct:,.4f}%")
+
+            st.info(
+                f"🔄 **Homologación de unidades:** El plazo de **{tiempo_val:,.4f} {unidad_tiempo.lower()}** equivale a "
+                f"**{t_anios:,.4f} años** (**{n_per:,.4f} {plur_tasa}**). "
+                f"La tasa aplicada por cada {sust_tasa} es **i = {i_per * 100:.6f}%** "
+                f"(equivalente a una tasa anual efectiva de **{tea_equiv * 100:.4f}%**)."
+            )
+
+            if regimen == "Interés Compuesto":
+                st.latex(
+                    r"M = C(1 + i)^n \implies "
+                    + f"{M_val:,.2f} = {C_val:,.2f}\\left(1 + {i_per:.6f}\\right)^{{{n_per:.4f}}}"
+                )
+            else:
+                st.latex(
+                    r"M = C(1 + i \cdot n) \implies "
+                    + f"{M_val:,.2f} = {C_val:,.2f}\\left(1 + {i_per:.6f} \\times {n_per:.4f}\\right)"
+                )
 
             st.divider()
             col_s1, col_s2 = st.columns([2.5, 1])
             with col_s1:
-                nom_esc = st.text_input("Guardar este escenario en el inventario lateral como (Ej: INV_CETES, PAGARE_1):", value="INV_1", key="nom_esc_fin").upper().strip()
+                nom_inv = st.text_input(
+                    "Asignar nombre para guardar en el Comparador (Ej: INV_1, CETES, PAGARE):",
+                    value=f"INV_{len(st.session_state.mis_inversiones) + 1}",
+                    key="nom_save_inv",
+                ).upper().strip()
             with col_s2:
                 st.write("")
-                if st.button("💾 Guardar Escenario", key="btn_save_esc_fin", use_container_width=True):
-                    if nom_esc:
-                        st.session_state.mis_inversiones[nom_esc] = r_f.copy()
-                        st.success(f"Escenario '{nom_esc}' guardado en la barra lateral.")
+                if st.button("💾 Guardar en el Comparador", use_container_width=True):
+                    if nom_inv:
+                        st.session_state.mis_inversiones[nom_inv] = {
+                            "tipo": regimen,
+                            "C": C_val,
+                            "M": M_val,
+                            "I": I_generado,
+                            "tasa": i_per,
+                            "m_tasa": m_tasa,
+                            "frec_tasa": frec_tasa,
+                            "n": n_per,
+                            "t_anios": t_anios,
+                            "tea": tea_equiv,
+                        }
+                        st.success(f"Inversión '{nom_inv}' guardada en la barra lateral.")
                         st.rerun()
 
 # ------------------------------------------------------------------------------
-# PESTAÑA 2: COMPARADOR GRÁFICO DE ESCENARIOS (ANCHO COMPLETO)
+# PESTAÑA 2: COMPARADOR GRÁFICO (ANCHO COMPLETO)
 # ------------------------------------------------------------------------------
 with tab_comparador:
     with st.container(border=True):
-        header_tarjeta("Comparador Gráfico de Inversiones y Escenarios Guardados")
+        header_tarjeta("Comparador Gráfico de Inversiones Guardadas")
         if not st.session_state.mis_inversiones:
-            st.info("👈 Guarde uno o más escenarios en la Pestaña 1 para compararlos gráficamente en pantalla completa.")
+            st.info("👈 Guarde una o más inversiones en la Pestaña 1 para compararlas aquí.")
         else:
-            seleccion_esc = st.multiselect(
-                "Seleccione los escenarios a comparar:",
-                list(st.session_state.mis_inversiones.keys()),
-                default=list(st.session_state.mis_inversiones.keys()),
-            )
-            if seleccion_esc:
-                horizonte_max = max(float(st.session_state.mis_inversiones[k]["n"]) for k in seleccion_esc)
+            c_sel, c_uni = st.columns([2.2, 1])
+            with c_sel:
+                seleccion_inv = st.multiselect(
+                    "Seleccione las inversiones a graficar:",
+                    list(st.session_state.mis_inversiones.keys()),
+                    default=list(st.session_state.mis_inversiones.keys()),
+                )
+            with c_uni:
+                eje_x_uni = st.radio("Unidad del eje horizontal:", ["Años", "Meses"], horizontal=True, key="comp_eje_x")
+
+            if seleccion_inv:
+                factor_x = 12.0 if eje_x_uni == "Meses" else 1.0
+                max_anios = max(max(float(st.session_state.mis_inversiones[k]["t_anios"]) for k in seleccion_inv), 0.1)
+
                 fig_comp, ax_comp = _crear_grafica_amplia(
                     w=11.0,
                     h=4.6,
-                    titulo="Comparativa de Crecimiento de Escenarios de Inversión",
+                    titulo="Crecimiento Comparativo de las Inversiones en el Tiempo",
+                    xlabel=f"Tiempo ({eje_x_uni})",
+                    ylabel=f"Monto Acumulado ({SIMB_PESO})",
                 )
                 paleta = [AZUL, NARANJA, VERDE, ROJO, MORADO, "#0891b2", "#be185d"]
-                filas_resumen = []
+                filas_comp = []
 
-                for idx, nom_k in enumerate(seleccion_esc):
+                for idx, nom_k in enumerate(seleccion_inv):
                     d_k = st.session_state.mis_inversiones[nom_k]
-                    t_k = np.linspace(0, float(d_k["n"]), 200)
+                    t_anios_vec = np.linspace(0, float(d_k["t_anios"]), 200)
+                    n_per_vec = t_anios_vec * float(d_k.get("m_tasa", 1.0))
+
                     if d_k["tipo"] == "Interés Compuesto":
-                        y_k = d_k["C"] * ((1.0 + d_k["tasa"]) ** t_k)
-                    elif d_k["tipo"] == "Interés Simple":
-                        y_k = d_k["C"] * (1.0 + d_k["tasa"] * t_k)
+                        y_vec = d_k["C"] * ((1.0 + d_k["tasa"]) ** n_per_vec)
                     else:
-                        y_k = d_k["C"] * np.exp(d_k["tasa"] * t_k)
+                        y_vec = d_k["C"] * (1.0 + d_k["tasa"] * n_per_vec)
 
                     col_k = paleta[idx % len(paleta)]
-                    ax_comp.plot(t_k, y_k, color=col_k, lw=2.5, label=f"{nom_k} ({d_k['tipo']} → ${d_k['M']:,.2f})")
-                    ax_comp.plot([d_k["n"]], [d_k["M"]], "o", color=col_k, ms=7)
-                    filas_resumen.append({
-                        "Escenario": nom_k,
+                    x_plot = t_anios_vec * factor_x
+                    ax_comp.plot(x_plot, y_vec, color=col_k, lw=2.5, label=f"{nom_k} ({d_k['tipo']} → {_moneda(d_k['M'])})")
+                    ax_comp.plot([d_k["t_anios"] * factor_x], [d_k["M"]], "o", color=col_k, ms=7.5)
+
+                    filas_comp.append({
+                        "Inversión": nom_k,
                         "Régimen": d_k["tipo"],
                         "Capital Inicial (C)": d_k["C"],
-                        "Tasa por Periodo": f"{d_k['tasa'] * 100:.4f}%",
-                        "Plazo (n)": f"{d_k['n']:.2f}",
+                        "Tasa Periódica": f"{d_k['tasa'] * 100:.4f}% ({d_k.get('frec_tasa', 'Anual')})",
+                        "Plazo (Años)": f"{d_k['t_anios']:.2f}",
                         "Interés Generado (I)": d_k["I"],
                         "Monto Final (M)": d_k["M"],
                     })
 
-                ax_comp.set_xlim(0, horizonte_max * 1.05)
+                ax_comp.set_xlim(0, max_anios * factor_x * 1.05)
                 ax_comp.legend(fontsize=9.5, loc="upper left")
                 mostrar_figura_segura(fig_comp)
 
-                subheader_tarjeta("Tabla Comparativa de Escenarios")
-                df_comp = pd.DataFrame(filas_resumen)
+                subheader_tarjeta("Resumen Comparativo")
+                df_c = pd.DataFrame(filas_comp)
                 st.dataframe(
-                    df_comp.style.format({
-                        "Capital Inicial (C)": "${:,.2f}",
-                        "Interés Generado (I)": "${:,.2f}",
-                        "Monto Final (M)": "${:,.2f}",
+                    df_c.style.format({
+                        "Capital Inicial (C)": f"{SIMB_PESO}{{:,.2f}}",
+                        "Interés Generado (I)": f"{SIMB_PESO}{{:,.2f}}",
+                        "Monto Final (M)": f"{SIMB_PESO}{{:,.2f}}",
                     }),
                     use_container_width=True,
                     hide_index=True,
                 )
 
 # ------------------------------------------------------------------------------
-# PESTAÑA 3: CONVERSIÓN DE TASAS (NOMINAL, EFECTIVA, CONTINUA Y TASA REAL)
+# PESTAÑA 3: CONVERSIÓN DE TASAS (AUTOMÁTICA)
 # ------------------------------------------------------------------------------
 with tab_tasas:
     with st.container(border=True):
-        header_tarjeta("Conversión de Tasas de Interés (Nominal ↔ Efectiva ↔ Continua y Ecuación de Fisher)")
+        header_tarjeta("Conversión de Tasas Equivalentes (Nominal ↔ Efectiva ↔ Continua y Tasa Real)")
 
         c1, c2, c3, c4 = st.columns(4, gap="medium")
         with c1:
-            tasa_in_pct = st.number_input("Tasa de entrada (%):", min_value=0.0, value=12.0, step=0.25, format="%.4f", key="tasa_conv_in")
+            tasa_in_pct = st.number_input("Tasa de interés (%):", min_value=0.0, value=12.0, step=0.25, format="%.4f", key="tc_val")
         with c2:
             tipo_tasa_in = st.selectbox(
-                "Tipo de tasa ingresada:",
-                ["Nominal Anual j^(m)", "Efectiva del Periodo i_m", "Efectiva Anual (TEA / i)"],
-                key="tipo_tasa_in",
+                "Tipo de la tasa ingresada:",
+                ["Nominal Anual Capitalizable j^(m)", "Efectiva del Periodo i_m", "Efectiva Anual (TEA / i)"],
+                key="tc_tipo",
             )
         with c3:
-            frec_origen = st.selectbox("Capitalización de origen (m):", list(FRECUENCIAS.keys()), index=5, key="frec_orig")
+            frec_origen = st.selectbox("Frecuencia de origen (m):", list(FRECUENCIAS_TASA.keys()), index=5, key="tc_orig")
         with c4:
-            frec_destino = st.selectbox("Convertir a frecuencia destino (k):", list(FRECUENCIAS.keys()), index=3, key="frec_dest")
+            frec_destino = st.selectbox("Convertir a frecuencia destino (k):", list(FRECUENCIAS_TASA.keys()), index=3, key="tc_dest")
 
-        inflacion_pct = st.slider("Tasa de inflación anual π (%) [para calcular Tasa Real de Fisher]:", min_value=0.0, max_value=25.0, value=4.5, step=0.25, key="inf_fisher")
+        inflacion_pct = st.number_input("Tasa de inflación anual π (%) [Opcional, para Tasa Real de Fisher]:", min_value=0.0, value=4.5, step=0.25, format="%.2f", key="tc_inf")
 
-        m_or = FRECUENCIAS[frec_origen]
-        m_de = FRECUENCIAS[frec_destino]
+        m_or = FRECUENCIAS_TASA[frec_origen]
+        m_de = FRECUENCIAS_TASA[frec_destino]
         t_in = tasa_in_pct / 100.0
 
         if tipo_tasa_in.startswith("Nominal"):
@@ -416,165 +486,208 @@ with tab_tasas:
         i_per_dest = (1.0 + tea) ** (1.0 / m_de) - 1.0
         j_nom_dest = i_per_dest * m_de
         delta_cont = math.log(1.0 + tea)
-        pi_inf = inflacion_pct / 100.0
-        tasa_real = (1.0 + tea) / (1.0 + pi_inf) - 1.0
+        tasa_real = (1.0 + tea) / (1.0 + inflacion_pct / 100.0) - 1.0
 
-        sust_or, _, adj_or = NOMBRE_PERIODO[frec_origen]
-        sust_de, _, adj_de = NOMBRE_PERIODO[frec_destino]
+        sust_or, _, adj_or = INFO_FRECUENCIA[frec_origen]
+        sust_de, _, adj_de = INFO_FRECUENCIA[frec_destino]
 
         st.divider()
-        subheader_tarjeta("Tasas Equivalentes Obtenidas")
-
         k1, k2, k3, k4 = st.columns(4, gap="medium")
-        k1.metric(f"Tasa Efectiva por {sust_de}", f"{i_per_dest * 100:.4f}%")
-        k2.metric(f"Nominal Anual Cap. {frec_destino}", f"{j_nom_dest * 100:.4f}%")
-        k3.metric("Tasa Efectiva Anual (TEA)", f"{tea * 100:.4f}%")
-        k4.metric("Tasa Real Anual (Fisher)", f"{tasa_real * 100:.4f}%")
+        k1.metric(f"Efectiva {frec_destino}", f"{i_per_dest * 100:.4f}% por {sust_de}")
+        k2.metric(f"Nominal Anual Cap. {frec_destino}", f"{j_nom_dest * 100:.4f}% anual")
+        k3.metric("Tasa Efectiva Anual (TEA)", f"{tea * 100:.4f}% anual")
+        k4.metric("Fuerza de Interés δ / Tasa Real", f"δ={delta_cont * 100:.3f}% · Real={tasa_real * 100:.3f}%")
 
         st.latex(
-            r"1 + i = \left(1 + \frac{j^{(m)}}{m}\right)^m = \left(1 + \frac{j^{(k)}}{k}\right)^k = e^{\delta}, \qquad "
-            r"i_{\text{real}} = \frac{1 + i}{1 + \pi} - 1"
+            r"1 + i = \left(1 + \frac{j^{(m)}}{m}\right)^m = \left(1 + i_k\right)^k = e^{\delta}"
+        )
+        st.success(
+            f"**Explicación:** Una tasa {adj_or} efectiva de **{i_per_or * 100:.4f}%** por {sust_or} "
+            f"produce el mismo rendimiento que una tasa efectiva {adj_de} de **{i_per_dest * 100:.4f}%** por {sust_de}, "
+            f"o una tasa nominal anual de **{j_nom_dest * 100:.4f}%** capitalizable {frec_destino.lower()}."
         )
 
-        st.info(
-            f"💡 **Interpretación:** Una tasa {adj_or} efectiva de **{i_per_or * 100:.4f}%** por {sust_or} "
-            f"equivale exactamente a una tasa efectiva {adj_de} de **{i_per_dest * 100:.4f}%** por {sust_de} "
-            f"(o una nominal anual $j^{{({m_de})}} = {j_nom_dest * 100:.4f}\\%$ capitalizable {frec_destino.lower()}), "
-            f"y a una fuerza de interés continua $\\delta = {delta_cont * 100:.4f}\\%$."
-        )
+        with st.expander("📋 Ver tabla de equivalencias en todas las frecuencias de capitalización"):
+            filas_eq = []
+            for nom_f, m_f in FRECUENCIAS_TASA.items():
+                i_f = (1.0 + tea) ** (1.0 / m_f) - 1.0
+                j_f = i_f * m_f
+                filas_eq.append({
+                    "Frecuencia": nom_f,
+                    "Periodos por Año (m)": int(m_f),
+                    "Tasa Efectiva del Periodo (i_m)": f"{i_f * 100:.6f}%",
+                    "Tasa Nominal Anual (j^(m))": f"{j_f * 100:.6f}%",
+                })
+            st.dataframe(pd.DataFrame(filas_eq), use_container_width=True, hide_index=True)
 
 # ------------------------------------------------------------------------------
-# PESTAÑA 4: CÁLCULO DE PLAZOS Y CONVENCIÓN 30/360 ISDA
+# PESTAÑA 4: CÁLCULO DE PLAZOS ENTRE FECHAS (EXACTO Y 30/360 ISDA)
 # ------------------------------------------------------------------------------
 with tab_plazos:
     with st.container(border=True):
-        header_tarjeta("Cálculo de Plazos entre Fechas y Convenciones Bancarias (Exacto vs. 30/360 ISDA)")
-        st.caption("Incluye el ajuste normativo ISDA para fines de mes (día 31 → 30), garantizando que del 31 de marzo al 1 de abril cuente exactamente 1 día.")
+        header_tarjeta("Cálculo de Plazos entre Fechas (Tiempo Exacto vs. Tiempo Comercial 30/360 ISDA)")
 
-        c_f1, c_f2, c_f3 = st.columns(3, gap="large")
+        c_f1, c_f2 = st.columns(2, gap="large")
         with c_f1:
-            f_ini = st.date_input("Fecha de inicio (Apertura / Emisión):", value=datetime.date(2026, 3, 31), key="f_ini_d")
+            f_ini = st.date_input("Fecha Inicial:", value=datetime.date(2026, 3, 31), key="pl_f_ini")
         with c_f2:
-            f_fin = st.date_input("Fecha de término (Vencimiento / Liquidación):", value=datetime.date(2026, 4, 1), key="f_fin_d")
-        with c_f3:
-            cap_plazo = st.number_input("Capital para estimar intereses en el plazo ($):", min_value=0.0, value=100000.0, step=5000.0, format="%.2f")
-            tasa_anual_plazo = st.number_input("Tasa simple anual (%):", min_value=0.0, value=11.0, step=0.25) / 100.0
+            f_fin = st.date_input("Fecha Final:", value=datetime.date(2026, 4, 1), key="pl_f_fin")
 
         if f_fin < f_ini:
-            st.error("⛔ La fecha de vencimiento debe ser posterior o igual a la fecha de inicio.")
+            st.error("⛔ La Fecha Final debe ser posterior o igual a la Fecha Inicial.")
         else:
             dias_exactos = (f_fin - f_ini).days
             dias_360 = _dias_30_360_isda(f_ini, f_fin)
 
             st.divider()
             d1, d2, d3 = st.columns(3, gap="medium")
-            d1.metric("Días Exactos (Calendario Real)", f"{dias_exactos:,} días")
-            d2.metric("Días Comerciales (30/360 ISDA)", f"{dias_360:,} días")
-            d3.metric("Diferencia entre Convenciones", f"{dias_exactos - dias_360:+,} días")
-
-            int_act_365 = cap_plazo * tasa_anual_plazo * (dias_exactos / 365.0)
-            int_act_360 = cap_plazo * tasa_anual_plazo * (dias_exactos / 360.0)
-            int_30_360 = cap_plazo * tasa_anual_plazo * (dias_360 / 360.0)
+            d1.metric("Tiempo Exacto (Actual)", f"{dias_exactos:,} días")
+            d2.metric("Tiempo Comercial (30/360 ISDA)", f"{dias_360:,} días")
+            d3.metric("Años Equivalentes (Exacto/365 vs 30/360)", f"{dias_exactos / 365.0:.4f}  |  {dias_360 / 360.0:.4f}")
 
             st.markdown(
-                f"| Convención | Nombre Técnico | Fracción de Año ($t$) | Interés Simple Generado (`${cap_plazo:,.2f}` al `{tasa_anual_plazo*100:.2f}%`) |\n"
+                f"| Convención | Días Contabilizados | Base Anual | Fracción de Año ($t$) |\n"
                 f"|---|---|---|---|\n"
-                f"| **Exacto / 365 (Actual/Actual)** | Interés Exacto con tiempo exacto | `{dias_exactos} / 365 = {dias_exactos / 365.0:.6f}` | **`${int_act_365:,.2f}`** |\n"
-                f"| **Exacto / 360 (Actual/360)** | Regla del Banquero (Ordinario con tiempo exacto) | `{dias_exactos} / 360 = {dias_exactos / 360.0:.6f}` | **`${int_act_360:,.2f}`** |\n"
-                f"| **30 / 360 (ISDA Bond Basis)** | Interés Ordinario con tiempo comercial | `{dias_360} / 360 = {dias_360 / 360.0:.6f}` | **`${int_30_360:,.2f}`** |"
+                f"| **Exacto / Exacto (Actual/365)** | `{dias_exactos}` días reales | `365` días | `{dias_exactos / 365.0:.6f}` |\n"
+                f"| **Bancario / Comercial (Actual/360)** | `{dias_exactos}` días reales | `360` días | `{dias_exactos / 360.0:.6f}` |\n"
+                f"| **30 / 360 (ISDA Bond Basis)** | `{dias_360}` días comerciales | `360` días | `{dias_360 / 360.0:.6f}` |"
             )
 
 # ------------------------------------------------------------------------------
-# PESTAÑA 5: ANUALIDADES (CONSTANTES Y VARIABLES) Y TABLA DE AMORTIZACIÓN
+# PESTAÑA 5: ANUALIDADES Y TABLAS DE AMORTIZACIÓN (AUTOMÁTICO)
 # ------------------------------------------------------------------------------
 with tab_anualidades:
-    sub_an1, sub_an2, sub_an3 = st.tabs([
-        "📅 1. Anualidades Constantes",
+    sub_an1, sub_an2 = st.tabs([
+        "🏦 1. Anualidades Constantes y Tabla de Amortización",
         "📈 2. Anualidades Variables (Aritmética, Geométrica y Perpetuidad)",
-        "🏦 3. Tabla de Amortización y Gráfica de Saldos",
     ])
 
     with sub_an1:
         with st.container(border=True):
-            header_tarjeta("Valuación de Anualidades Ciertas Constantes (Vencidas, Anticipadas y Diferidas)")
+            header_tarjeta("Calculadora de Anualidades y Tabla de Amortización")
 
-            c1, c2 = st.columns(2, gap="large")
+            c1, c2, c3 = st.columns(3, gap="medium")
             with c1:
-                modalidad_an = st.radio(
-                    "Modalidad de los pagos:",
-                    ["Vencida / Ordinaria (al final del periodo)", "Anticipada (al inicio del periodo)"],
-                    horizontal=True,
-                    key="an_mod",
-                )
+                modalidad_an = st.radio("Modalidad de pago:", ["Vencida (Ordinaria)", "Anticipada"], horizontal=True, key="an_mod")
             with c2:
                 incog_an = st.selectbox(
                     "Variable a calcular:",
-                    ["Valor Presente (VP) y Valor Futuro (VF)", "Pago Periódico / Renta (R) dado el Valor Presente", "Pago Periódico / Renta (R) dado el Valor Futuro"],
+                    [
+                        "Valor Presente (VP) y Valor Futuro (VF)",
+                        "Renta / Pago Periódico (R) dado el Valor Presente",
+                        "Renta / Pago Periódico (R) dado el Valor Futuro",
+                    ],
                     key="an_incog",
                 )
+            with c3:
+                frec_an = st.selectbox("Frecuencia de los pagos:", list(FRECUENCIAS_TASA.keys()), index=5, key="an_frec")
 
             p1, p2, p3, p4 = st.columns(4, gap="medium")
             with p1:
                 if incog_an.startswith("Valor Presente"):
-                    R_an = st.number_input("Renta periódica R ($):", min_value=0.01, value=2500.0, step=100.0, format="%.2f", key="an_R")
+                    R_in = st.number_input("Renta Periódica R:", min_value=0.01, value=2500.0, step=100.0, format="%.2f", key="an_R")
                 elif "Valor Presente" in incog_an:
-                    VP_conocido = st.number_input("Valor Presente VP ($):", min_value=0.01, value=25000.0, step=500.0, format="%.2f", key="an_VP_c")
+                    VP_in = st.number_input("Valor Presente / Deuda VP:", min_value=0.01, value=50000.0, step=1000.0, format="%.2f", key="an_VP")
                 else:
-                    VF_conocido = st.number_input("Valor Futuro VF ($):", min_value=0.01, value=35000.0, step=500.0, format="%.2f", key="an_VF_c")
+                    VF_in = st.number_input("Valor Futuro Objetivo VF:", min_value=0.01, value=50000.0, step=1000.0, format="%.2f", key="an_VF")
             with p2:
-                i_an_pct = st.number_input("Tasa por periodo i (%):", min_value=0.0, value=1.5, step=0.1, format="%.4f", key="an_i")
+                tipo_tasa_an = st.selectbox("La tasa ingresada es:", ["Efectiva del periodo de pago", "Nominal Anual Capitalizable"], key="an_tipo_i")
             with p3:
-                n_an = int(st.number_input("Número de pagos (n):", min_value=1, max_value=600, value=12, step=1, key="an_n"))
+                tasa_an_pct = st.number_input("Valor de la tasa (%):", min_value=0.0, value=12.0 if tipo_tasa_an.startswith("Nominal") else 1.5, step=0.25, format="%.4f", key="an_i")
             with p4:
-                k_dif = int(st.number_input("Periodos de diferimiento (k ≥ 0):", min_value=0, max_value=120, value=0, step=1, key="an_k"))
+                n_an = int(st.number_input("Número total de pagos (n):", min_value=1, max_value=360, value=12, step=1, key="an_n"))
 
-            i_an = i_an_pct / 100.0
+            m_an = FRECUENCIAS_TASA[frec_an]
+            i_an = (tasa_an_pct / 100.0 / m_an) if tipo_tasa_an.startswith("Nominal") else (tasa_an_pct / 100.0)
             factor_ant = (1.0 + i_an) if modalidad_an.startswith("Anticipada") else 1.0
-            factor_dif = (1.0 + i_an) ** (-k_dif)
 
-            # Manejo exacto de tasa = 0% (Fix de auditoría)
+            # Soporte exacto para tasa = 0% (Fix de auditoría)
             if abs(i_an) < 1e-12:
                 if incog_an.startswith("Valor Presente"):
-                    R_res = R_an
-                    vp_res = R_an * n_an
-                    vf_res = R_an * n_an
+                    R_calc = R_in
+                    vp_calc = R_in * n_an
+                    vf_calc = R_in * n_an
                 elif "Valor Presente" in incog_an:
-                    R_res = VP_conocido / n_an
-                    vp_res = VP_conocido
-                    vf_res = VP_conocido
+                    R_calc = VP_in / n_an
+                    vp_calc = VP_in
+                    vf_calc = VP_in
                 else:
-                    R_res = VF_conocido / n_an
-                    vp_res = VF_conocido
-                    vf_res = VF_conocido
+                    R_calc = VF_in / n_an
+                    vp_calc = VF_in
+                    vf_calc = VF_in
             else:
-                a_n_i = (1.0 - (1.0 + i_an) ** (-n_an)) / i_an
-                s_n_i = (((1.0 + i_an) ** n_an) - 1.0) / i_an
+                a_ni = (1.0 - (1.0 + i_an) ** (-n_an)) / i_an
+                s_ni = (((1.0 + i_an) ** n_an) - 1.0) / i_an
                 if incog_an.startswith("Valor Presente"):
-                    R_res = R_an
-                    vp_res = R_an * a_n_i * factor_ant * factor_dif
-                    vf_res = R_an * s_n_i * factor_ant
+                    R_calc = R_in
+                    vp_calc = R_in * a_ni * factor_ant
+                    vf_calc = R_in * s_ni * factor_ant
                 elif "Valor Presente" in incog_an:
-                    R_res = VP_conocido / (a_n_i * factor_ant * factor_dif)
-                    vp_res = VP_conocido
-                    vf_res = R_res * s_n_i * factor_ant
+                    R_calc = VP_in / (a_ni * factor_ant)
+                    vp_calc = VP_in
+                    vf_calc = R_calc * s_ni * factor_ant
                 else:
-                    R_res = VF_conocido / (s_n_i * factor_ant)
-                    vf_res = VF_conocido
-                    vp_res = R_res * a_n_i * factor_ant * factor_dif
+                    R_calc = VF_in / (s_ni * factor_ant)
+                    vf_calc = VF_in
+                    vp_calc = R_calc * a_ni * factor_ant
 
             st.divider()
             m1, m2, m3, m4 = st.columns(4, gap="medium")
-            m1.metric("Renta Periódica (R)", f"${R_res:,.2f}")
-            m2.metric("Valor Presente (VP)", f"${vp_res:,.2f}")
-            m3.metric("Valor Futuro / Monto (VF)", f"${vf_res:,.2f}")
-            m4.metric("Total de Pagos (n · R)", f"${n_an * R_res:,.2f}")
+            m1.metric("Pago Periódico / Renta (R)", _moneda(R_calc))
+            m2.metric("Valor Presente (VP)", _moneda(vp_calc))
+            m3.metric("Valor Futuro / Monto (VF)", _moneda(vf_calc))
+            m4.metric("Tasa Efectiva por Periodo", f"{i_an * 100:.4f}%")
 
-            st.latex(
-                r"VP = R \cdot \frac{1 - (1+i)^{-n}}{i}"
-                + (r"(1+i)" if modalidad_an.startswith("Anticipada") else "")
-                + (r"(1+i)^{-k}" if k_dif > 0 else "")
-                + r", \qquad VF = R \cdot \frac{(1+i)^n - 1}{i}"
-                + (r"(1+i)" if modalidad_an.startswith("Anticipada") else "")
+            # Tabla de amortización automática sobre el Valor Presente
+            subheader_tarjeta("Tabla de Amortización de la Deuda (VP)")
+            filas_am = [{
+                "Periodo": 0,
+                "Pago Periódico": 0.0,
+                "Intereses": 0.0,
+                "Abono a Capital": 0.0,
+                "Capital Amortizado Acum.": 0.0,
+                "Saldo Insoluto": float(vp_calc),
+            }]
+            saldo = float(vp_calc)
+            acum_cap = 0.0
+            for k in range(1, n_an + 1):
+                if modalidad_an.startswith("Anticipada") and k == 1:
+                    int_k = 0.0
+                else:
+                    int_k = saldo * i_an
+                abono_k = R_calc - int_k
+                saldo = max(0.0, saldo - abono_k)
+                acum_cap += abono_k
+                filas_am.append({
+                    "Periodo": k,
+                    "Pago Periódico": R_calc,
+                    "Intereses": int_k,
+                    "Abono a Capital": abono_k,
+                    "Capital Amortizado Acum.": acum_cap,
+                    "Saldo Insoluto": saldo,
+                })
+
+            df_am = pd.DataFrame(filas_am)
+            fig_am, ax_am = _crear_grafica_amplia(
+                titulo="Evolución del Saldo Insoluto vs. Capital Amortizado Acumulado",
+                xlabel=f"Periodo ({frec_an})",
+                ylabel=f"Monto ({SIMB_PESO})",
+            )
+            ax_am.plot(df_am["Periodo"], df_am["Saldo Insoluto"], "o-", color=AZUL, lw=2.4, ms=5, label="Saldo Insoluto")
+            ax_am.plot(df_am["Periodo"], df_am["Capital Amortizado Acum."], "s--", color=VERDE, lw=2.2, ms=4.5, label="Capital Amortizado Acumulado")
+            ax_am.legend(fontsize=9.5, loc="center right")
+            mostrar_figura_segura(fig_am)
+
+            st.dataframe(
+                df_am.style.format({
+                    "Pago Periódico": f"{SIMB_PESO}{{:,.2f}}",
+                    "Intereses": f"{SIMB_PESO}{{:,.2f}}",
+                    "Abono a Capital": f"{SIMB_PESO}{{:,.2f}}",
+                    "Capital Amortizado Acum.": f"{SIMB_PESO}{{:,.2f}}",
+                    "Saldo Insoluto": f"{SIMB_PESO}{{:,.2f}}",
+                }),
+                use_container_width=True,
+                hide_index=True,
             )
 
     with sub_an2:
@@ -583,30 +696,28 @@ with tab_anualidades:
             tipo_var = st.radio(
                 "Seleccione el modelo actuarial:",
                 [
-                    "1. Progresión Aritmética (Primer pago P, incremento constante Q en cada periodo)",
-                    "2. Progresión Geométrica (Primer pago R₁, crecimiento porcentual g % en cada periodo)",
-                    "3. Perpetuidad (Pagos infinitos constantes o crecientes a tasa g < i)",
+                    "1. Progresión Aritmética (Primer pago P, incremento constante Q por periodo)",
+                    "2. Progresión Geométrica (Primer pago R₁, tasa de crecimiento g % por periodo)",
+                    "3. Perpetuidad (Pagos infinitos constantes o crecientes)",
                 ],
                 key="an_var_tipo",
             )
             cv1, cv2, cv3, cv4 = st.columns(4, gap="medium")
-            p_base = cv1.number_input("Primer pago P / R₁ ($):", min_value=0.01, value=1000.0, step=100.0, format="%.2f", key="av_P")
-            i_v = cv2.number_input("Tasa por periodo i (%):", min_value=0.01, value=2.0, step=0.25, format="%.4f", key="av_i") / 100.0
+            p_base = cv1.number_input("Primer pago P / R₁:", min_value=0.01, value=1000.0, step=100.0, format="%.2f", key="av_P")
+            i_v = cv2.number_input("Tasa efectiva por periodo i (%):", min_value=0.01, value=2.0, step=0.25, format="%.4f", key="av_i") / 100.0
             if not tipo_var.startswith("3."):
                 n_v = int(cv3.number_input("Número de pagos (n):", min_value=1, max_value=360, value=12, step=1, key="av_n"))
 
             if tipo_var.startswith("1."):
-                Q_inc = cv4.number_input("Incremento aritmético Q ($):", value=200.0, step=50.0, format="%.2f", key="av_Q")
+                Q_inc = cv4.number_input("Incremento constante Q:", value=200.0, step=50.0, format="%.2f", key="av_Q")
                 a_ni = (1.0 - (1.0 + i_v) ** (-n_v)) / i_v
                 vp_var = p_base * a_ni + (Q_inc / i_v) * (a_ni - n_v * ((1.0 + i_v) ** (-n_v)))
                 vf_var = vp_var * ((1.0 + i_v) ** n_v)
-                ult_pago = p_base + (n_v - 1) * Q_inc
-
                 st.divider()
                 v1, v2, v3 = st.columns(3, gap="medium")
-                v1.metric("Valor Presente (VP)", f"${vp_var:,.2f}")
-                v2.metric("Valor Futuro (VF)", f"${vf_var:,.2f}")
-                v3.metric("Último Pago en t = n", f"${ult_pago:,.2f}")
+                v1.metric("Valor Presente (VP)", _moneda(vp_var))
+                v2.metric("Valor Futuro (VF)", _moneda(vf_var))
+                v3.metric("Último Pago en t = n", _moneda(p_base + (n_v - 1) * Q_inc))
                 st.latex(r"VP = P\,a_{\overline{n}|i} + \frac{Q}{i}\left(a_{\overline{n}|i} - n(1+i)^{-n}\right)")
 
             elif tipo_var.startswith("2."):
@@ -616,155 +727,42 @@ with tab_anualidades:
                 else:
                     vp_var = p_base * (1.0 - ((1.0 + g_v) / (1.0 + i_v)) ** n_v) / (i_v - g_v)
                 vf_var = vp_var * ((1.0 + i_v) ** n_v)
-                ult_pago = p_base * ((1.0 + g_v) ** (n_v - 1))
-
                 st.divider()
                 v1, v2, v3 = st.columns(3, gap="medium")
-                v1.metric("Valor Presente (VP)", f"${vp_var:,.2f}")
-                v2.metric("Valor Futuro (VF)", f"${vf_var:,.2f}")
-                v3.metric("Último Pago en t = n", f"${ult_pago:,.2f}")
+                v1.metric("Valor Presente (VP)", _moneda(vp_var))
+                v2.metric("Valor Futuro (VF)", _moneda(vf_var))
+                v3.metric("Último Pago en t = n", _moneda(p_base * ((1.0 + g_v) ** (n_v - 1))))
                 st.latex(r"VP = R_1 \cdot \frac{1 - \left(\frac{1+g}{1+i}\right)^n}{i - g}")
 
             else:
                 g_perp = cv3.number_input("Crecimiento perpetuo g (% < i):", min_value=0.0, value=0.5, step=0.1, format="%.4f", key="av_gp") / 100.0
                 if g_perp >= i_v:
-                    st.error("⛔ En una perpetuidad en crecimiento, la tasa de descuento i debe ser estrictamente mayor que g.")
+                    st.error("⛔ En una perpetuidad creciente, la tasa de descuento i debe ser mayor que g.")
                 else:
                     vp_perp = p_base / (i_v - g_perp)
-                    vp_perp_ant = vp_perp * (1.0 + i_v)
                     st.divider()
                     v1, v2 = st.columns(2, gap="medium")
-                    v1.metric("Valor Presente Perpetuidad Vencida", f"${vp_perp:,.2f}")
-                    v2.metric("Valor Presente Perpetuidad Anticipada", f"${vp_perp_ant:,.2f}")
+                    v1.metric("Valor Presente Perpetuidad Vencida", _moneda(vp_perp))
+                    v2.metric("Valor Presente Perpetuidad Anticipada", _moneda(vp_perp * (1.0 + i_v)))
                     st.latex(r"VP_{\infty} = \frac{R_1}{i - g}")
 
-    with sub_an3:
-        with st.container(border=True):
-            header_tarjeta("Generador de Tabla de Amortización (Francés, Alemán y Americano)")
-            ca1, ca2, ca3, ca4 = st.columns(4, gap="medium")
-            monto_cred = ca1.number_input("Importe del Crédito ($):", min_value=1.0, value=50000.0, step=1000.0, format="%.2f", key="am_C")
-            tasa_cred_pct = ca2.number_input("Tasa Efectiva por Periodo (%):", min_value=0.0, value=2.0, step=0.25, format="%.4f", key="am_i")
-            plazo_cred = int(ca3.number_input("Plazo (n periodos):", min_value=1, max_value=360, value=12, step=1, key="am_n"))
-            sistema_am = ca4.selectbox(
-                "Sistema de Amortización:",
-                ["Francés (Cuota Constante)", "Alemán (Amortización Constante)", "Americano (Intereses periódicos + Capital al final)"],
-                key="am_sis",
-            )
-
-            i_c = tasa_cred_pct / 100.0
-            filas_am = [{
-                "Periodo": 0,
-                "Pago Total ($)": 0.0,
-                "Intereses ($)": 0.0,
-                "Amortización de Capital ($)": 0.0,
-                "Capital Amortizado Acum. ($)": 0.0,
-                "Saldo Insoluto ($)": float(monto_cred),
-            }]
-            saldo = float(monto_cred)
-            acum_cap = 0.0
-
-            if sistema_am.startswith("Francés"):
-                pago_fijo = (monto_cred / plazo_cred) if abs(i_c) < 1e-12 else (monto_cred * i_c / (1.0 - (1.0 + i_c) ** (-plazo_cred)))
-                for k in range(1, plazo_cred + 1):
-                    interes_k = saldo * i_c
-                    abono_k = pago_fijo - interes_k
-                    saldo = max(0.0, saldo - abono_k)
-                    acum_cap += abono_k
-                    filas_am.append({
-                        "Periodo": k,
-                        "Pago Total ($)": pago_fijo,
-                        "Intereses ($)": interes_k,
-                        "Amortización de Capital ($)": abono_k,
-                        "Capital Amortizado Acum. ($)": acum_cap,
-                        "Saldo Insoluto ($)": saldo,
-                    })
-            elif sistema_am.startswith("Alemán"):
-                abono_fijo = monto_cred / plazo_cred
-                for k in range(1, plazo_cred + 1):
-                    interes_k = saldo * i_c
-                    pago_k = abono_fijo + interes_k
-                    saldo = max(0.0, saldo - abono_fijo)
-                    acum_cap += abono_fijo
-                    filas_am.append({
-                        "Periodo": k,
-                        "Pago Total ($)": pago_k,
-                        "Intereses ($)": interes_k,
-                        "Amortización de Capital ($)": abono_fijo,
-                        "Capital Amortizado Acum. ($)": acum_cap,
-                        "Saldo Insoluto ($)": saldo,
-                    })
-            else:
-                for k in range(1, plazo_cred + 1):
-                    interes_k = saldo * i_c
-                    abono_k = monto_cred if k == plazo_cred else 0.0
-                    pago_k = interes_k + abono_k
-                    saldo = max(0.0, saldo - abono_k)
-                    acum_cap += abono_k
-                    filas_am.append({
-                        "Periodo": k,
-                        "Pago Total ($)": pago_k,
-                        "Intereses ($)": interes_k,
-                        "Amortización de Capital ($)": abono_k,
-                        "Capital Amortizado Acum. ($)": acum_cap,
-                        "Saldo Insoluto ($)": saldo,
-                    })
-
-            df_am = pd.DataFrame(filas_am)
-            tot_pagado = float(df_am["Pago Total ($)"].sum())
-            tot_int = float(df_am["Intereses ($)"].sum())
-
-            st.divider()
-            k1, k2, k3 = st.columns(3, gap="medium")
-            k1.metric("Primera Cuota Periódica", f"${df_am.iloc[1]['Pago Total ($)']:,.2f}")
-            k2.metric("Total de Intereses Pagados", f"${tot_int:,.2f}")
-            k3.metric("Desembolso Total Acumulado", f"${tot_pagado:,.2f}")
-
-            fig_am, ax_am = _crear_grafica_amplia(
-                titulo="Evolución del Saldo Insoluto vs. Capital Amortizado Acumulado"
-            )
-            ax_am.plot(df_am["Periodo"], df_am["Saldo Insoluto ($)"], "o-", color=AZUL, lw=2.4, ms=5, label="Saldo Insoluto ($)")
-            ax_am.plot(df_am["Periodo"], df_am["Capital Amortizado Acum. ($)"], "s--", color=VERDE, lw=2.2, ms=4.5, label="Capital Amortizado Acumulado ($)")
-            ax_am.legend(fontsize=9.5, loc="center right")
-            mostrar_figura_segura(fig_am)
-
-            subheader_tarjeta("Tabla de Amortización Completa")
-            st.dataframe(
-                df_am.style.format({
-                    "Pago Total ($)": "${:,.2f}",
-                    "Intereses ($)": "${:,.2f}",
-                    "Amortización de Capital ($)": "${:,.2f}",
-                    "Capital Amortizado Acum. ($)": "${:,.2f}",
-                    "Saldo Insoluto ($)": "${:,.2f}",
-                }),
-                use_container_width=True,
-                hide_index=True,
-            )
-            csv_bytes = df_am.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                "📥 Descargar Tabla de Amortización en CSV",
-                data=csv_bytes,
-                file_name="tabla_amortizacion_mathesis.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
-
 # ------------------------------------------------------------------------------
-# PESTAÑA 6: VALUACIÓN ACTUARIAL DE BONOS Y EVALUACIÓN DE PROYECTOS (VPN / TIR)
+# PESTAÑA 6: VALUACIÓN DE BONOS Y PROYECTOS (VPN / TIR) (AUTOMÁTICO)
 # ------------------------------------------------------------------------------
 with tab_bonos:
     t_bono, t_vpn = st.tabs([
-        "📜 1. Valuación de Bonos, Duración de Macaulay y Convexidad",
-        "🚀 2. Evaluación de Proyectos de Inversión (VPN y TIR)",
+        "📜 1. Valuación de Bonos, Duración y Convexidad",
+        "🚀 2. Evaluación de Proyectos (VPN y TIR)",
     ])
 
     with t_bono:
         with st.container(border=True):
-            header_tarjeta("Valuación de Bonos / Obligaciones y Sensibilidad a Tasas de Interés")
+            header_tarjeta("Valuación de Bonos / Obligaciones, Duración de Macaulay y Convexidad")
             b1, b2, b3, b4 = st.columns(4, gap="medium")
-            vn_bono = b1.number_input("Valor Nominal / Redención F ($):", min_value=10.0, value=1000.0, step=100.0, format="%.2f", key="bn_F")
+            vn_bono = b1.number_input("Valor Nominal F:", min_value=10.0, value=1000.0, step=100.0, format="%.2f", key="bn_F")
             tasa_cupon_pct = b2.number_input("Tasa Cupón por periodo r (%):", min_value=0.0, value=5.0, step=0.25, format="%.4f", key="bn_r")
             ytm_pct = b3.number_input("Tasa de Rendimiento YTM por periodo y (%):", min_value=0.01, value=4.0, step=0.25, format="%.4f", key="bn_y")
-            n_cupones = int(b4.number_input("Cupones restantes (n):", min_value=1, max_value=120, value=10, step=1, key="bn_n"))
+            n_cupones = int(b4.number_input("Cupones por pagar (n):", min_value=1, max_value=120, value=10, step=1, key="bn_n"))
 
             cupon_C = vn_bono * (tasa_cupon_pct / 100.0)
             y_b = ytm_pct / 100.0
@@ -772,60 +770,44 @@ with tab_bonos:
             ts_b = np.arange(1, n_cupones + 1, dtype=float)
             flujos_b = np.full(n_cupones, cupon_C, dtype=float)
             flujos_b[-1] += vn_bono
-            factores_desc = (1.0 + y_b) ** (-ts_b)
-            vp_flujos = flujos_b * factores_desc
+            vp_flujos = flujos_b * ((1.0 + y_b) ** (-ts_b))
 
             precio_bono = float(np.sum(vp_flujos))
             dur_macaulay = float(np.sum(ts_b * vp_flujos) / precio_bono)
             dur_modificada = dur_macaulay / (1.0 + y_b)
             convexidad = float(np.sum(ts_b * (ts_b + 1.0) * vp_flujos) / (precio_bono * ((1.0 + y_b) ** 2)))
 
-            tipo_compra = (
-                "SOBRE PAR (Con Prima: Cupón > YTM)" if precio_bono > vn_bono + 1e-4
-                else "BAJO PAR (Con Descuento: Cupón < YTM)" if precio_bono < vn_bono - 1e-4
-                else "A LA PAR (Precio = Valor Nominal)"
-            )
-
             st.divider()
             m1, m2, m3, m4 = st.columns(4, gap="medium")
-            m1.metric("Precio del Bono (P)", f"${precio_bono:,.2f}")
-            m2.metric("Duración de Macaulay (D)", f"{dur_macaulay:.4f} per.")
+            m1.metric("Precio del Bono (P)", _moneda(precio_bono))
+            m2.metric("Duración de Macaulay", f"{dur_macaulay:.4f} per.")
             m3.metric("Duración Modificada (D*)", f"{dur_modificada:.4f}")
-            m4.metric("Convexidad (C)", f"{convexidad:.4f}")
+            m4.metric("Convexidad", f"{convexidad:.4f}")
 
-            st.info(f"**Diagnóstico de Emisión:** El bono cotiza **{tipo_compra}** (Cupón periódico = `${cupon_C:,.2f}`).")
-            st.latex(
-                r"P = C\,a_{\overline{n}|y} + F(1+y)^{-n}, \qquad "
-                r"D_{\text{Mac}} = \frac{1}{P}\sum_{t=1}^{n} t\,\frac{CF_t}{(1+y)^t}, \qquad "
-                r"\frac{\Delta P}{P} \approx -D^* \Delta y + \frac{1}{2}\text{Conv}\cdot(\Delta y)^2"
-            )
-
-            # Curva Precio-Rendimiento a ancho completo
             ys_grid = np.linspace(max(0.002, y_b * 0.25), y_b * 2.5, 160)
             precios_grid = [
                 sum(flujos_b[k] * ((1.0 + y_g) ** (-(k + 1))) for k in range(n_cupones))
                 for y_g in ys_grid
             ]
             fig_b, ax_b = _crear_grafica_amplia(
-                titulo="Curva Precio vs. Rendimiento (Convexidad del Bono)",
+                titulo="Curva Precio vs. Rendimiento (P vs. YTM)",
                 xlabel="Tasa de Rendimiento por Periodo YTM (%)",
-                ylabel="Precio del Bono ($)",
+                ylabel=f"Precio ({SIMB_PESO})",
             )
-            ax_b.plot(ys_grid * 100, precios_grid, color=AZUL, lw=2.5, label="Precio exacto P(y)")
-            ax_b.plot([ytm_pct], [precio_bono], "o", color=ROJO, ms=8, label=f"Punto actual (y={ytm_pct:.2f}%, P=${precio_bono:,.2f})")
-            ax_b.axhline(vn_bono, color=OSCURO, ls=":", lw=1.2, label=f"Valor Nominal (${vn_bono:,.0f})")
+            ax_b.plot(ys_grid * 100, precios_grid, color=AZUL, lw=2.5, label="Precio P(y)")
+            ax_b.plot([ytm_pct], [precio_bono], "o", color=ROJO, ms=8, label=f"Precio actual ({_moneda(precio_bono)})")
+            ax_b.axhline(vn_bono, color=OSCURO, ls=":", lw=1.2, label=f"Valor Nominal ({_moneda(vn_bono)})")
             ax_b.legend(fontsize=9.5)
             mostrar_figura_segura(fig_b)
 
     with t_vpn:
         with st.container(border=True):
-            header_tarjeta("Evaluación de Proyectos de Inversión: Valor Presente Neto (VPN) y Tasa Interna de Retorno (TIR)")
-
+            header_tarjeta("Valor Presente Neto (VPN) y Tasa Interna de Retorno (TIR)")
             v1, v2, v3 = st.columns([1, 2, 1], gap="medium")
             with v1:
-                inv_ini = st.number_input("Inversión Inicial CF₀ ($):", min_value=0.0, value=10000.0, step=500.0, format="%.2f", key="vpn_cf0")
+                inv_ini = st.number_input("Inversión Inicial CF₀:", min_value=0.0, value=10000.0, step=500.0, format="%.2f", key="vpn_cf0")
             with v2:
-                flujos_str = st.text_input("Flujos netos CF₁, CF₂, …, CFₙ separados por comas ($):", value="3000, 4000, 4500, 5000", key="vpn_cfs")
+                flujos_str = st.text_input("Flujos netos CF₁, CF₂, …, CFₙ separados por comas:", value="3000, 4000, 4500, 5000", key="vpn_cfs")
             with v3:
                 tasa_k_pct = st.number_input("Tasa de descuento TREMA k (%):", min_value=0.0, value=12.0, step=0.5, format="%.2f", key="vpn_k")
 
@@ -842,22 +824,22 @@ with tab_bonos:
 
                 st.divider()
                 p1, p2, p3 = st.columns(3, gap="medium")
-                p1.metric("Valor Presente Neto (VPN)", f"${vpn_val:,.2f}", delta="Proyecto Viable (VPN > 0)" if vpn_val > 0 else "No Viable (VPN < 0)")
-                p2.metric("Tasa Interna de Retorno (TIR)", f"{tir_val * 100:.4f}%" if tir_val is not None else "No única / N/D")
-                p3.metric("Índice de Rentabilidad (IR = VP / CF₀)", f"{ir_val:.4f}")
+                p1.metric("Valor Presente Neto (VPN)", _moneda(vpn_val), delta="Viable (VPN > 0)" if vpn_val > 0 else "No Viable")
+                p2.metric("Tasa Interna de Retorno (TIR)", f"{tir_val * 100:.4f}%" if tir_val is not None else "N/D")
+                p3.metric("Índice de Rentabilidad (IR)", f"{ir_val:.4f}")
 
                 tasas_grid = np.linspace(0.0, 0.50, 180)
                 vpns_grid = [sum(cf / ((1.0 + r_g) ** t) for t, cf in enumerate(cfs)) for r_g in tasas_grid]
                 fig_v, ax_v = _crear_grafica_amplia(
                     titulo="Perfil del Valor Presente Neto (VPN vs. Tasa de Descuento k)",
                     xlabel="Tasa de Descuento k (%)",
-                    ylabel="VPN ($)",
+                    ylabel=f"VPN ({SIMB_PESO})",
                 )
-                ax_v.plot(tasas_grid * 100, vpns_grid, color=AZUL, lw=2.5, label="Curva VPN(k)")
+                ax_v.plot(tasas_grid * 100, vpns_grid, color=AZUL, lw=2.5, label="VPN(k)")
                 ax_v.axhline(0, color=OSCURO, lw=1.3, ls="--")
-                ax_v.plot([tasa_k_pct], [vpn_val], "o", color=VERDE if vpn_val >= 0 else ROJO, ms=8.5, label=f"TREMA ({tasa_k_pct:.2f}% → ${vpn_val:,.2f})")
+                ax_v.plot([tasa_k_pct], [vpn_val], "o", color=VERDE if vpn_val >= 0 else ROJO, ms=8.5, label=f"TREMA ({tasa_k_pct:.2f}% → {_moneda(vpn_val)})")
                 if tir_val is not None and 0 <= tir_val <= 0.50:
-                    ax_v.plot([tir_val * 100], [0], "o", color=NARANJA, ms=8.5, label=f"TIR = {tir_val * 100:.2f}% (VPN = $0)")
+                    ax_v.plot([tir_val * 100], [0], "o", color=NARANJA, ms=8.5, label=f"TIR = {tir_val * 100:.2f}%")
                 ax_v.legend(fontsize=9.5)
                 mostrar_figura_segura(fig_v)
             except Exception as e:
