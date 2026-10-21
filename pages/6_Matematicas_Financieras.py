@@ -196,10 +196,10 @@ gestionar_inventario_sidebar(
 # PESTAÑAS PRINCIPALES
 # ==============================================================================
 tab_interes, tab_comparador, tab_tasas, tab_plazos, tab_anualidades, tab_bonos = st.tabs([
-    "💰 1. Interés Simple y Compuesto",
-    "📊 2. Comparador Gráfico",
-    "🔄 3. Conversión de Tasas",
-    "📅 4. Cálculo de Plazos",
+    "💰 1. Interés",
+    "📊 2. Gráficas",
+    "🔄 3. Equivalencia de Tasas",
+    "📅 4. Fechas",
     "🏦 5. Anualidades y Amortización",
     "📜 6. Bonos y Proyectos (VPN / TIR)",
 ])
@@ -221,7 +221,7 @@ with tab_interes:
             )
         with c_inc:
             incognita = st.selectbox(
-                "Variable a calcular (se actualiza automáticamente):",
+                "Variable a calcular:",
                 [
                     "Monto Futuro / Valor Final (M)",
                     "Capital Inicial / Valor Presente (C)",
@@ -242,14 +242,12 @@ with tab_interes:
                 C_val = st.number_input("Capital Inicial C:", min_value=0.01, value=10000.0, step=500.0, format="%.2f", key="in_C")
             else:
                 C_val = 0.0
-                st.info("El **Capital Inicial (C)** se calculará automáticamente.")
-
+                
             if incognita != "Monto Futuro / Valor Final (M)":
                 M_val = st.number_input("Monto Futuro M:", min_value=0.01, value=15000.0, step=500.0, format="%.2f", key="in_M")
             else:
                 M_val = 0.0
-                st.info("El **Monto Futuro (M)** se calculará automáticamente.")
-
+               
         with col_tasa:
             st.markdown("**2. Tasa de Interés**")
             if regimen == "Interés Compuesto":
@@ -273,8 +271,7 @@ with tab_interes:
                 tasa_pct = st.number_input("Valor de la tasa (%):", min_value=0.0, value=12.0, step=0.5, format="%.4f", key="in_tasa_val")
             else:
                 tasa_pct = 0.0
-                st.info("La **Tasa de Interés** se calculará en el periodo seleccionado.")
-
+                
         with col_tiempo:
             st.markdown("**3. Plazo / Tiempo**")
             unidad_tiempo = st.selectbox(
@@ -371,10 +368,10 @@ with tab_interes:
                 m4.metric(f"Tasa ({tipo_tasa[:8]}. {frec_tasa})", f"{tasa_pct:,.4f}%")
 
             st.info(
-                f"🔄 **Homologación de unidades:** El plazo de **{tiempo_val:,.4f} {unidad_tiempo.lower()}** equivale a "
-                f"**{t_anios:,.4f} años** (**{n_per:,.4f} {plur_tasa}**). "
-                f"La tasa aplicada por cada {sust_tasa} es **i = {i_per * 100:.6f}%** "
-                f"(equivalente a una tasa anual efectiva de **{tea_equiv * 100:.4f}%**)."
+                f"🔄 **Homologación de unidades:** El plazo de **{tiempo_val:,.2f} {unidad_tiempo.lower()}** equivale a "
+                f"**{t_anios:,.2f} años** (**{n_per:,.2f} {plur_tasa}**). "
+                f"La tasa aplicada por cada {sust_tasa} es **i = {i_per * 100:.2f}%** "
+                f"(equivalente a una tasa anual efectiva de **{tea_equiv * 100:.2f}%**)."
             )
 
             if regimen == "Interés Compuesto":
@@ -491,7 +488,7 @@ with tab_comparador:
                 )
 
 # ------------------------------------------------------------------------------
-# PESTAÑA 3: CONVERSIÓN DE TASAS (AUTOMÁTICA)
+# PESTAÑA 3: CONVERSIÓN DE TASAS
 # ------------------------------------------------------------------------------
 with tab_tasas:
     with st.container(border=True):
@@ -537,18 +534,18 @@ with tab_tasas:
 
         st.divider()
         k1, k2, k3, k4 = st.columns(4, gap="medium")
-        k1.metric(f"Efectiva {frec_destino}", f"{i_per_dest * 100:.4f}% por {sust_de}")
-        k2.metric(f"Nominal Anual Cap. {frec_destino}", f"{j_nom_dest * 100:.4f}% anual")
-        k3.metric("Tasa Efectiva Anual (TEA)", f"{tea * 100:.4f}% anual")
-        k4.metric("Fuerza de Interés δ / Tasa Real", f"δ={delta_cont * 100:.3f}% · Real={tasa_real * 100:.3f}%")
+        k1.metric(f"Efectiva {frec_destino}", f"{i_per_dest * 100:.2f}% por {sust_de}")
+        k2.metric(f"Nominal Anual Cap. {frec_destino}", f"{j_nom_dest * 100:.2f}% anual")
+        k3.metric("Tasa Efectiva Anual (TEA)", f"{tea * 100:.2f}% anual")
+        k4.metric("Fuerza de Interés δ / Tasa Real", f"δ={delta_cont * 100:.2f}% · Real={tasa_real * 100:.2f}%")
 
         st.latex(
             r"1 + i = \left(1 + \frac{j^{(m)}}{m}\right)^m = \left(1 + i_k\right)^k = e^{\delta}"
         )
         st.success(
-            f"**Explicación:** Una tasa {adj_or} efectiva de **{i_per_or * 100:.4f}%** por {sust_or} "
-            f"produce el mismo rendimiento que una tasa efectiva {adj_de} de **{i_per_dest * 100:.4f}%** por {sust_de}, "
-            f"o una tasa nominal anual de **{j_nom_dest * 100:.4f}%** capitalizable {frec_destino.lower()}."
+            f"**Explicación:** Una tasa {adj_or} efectiva de **{i_per_or * 100:.2f}%** por {sust_or} "
+            f"produce el mismo rendimiento que una tasa efectiva {adj_de} de **{i_per_dest * 100:.2f}%** por {sust_de}, "
+            f"o una tasa nominal anual de **{j_nom_dest * 100:.2f}%** capitalizable {frec_destino.lower()}."
         )
 
         with st.expander("📋 Ver tabla de equivalencias en todas las frecuencias de capitalización"):
