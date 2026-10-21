@@ -79,7 +79,7 @@ def _dias_30_360_isda(d1: datetime.date, d2: datetime.date) -> int:
     y2, m2, day2 = d2.year, d2.month, d2.day
 
     # Ajuste de fin de febrero
-     es_feb1 = m1 == 2 and (day1 == 29 or (day1 == 28 and not (y1 % 4 == 0 and (y1 % 100 != 0 or y1 % 400 == 0))))
+    es_feb1 = m1 == 2 and (day1 == 29 or (day1 == 28 and not (y1 % 4 == 0 and (y1 % 100 != 0 or y1 % 400 == 0))))
     es_feb2 = m2 == 2 and (day2 == 29 or (day2 == 28 and not (y2 % 4 == 0 and (y2 % 100 != 0 or y2 % 400 == 0))))
     if es_feb1 and es_feb2:
         day2 = 30
