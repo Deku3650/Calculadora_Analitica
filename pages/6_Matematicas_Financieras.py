@@ -368,8 +368,8 @@ with tab_interes:
                 m4.metric(f"Tasa ({tipo_tasa[:8]}. {frec_tasa})", f"{tasa_pct:,.4f}%")
 
             st.info(
-                f"🔄 **Homologación de unidades:** El plazo de **{tiempo_val:,.2f} {unidad_tiempo.lower()}** equivale a "
-                f"**{t_anios:,.2f} años** (**{n_per:,.2f} {plur_tasa}**). "
+                f"🔄 El plazo de **{tiempo_val:,.2f} {unidad_tiempo.lower()}** equivale a "
+                f"**{t_anios:,.2f} años**. "
                 f"La tasa aplicada por cada {sust_tasa} es **i = {i_per * 100:.2f}%** "
                 f"(equivalente a una tasa anual efectiva de **{tea_equiv * 100:.2f}%**)."
             )
