@@ -298,6 +298,13 @@ def _tab_rn() -> dict:
          s("ℝ<sup><i>n</i></sup>", r"\mathbb{R}^{n}", "ℝⁿ", "fn sm"), s("ℝ<sup>+</sup>", r"\mathbb{R}^{+}", "reales positivos", "fn sm"),
          s("∅", r"\emptyset", "conjunto vacío"), s("±", r"\pm", "más menos"), s("≈", r"\approx", "aproximadamente igual"),
          s("{ , }", r"\left\{#?,#?\right\}", "conjunto finito", "fn sm")],
+        [s("∬", r"\iint_{#?}#?\,dA", "integral doble sobre una región (abajo va la región; termina con dA)"),
+         s("∭", r"\iiint_{#?}#?\,dV", "integral triple sobre una región (abajo va la región; termina con dV)"),
+         s("∇·", r"\nabla\cdot #?", "divergencia de un campo ⟨P, Q, R⟩"), s("∇×", r"\nabla\times #?", "rotacional de un campo ⟨P, Q, R⟩"),
+         s("∇²", r"\nabla^{2}\left(#?\right)", "laplaciano de una función", "fn sm"),
+         s("⟨,,⟩ <i>t</i>", r"\langle #?,#?,#?\rangle,\ #?\le t\le #?", "curva en el espacio con su intervalo: ⟨x(t), y(t), z(t)⟩, a ≤ t ≤ b", "fn xs"),
+         s("<i>r</i>(<i>u</i>,<i>v</i>)", r"\langle #?,#?,#?\rangle,\ #?\le u\le #?,\ #?\le v\le #?", "superficie paramétrica con su dominio: ⟨x, y, z⟩, a ≤ u ≤ b, c ≤ v ≤ d", "fn xs"),
+         s("<span class=\"mk-ov\"><i>x</i></span>", r"\bar{#?}", "x barra (media)", "fn sm")],
     ]}
 
 
