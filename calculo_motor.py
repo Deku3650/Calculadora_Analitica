@@ -2523,17 +2523,11 @@ def evaluar_operacion(obj):
         k, a, bb = obj.limits[0]
         if bb in (sp.oo, -sp.oo):
             return serie(obj.function, k, int(a) if a.is_Integer else 1)
-        b = [H("Suma finita"), L(sp.latex(obj))]
-        val = sp.summation(obj.function, (k, a, bb))
-        if val.has(sp.Sum):
-            raise ErrorCalculo("SymPy no encontró una fórmula cerrada para esta suma.")
-        val = _simplificar(val)
-        b.append(OK(f"**Resultado:** ${lx(val)}$" + ("" if val.is_Integer or val.free_symbols else f" $\\approx{sp.latex(sp.N(val, 10))}$")))
-        if bb.free_symbols:
-            b.append(IN("El resultado es una **fórmula en función de** " + ", ".join(f"${sp.latex(s)}$" for s in bb.free_symbols) + "."))
-        return res(b, valor=val)
+        return OPERACIONES["evaluar_suma"](obj)        # desarrollo, telescopado, linealidad, reindexado, dobles (calculo_sumas.py)
     if isinstance(obj, sp.Product):
         k, a, bb = obj.limits[0]
+        if bb not in (sp.oo, -sp.oo):
+            return OPERACIONES["evaluar_producto"](obj)
         b = [H("Productoria"), L(sp.latex(obj))]
         if bb in (sp.oo, -sp.oo):
             val = obj.doit()
@@ -2761,3 +2755,8 @@ def ejecutar_seguro(nombre, *args, timeout=TIEMPO_POR_DEFECTO, **kwargs):
 # Operaciones de puntos, vectores, listas, conjuntos y lógica (se registran en OPERACIONES al importarse).
 # Va al final a propósito: calculo_conjuntos importa de este módulo.
 import calculo_conjuntos  # noqa: E402,F401
+import calculo_sumas  # noqa: E402,F401   (sumas y productorias con índices: se registran en OPERACIONES)
+import calculo_curvas  # noqa: E402,F401   (curvas paramétricas: curvatura, Frenet, osculadores)
+import calculo_integrales_multiples  # noqa: E402,F401   (integrales dobles y triples sobre regiones)
+import calculo_vectorial  # noqa: E402,F401   (campos, integrales de línea, derivación implícita, regla de la cadena)
+import calculo_superficies  # noqa: E402,F401   (superficies, flujo, Green, Stokes, Gauss)
