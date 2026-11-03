@@ -11,10 +11,17 @@ import streamlit as st
 
 st.set_page_config(page_title="Guía de Cálculo", page_icon="📖", layout="wide")
 
+from estilos import cargar_estilos_globales, encabezado_pagina  # noqa: E402
 from guia_ejemplos import EJEMPLOS, TEMAS  # noqa: E402
+from utils import inicializar_estado  # noqa: E402
 
-st.title("📖 Guía de uso — Cálculo, conjuntos y lógica")
-st.caption("Cómo escribir lo que quieres calcular, qué obtienes y qué hacer si algo no sale. Cada ejemplo tiene un botón **▶ Probar** que lo abre ya escrito.")
+cargar_estilos_globales()
+inicializar_estado()
+
+encabezado_pagina(
+    "📖 Guía de uso — Cálculo, conjuntos y lógica",
+    "Cómo escribir lo que quieres calcular, qué obtienes y qué hacer si algo no sale. Cada ejemplo tiene un botón **▶ Probar** que lo abre ya escrito.",
+)
 
 
 def _probar(latex: str, clave: str):
