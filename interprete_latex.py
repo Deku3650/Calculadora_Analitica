@@ -32,7 +32,8 @@ import sympy as sp
 
 import estructuras as _E
 from estructuras import (
-    ELIPSIS, Angulo, Argumento, Aproximado, Bola, Congruencia, ConjuntoImagen, Cuantificado, Distancia, Divisibilidad,
+    ELIPSIS, Angulo, Argumento, Aproximado, Bola, Congruencia, ConjuntoImagen, Cuantificado, Curva, Distancia, Divergencia, Divisibilidad,
+    IntegralRegion, Laplaciano, Rotacional, Superficie, evaluar_operador, variables_campo, variables_escalar,
     Equivalencia, ErrorEstructura, Espacio, Funcion, Lista, Norma, OpTop, Pertenencia, Punto, ProdPunto, Region, RelConj, Vector,
     a_conjunto, a_region, complemento, completar_patron, conjunto_nb, coords_de, es_conjunto, es_vectorial, evaluar_nodos,
     lectura_de, operar_conjuntos, pertenece, producto_cartesiano, variables_por_defecto,
@@ -128,10 +129,10 @@ _NO_ATOMO = set(_RELACIONES) | {
 }
 _PUNTOS = (r"\ldots", r"\cdots", r"\dots")
 _NO_SOPORTADO = {
-    r"\vec": "los vectores con flecha (usa ⟨ ⟩ para escribir un vector)",
     r"\prime": "la prima suelta (escríbela como exponente de una expresión: f′)",
 }
-_ESTRUCT = {"d", "dist", "int", "cl", "Fr", "ext", "diam"}      # \operatorname{…} de estructuras
+_DECORACIONES = {r"\bar": "barra", r"\overline": "barra", r"\hat": "gorro", r"\tilde": "tilde", r"\vec": "flecha"}
+_ESTRUCT = {"d", "dist", "int", "cl", "Fr", "ext", "diam", "div", "rot", "curl", "lap", "grad"}      # \operatorname{…} de estructuras
 _DEG = object()  # marcador: el exponente era un grado (^{\circ})
 _COMPL = object()  # marcador: el exponente era «c» (complemento de un conjunto)
 
@@ -198,7 +199,8 @@ def _es_letra_o_griega(t: str) -> bool:
 
 
 class _Parser:
-    def __init__(self, toks, reales: bool, i_imaginaria: bool, ent=None, nat0: bool = False, sin_ev: int = 0):
+    def __init__(self, toks, reales: bool, i_imaginaria: bool, ent=None, nat0: bool = False, sin_ev: int = 0, promover: bool = True):
+        self.promover = promover                      # ¿un vector con parámetros es una curva/superficie? (False al leer un CAMPO)
         self.sin_ev = sin_ev                          # >0: las relaciones NO se evalúan (se conserva lo que se escribió)
         self.t = toks
         self.p = 0
@@ -232,7 +234,7 @@ class _Parser:
             )
 
     def _sub(self, tokens: list[str]):
-        return _Parser(tokens, self.reales, self.i_imag, self.ent, self.nat0, self.sin_ev).completo()
+        return _Parser(tokens, self.reales, self.i_imag, self.ent, self.nat0, self.sin_ev, self.promover).completo()
 
     def inicia_atomo(self, tok) -> bool:
         if tok is None:
@@ -288,10 +290,76 @@ class _Parser:
                 return Argumento([self._bool(e) for e in elems], self._bool(concl))
             if self.peek() is not None:
                 raise ErrorLatex(f"Hay símbolos que no se pudieron interpretar cerca de «{self.peek()}».")
+            curva = self._curva_con_intervalo(elems)
+            if curva is not None:
+                return curva
             return self._lista_de(elems)
         if self.peek() is not None:
             raise ErrorLatex(f"Hay símbolos que no se pudieron interpretar cerca de «{self.peek()}».")
+        return self._promover_curva(val)
+
+    @staticmethod
+    def _parametro_unico(v):
+        libres = {s for c in v.c for s in c.free_symbols if isinstance(s, sp.Symbol)}
+        return libres.pop() if len(libres) == 1 else None
+
+    @staticmethod
+    def _parametros(v):
+        return sorted({s for c in v.c for s in c.free_symbols if isinstance(s, sp.Symbol)}, key=lambda s: s.name)
+
+    def _promover_curva(self, val):
+        """Vector/punto con UN parámetro libre → curva r(t). Con tres componentes y DOS parámetros con nombres de parámetro (u, v, s, t, θ, φ…) → superficie."""
+        if not self.promover or not isinstance(val, (Vector, Punto)) or val.n < 2:
+            return val
+        ps = self._parametros(val)
+        if len(ps) == 1:
+            return Curva(ps[0], val.c)
+        if len(ps) == 2 and val.n == 3 and not {s.name for s in ps} <= {"x", "y", "z"}:
+            return Superficie(ps, val.c)
         return val
+
+    def _superficie_con_dominio(self, elems):
+        """⟨x(u,v), y(u,v), z(u,v)⟩, 0 ≤ u ≤ 1, 0 ≤ v ≤ 2π: superficie con su dominio (rectángulo o región de parámetros)."""
+        ps = self._parametros(elems[0])
+        conds = []
+        for e in elems[1:]:
+            c = e.valor() if isinstance(e, Pertenencia) else e if isinstance(e, sp.logic.boolalg.Boolean) else None
+            if c is None:
+                return None
+            conds.append(c)
+        cond = sp.And(*conds)
+        if not cond.free_symbols or not cond.free_symbols <= set(ps):
+            return None
+        orden = []                                               # (u, v) en el orden en que se mencionan: 0 ≤ φ ≤ π, 0 ≤ θ ≤ 2π  ⇒  (φ, θ)
+        for c in conds:
+            for sy in sorted(c.free_symbols, key=lambda s: s.name):
+                if sy in ps and sy not in orden:
+                    orden.append(sy)
+        ps = orden + [sy for sy in ps if sy not in orden]
+        return Superficie(ps, elems[0].c, Region(tuple(ps), cond, "los valores de los parámetros que cumplen " + lectura_de(cond)))
+
+    def _curva_con_intervalo(self, elems):
+        """⟨cos t, sen t⟩, 0 ≤ t ≤ 2π   /   ⟨…⟩, t ∈ [a, b]: la curva con su intervalo de t."""
+        if self.promover and isinstance(elems[0], Vector) and elems[0].n == 3 and len(elems) >= 2 and len(self._parametros(elems[0])) == 2:
+            sup = self._superficie_con_dominio(elems)
+            if sup is not None:
+                return sup
+        c0 = self._promover_curva(elems[0]) if isinstance(elems[0], (Vector, Punto)) else elems[0]
+        if not isinstance(c0, Curva) or len(elems) < 2:
+            return None
+        dom = sp.S.Reals
+        for e in elems[1:]:
+            if e is ELIPSIS:
+                return None
+            cond = e.valor() if isinstance(e, Pertenencia) else e if isinstance(e, sp.logic.boolalg.Boolean) else None
+            if cond is None:
+                return None
+            try:
+                parte = _cond_a_conjunto(cond, c0.param)
+            except Exception:  # noqa: BLE001
+                return None
+            dom = sp.Intersection(dom, parte)
+        return Curva(c0.param, c0.comps, dom, c0.nombre)
 
     def _lista_de(self, elems):
         if any(e is ELIPSIS for e in elems):
@@ -305,8 +373,10 @@ class _Parser:
     def _definicion(self):
         """f(x) = …  /  g(x, y) = …  se leen como la DEFINICIÓN de una función (y no como el producto f·x)."""
         t = self.t
-        if len(t) < 6 or t[0] not in "fghFGH" or len(t[0]) != 1:
+        NOMBRES_VEC = {"r", "R", "c", "C", "p", "P", "q", "Q", r"\gamma", r"\alpha", r"\beta", r"\sigma", r"\rho"}
+        if len(t) < 6 or not ((len(t[0]) == 1 and t[0] in "fghFGH") or t[0] in NOMBRES_VEC):
             return None
+        solo_vector = t[0] in NOMBRES_VEC                       # r(t) = 5 sigue siendo una ecuación; r(t) = ⟨…⟩ es una curva
         i = 1
         if t[i] == r"\left":
             i += 1
@@ -338,6 +408,28 @@ class _Parser:
                 return None
             vars_.append(v)
         cuerpo = self._sub(t[j + 2:])
+        if solo_vector and not isinstance(cuerpo, (Vector, Punto, Curva, Superficie)):
+            return None
+        if isinstance(cuerpo, Superficie) or (isinstance(cuerpo, Vector) and len(vars_) == 2 and cuerpo.n == 3):
+            comps = cuerpo.comps if isinstance(cuerpo, Superficie) else cuerpo.c
+            if len(vars_) != 2:
+                raise ErrorLatex("Una superficie paramétrica r(u, v) tiene dos parámetros: r(u, v) = ⟨x, y, z⟩.")
+            dom = cuerpo.dominio if isinstance(cuerpo, Superficie) else None
+            if isinstance(cuerpo, Superficie) and set(cuerpo.params) != set(vars_):
+                sub = dict(zip(cuerpo.params, vars_))
+                comps = tuple(c.subs(sub, simultaneous=True) for c in comps)
+                dom = dom.renombrar(vars_) if dom is not None else None
+            self.p = len(t)
+            return Superficie(vars_, comps, dom, t[0])
+        if isinstance(cuerpo, (Vector, Punto, Curva)):                 # r(t) = ⟨…⟩  (con o sin intervalo): una CURVA
+            if len(vars_) != 1:
+                raise ErrorLatex("Una curva paramétrica r(t) tiene un solo parámetro: r(t) = ⟨x(t), y(t), z(t)⟩.")
+            comps = cuerpo.comps if isinstance(cuerpo, Curva) else cuerpo.c
+            if isinstance(cuerpo, Curva) and cuerpo.param != vars_[0]:
+                comps = tuple(c.subs(cuerpo.param, vars_[0]) for c in comps)
+            self.p = len(t)
+            nombre = {r"\gamma": "γ", r"\alpha": "α", r"\beta": "β", r"\sigma": "σ", r"\rho": "ρ"}.get(t[0], t[0])
+            return Curva(vars_[0], comps, cuerpo.dominio if isinstance(cuerpo, Curva) else None, nombre)
         if not isinstance(cuerpo, sp.Expr):
             raise ErrorLatex("A la derecha de «f(x) =» debe ir la fórmula de la función (una expresión con las variables).")
         self.p = len(t)
@@ -665,6 +757,22 @@ class _Parser:
             val = sp.factorial(val)
         return val
 
+    def _peek_grupo_en(self, k):
+        """Tokens del {…} que empieza k posiciones adelante (sin consumir), o None."""
+        i = self.p + k
+        if i >= len(self.t) or self.t[i] != "{":
+            return None
+        depth, j = 0, i
+        while j < len(self.t):
+            if self.t[j] == "{":
+                depth += 1
+            elif self.t[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    return self.t[i + 1:j]
+            j += 1
+        return None
+
     def _peek_grupo(self):
         """Tokens dentro del {…} que viene (sin consumirlos), o None."""
         if self.peek() != "{":
@@ -742,11 +850,40 @@ class _Parser:
         return self.grupo_tokens() if self.peek() == "{" else [self.next() or ""]
 
     # -- átomos -------------------------------------------------------------
+    _OPS_SUBINDICE = {"+", "-", "*", r"\cdot", r"\times", "(", ")", r"\frac", r"\left", r"\right", "/"}
+
+    def _subindice(self, nombre: str, toks: list[str]):
+        """
+        Un subíndice puede ser una ETIQUETA (x_1, x_{12}, x_{max}, v_0: nombres distintos) o un ÍNDICE (x_i dentro de
+        una suma, x_{i-1}, a_{n+1}, a_{ij}, a_{i,j}: el elemento número «i» de una lista x).
+        Devuelve el elemento indexado (sympy.Indexed) o None si es una etiqueta.
+        """
+        texto = "".join(toks)
+        if not toks:
+            raise ErrorLatex("Hay un subíndice vacío.")
+        if texto.isdigit():                                 # x_1, x_{12}: etiqueta numérica
+            return None
+        partes = _partir_comas(toks)
+        if len(partes) > 1:                                 # a_{i,j}, a_{1,2}: varios índices
+            idx = [self._sub(pt) for pt in partes]
+        elif len(toks) >= 2 and all(len(t) == 1 and t.isalpha() for t in toks) and all(t in self.ent for t in toks):
+            idx = [self.ent[t] for t in toks]               # a_{ij} con i y j índices de sumas
+        elif any(t in self._OPS_SUBINDICE for t in toks) or any(t in self.ent for t in toks):
+            idx = [self._sub(toks)]                         # x_i (i ligado), x_{i-1}, a_{n+1}, x_{2i}
+        else:
+            return None                                     # x_n, x_max fuera de una suma: etiqueta
+        if any(not isinstance(i, sp.Expr) for i in idx):
+            raise ErrorLatex("Un subíndice con operaciones debe ser un número o una expresión (por ejemplo i − 1).")
+        return sp.IndexedBase(nombre, real=self.reales)[tuple(idx) if len(idx) > 1 else idx[0]]
+
     def simbolo(self, nombre: str):
         if self.peek() == "_":
             self.next()
-            sub = self.grupo_texto() if self.peek() == "{" else (self.next() or "")
-            sub = re.sub(r"[^A-Za-z0-9]", "", sub)
+            toks = self._tokens_arg()
+            idx = self._subindice(nombre, toks)
+            if idx is not None:
+                return idx
+            sub = re.sub(r"[^A-Za-z0-9]", "", "".join(toks))
             if not sub:
                 raise ErrorLatex("Hay un subíndice vacío.")
             nombre = f"{nombre}_{sub}"
@@ -1089,8 +1226,21 @@ class _Parser:
             return sp.S.EmptySet
         if tok == r"\complement":
             return complemento(self._como_conjunto(self.potencia()))
+        if tok in (r"\bar", r"\hat", r"\tilde", r"\vec"):
+            if self.peek() != "{" and not (self.peek() and (self.peek().isalpha() or self.peek().startswith("\\"))):
+                raise ErrorLatex(f"Después de «{tok}» va la letra que lleva la marca, por ejemplo {tok}{{x}}.")
+            nom = self.grupo_texto() if self.peek() == "{" else self.next()
+            return self.simbolo(f"{tok}{{{nom}}}")
         if tok == r"\overline":
             return self._barra()
+        if tok == r"\partial" and self.peek() == "_":
+            self.next()
+            toks = self._tokens_arg()
+            letras = [tk for tk in toks if _es_letra_o_griega(tk)]
+            if not letras or len(letras) != len(toks):
+                raise ErrorLatex("Después de ∂₍ va la variable de derivación, por ejemplo ∂ₓ f o ∂ₓᵧ f.")
+            simbolos = [self.simbolo(tk[1:] if tk.startswith("\\") else tk) for tk in letras]
+            return sp.Derivative(self.operando("A la derivada parcial"), *[(s, 1) for s in simbolos])
         if tok == r"\partial":
             return OpTop("Fr", self._como_conjunto(self.potencia(), "La frontera (∂)"))
         if tok == r"\pi":
@@ -1124,7 +1274,21 @@ class _Parser:
             return self.suma_prod(tok)
         if tok == r"\int":
             return self.integral()
+        if tok in (r"\iint", r"\iiint"):
+            return self.integral_region(2 if tok == r"\iint" else 3)
+        if tok in (r"\oint", r"\oiint", r"\oiiint"):
+            raise ErrorLatex("Una integral sobre una curva CERRADA (∮) necesita saber quién es la curva. Escribe primero la curva (por ejemplo ⟨cos t, sin t⟩, 0 ≤ t ≤ 2π) "
+                             "y usa la caja «Integral de línea» del análisis de la curva.")
         if tok == r"\nabla":
+            if self.peek() == r"\cdot":
+                self.next()
+                return Divergencia(self.operando("A la divergencia (∇·)"))
+            if self.peek() == r"\times":
+                self.next()
+                return Rotacional(self.operando("Al rotacional (∇×)"))
+            if self.peek() == "^" and self._peek_grupo_en(1) == ["2"]:
+                self.p += 4
+                return Laplaciano(self.operando("Al laplaciano (∇²)"))
             return Gradiente(self.operando("Al gradiente (∇)"))
         if tok == r"\partial":
             raise ErrorLatex("El símbolo ∂ va dentro de una fracción de derivada: usa la tecla ∂/∂x.")
@@ -1203,10 +1367,13 @@ class _Parser:
             tipo, t = "p", t[1:]
         else:
             return None
-        o = self._orden_exp(t)
-        if o is None or o[1]:
-            return None
-        orden = o[0]
+        if t and t[0] == "^":
+            o = self._orden_exp(t)
+            if o is None:
+                return None
+            orden, resto = o
+        else:
+            orden, resto = 1, t                 # dy/dx, d(x²)/dx: el resto del numerador ES la función
 
         d = list(den_t)
         variables: list[tuple[list[str], int]] = []
@@ -1248,6 +1415,15 @@ class _Parser:
             if not isinstance(s, sp.Symbol):
                 return None
             simbolos.append((s, pot))
+        if resto:                                                    # notación ∂f/∂x, d(x²)/dx, d²y/dx²
+            f = self._sub(resto)
+            if isinstance(f, sp.Symbol) and f not in [s for s, _ in simbolos]:
+                raise ErrorLatex(f"«{f}» es solo una letra: no sé de qué depende, así que no puedo derivarla respecto de "
+                                 f"{', '.join(str(s) for s, _ in simbolos)}. Escribe la fórmula: por ejemplo d/dx (x² + 1); o, para "
+                                 "una relación como x² + y² = 1, usa la derivación implícita.")
+            if not isinstance(f, sp.Expr):
+                raise ErrorLatex("Lo que se deriva debe ser una expresión (una fórmula).")
+            return sp.Derivative(f, *simbolos)
         try:
             f = self.operando("A la derivada")
         except ErrorLatex:
@@ -1273,6 +1449,8 @@ class _Parser:
         if i is None:
             raise ErrorLatex("La condición del límite debe tener la forma «x → a».")
         izq, der = cond[:i], cond[i + 1:]
+        izq = [tk for tk in izq if tk not in (r"\left", r"\right")]
+        der = [tk for tk in der if tk not in (r"\left", r"\right")]
         if not izq or not der:
             raise ErrorLatex("A la condición del límite le falta algo a un lado de la flecha (x → a).")
 
@@ -1282,10 +1460,13 @@ class _Parser:
         elif der[-2:] in (["^", "+"], ["^", "-"]):
             direccion, der = der[-1], der[:-2]
 
-        multi = izq[:1] == ["("] and izq[-1:] == [")"]
+        multi = (izq[:1] == ["("] and izq[-1:] == [")"]) or len(_partir_comas(izq)) > 1
         if multi:
-            vars_t = _partir_comas(izq[1:-1])
-            vals_t = _partir_comas(der[1:-1]) if der[:1] == ["("] and der[-1:] == [")"] else [der]
+            vars_t = _partir_comas(izq[1:-1]) if izq[:1] == ["("] else _partir_comas(izq)
+            if der[:1] == ["("] and der[-1:] == [")"]:
+                vals_t = _partir_comas(der[1:-1])
+            else:
+                vals_t = [der] * len(vars_t)                 # x, y → 0  significa  (x, y) → (0, 0)
             variables = [self._sub(v) for v in vars_t]
             valores = [self._sub(v) for v in vals_t]
             if not all(isinstance(v, sp.Symbol) for v in variables):
@@ -1392,6 +1573,8 @@ class _Parser:
 
     def integral(self):
         inf, sup = self._limites_opcionales()
+        if inf is not None and sup is None and len(inf) == 1:      # ∫_C, ∫_γ: guiar ANTES de quejarse por el diferencial
+            self._guia_dominio(inf[0], "∫")
         i, (lp, lv) = self._hallar_diferencial()
         cuerpo_t = self.t[self.p:i]
         var = self._sub(self.t[i + lp:i + lp + lv])
@@ -1399,11 +1582,93 @@ class _Parser:
             raise ErrorLatex("La variable de integración debe ser una letra (dx, dy, dt…).")
         f = self._sub(cuerpo_t) if cuerpo_t else sp.Integer(1)
         self.p = i + lp + lv
+        if inf is not None and sup is None and len(inf) == 1:
+            self._guia_dominio(inf[0], "∫")
         if (inf is None) != (sup is None):
             raise ErrorLatex("La integral definida necesita límite inferior y superior (o ninguno).")
         if inf is None:
             return sp.Integral(f, var)
         return sp.Integral(f, (var, self._sub(inf), self._sub(sup)))
+
+    def _guia_dominio(self, letra, simbolo):
+        """∫_C, ∬_D…: la letra sola no dice qué curva/superficie/región es. Se explica cómo escribirlo."""
+        if letra in ("C", r"\gamma", r"\Gamma", "L"):
+            raise ErrorLatex("Una integral de LÍNEA (∫_C) necesita saber quién es la curva C. Escribe primero la curva, por ejemplo "
+                             "⟨cos t, sin t⟩, 0 ≤ t ≤ 2π, y en el análisis de la curva usa la caja «Integral de línea» "
+                             "(para ∫ f ds y para ∫ F·dr).")
+        if letra in ("S", r"\Sigma"):
+            raise ErrorLatex("Una integral de SUPERFICIE (∬_S) necesita saber quién es la superficie S. Escribe primero su parametrización, por ejemplo "
+                             "⟨u cos v, u sin v, v⟩, 0 ≤ u ≤ 1, 0 ≤ v ≤ 2π, y en el análisis de la superficie usa la caja «Integral de superficie».")
+        if letra in ("D", "R", "E", r"\Omega", "T", "V", "W"):
+            raise ErrorLatex(f"No sé qué región es «{letra}». Escríbela entre llaves, por ejemplo ∬_{{(x,y) ∣ x² + y² ≤ 1}} f dA, "
+                             "o como producto de intervalos [0,1] × [0,2], o como una bola B_1(0,0).")
+
+    def integral_region(self, k: int):
+        """∬_D f dA, ∭_E f dV  (también con dx dy dz y con dr dθ): integral sobre una región."""
+        if self.peek() != "_":
+            raise ErrorLatex(f"A {'∬' if k == 2 else '∭'} le falta la región de integración debajo del símbolo: por ejemplo "
+                             f"{'∬' if k == 2 else '∭'}_{{(x,y{',z' if k == 3 else ''}) ∣ …}} f dA.")
+        self.next()
+        sub = self._tokens_arg()
+        if len(sub) == 1:
+            self._guia_dominio(sub[0], "∬")
+        rest = [t for t in self.t[self.p:]]
+        i = len(rest)
+        difs: list = []
+        while i >= 2 and rest[i - 2] == "d" and (len(rest[i - 1]) == 1 and rest[i - 1].isalpha() or rest[i - 1].startswith("\\")):
+            difs.insert(0, rest[i - 1])
+            i -= 2
+        if not difs:
+            raise ErrorLatex("A la integral le faltan los diferenciales al final: dA o dV, o dx dy (dz).")
+        xyz = variables_campo_por_nombre = None
+        if difs in (["A"], ["V"]):
+            vars_ = tuple(sp.Symbol(n, real=self.reales) for n in (("x", "y") if difs == ["A"] else ("x", "y", "z")))
+            if (difs == ["A"]) != (k == 2):
+                raise ErrorLatex("dA va con la integral doble (∬) y dV con la triple (∭).")
+            orden = ()                      # dA / dV no fijan el orden de integración: lo elige el programa
+        elif any(d_ in ("S", "s") for d_ in difs):
+            raise ErrorLatex("dS (superficie) y ds (curva) no se integran sobre una región plana: para integrales de superficie o de línea usa la parametrización "
+                             "(cajas «Integral de superficie» e «Integral de línea»).")
+        else:
+            nombres = [d_[1:] if d_.startswith("\\") else d_ for d_ in difs]
+            if len(difs) != k:
+                raise ErrorLatex(f"Una integral {'doble' if k == 2 else 'triple'} necesita {k} diferenciales (hay {len(difs)}).")
+            vars_ = tuple(self.simbolo(n_) for n_ in nombres)
+            if len(set(vars_)) != k:
+                raise ErrorLatex("Los diferenciales deben ser de variables distintas.")
+            orden = vars_
+        f = self._sub(rest[:i]) if rest[:i] else sp.Integer(1)
+        origen = None
+        if isinstance(f, (Divergencia, Rotacional, Laplaciano)):
+            if isinstance(f, Divergencia):
+                origen = f.arg
+            f = evaluar_operador(f)
+        if not isinstance(f, sp.Expr):
+            raise ErrorLatex("El integrando debe ser una función (una expresión de las variables).")
+        partes = _partir_comas(sub) if not any(tk in (r"\{", r"\lbrace", r"\left") for tk in sub[:2]) else [sub]
+        if len(partes) > 1:                                            # 0 ≤ x ≤ 1, 0 ≤ y ≤ x : desigualdades separadas por comas
+            conds = [self._sub(pt) for pt in partes]
+            if not all(isinstance(c_, sp.logic.boolalg.Boolean) for c_ in conds):
+                raise ErrorLatex("Si separas condiciones con comas, todas deben ser desigualdades (por ejemplo 0 ≤ x ≤ 1, 0 ≤ y ≤ x).")
+            reg = sp.And(*conds)
+        else:
+            reg = self._sub(sub)
+        if isinstance(reg, sp.logic.boolalg.Boolean):
+            reg = Region(vars_, reg, "los puntos que cumplen " + lectura_de(reg))
+        elif isinstance(reg, Bola):
+            reg = reg.region(vars_) if reg.n == k else reg
+        elif isinstance(reg, Punto) and reg.ambiguo:
+            reg = a_region(a_conjunto(reg))
+        elif es_conjunto(reg):
+            reg = a_region(reg)
+        else:
+            raise ErrorLatex("La región de integración debe ser un conjunto: {(x,y) ∣ condición}, un producto de intervalos [a,b] × [c,d], o una bola.")
+        if reg.n != k:
+            raise ErrorLatex(f"La región vive en ℝ^{reg.n} pero la integral es {'doble' if k == 2 else 'triple'} (ℝ^{k}).")
+        if set(reg.vars) != set(vars_):
+            reg = reg.renombrar(vars_)
+        self.p = len(self.t)
+        return IntegralRegion(f, reg, vars_, orden, origen)
 
     # -- delimitadores, funciones y entornos --------------------------------
     def _cerrar_right(self):
@@ -1486,6 +1751,10 @@ class _Parser:
             if len(a) != len(b):
                 raise ErrorLatex(f"La distancia necesita puntos de la misma dimensión (hay {len(a)} y {len(b)}).")
             return Distancia(sp.Tuple(*a), sp.Tuple(*b))
+        if nombre in ("div", "rot", "curl", "lap", "grad"):
+            if len(args) != 1:
+                raise ErrorLatex(f"«{nombre}» recibe un solo argumento.")
+            return {"div": Divergencia, "rot": Rotacional, "curl": Rotacional, "lap": Laplaciano, "grad": Gradiente}[nombre](args[0])
         if len(args) != 1:
             raise ErrorLatex(f"«{nombre}» recibe un solo conjunto.")
         return OpTop(nombre, self._como_conjunto(args[0], f"«{nombre}»"))
@@ -1577,6 +1846,38 @@ class _Parser:
         return sp.Piecewise(*pares)
 
 
+def _cond_a_conjunto(cond, t):
+    """Conjunto de valores reales de t que cumplen una condición (y, o, desigualdades, pertenencia)."""
+    if isinstance(cond, sp.And):
+        return sp.Intersection(*[_cond_a_conjunto(a, t) for a in cond.args])
+    if isinstance(cond, sp.Or):
+        return sp.Union(*[_cond_a_conjunto(a, t) for a in cond.args])
+    if isinstance(cond, sp.Contains):
+        if cond.args[0] != t:
+            raise ValueError("pertenencia de otra cosa")
+        return cond.args[1]
+    return sp.solveset(cond, t, sp.S.Reals)
+
+
+def _unificar_indexados(obj):
+    """
+    Si en la fórmula aparece a_{n+1} (elemento indexado de «a») y también a_n (que se leyó como un símbolo suelto «a_n»),
+    a_n es en realidad a[n]: se convierten para que la fórmula sea coherente (por ejemplo la razón a_{n+1}/a_n).
+    """
+    if not isinstance(obj, sp.Basic):
+        return obj
+    bases = {ib.label.name for ib in obj.atoms(sp.IndexedBase)}
+    if not bases:
+        return obj
+    cambios = {}
+    for sym in obj.free_symbols:
+        if isinstance(sym, sp.Symbol) and "_" in sym.name:
+            b, _, w = sym.name.partition("_")
+            if b in bases and w.isalpha():
+                cambios[sym] = sp.IndexedBase(b, real=True)[sp.Symbol(w, real=True)]
+    return obj.xreplace(cambios) if cambios else obj
+
+
 def _norma(v):
     if isinstance(v, (Punto, Vector)):
         return Norma(sp.Tuple(*v.c))
@@ -1607,7 +1908,7 @@ def _pot(base, exp):
     return base ** exp
 
 
-def latex_a_sympy(latex: str, *, reales: bool = True, i_imaginaria: bool = False, naturales_con_cero: bool = False):
+def latex_a_sympy(latex: str, *, reales: bool = True, i_imaginaria: bool = False, naturales_con_cero: bool = False, promover_curvas: bool = True):
     """
     Convierte LaTeX (el que escribe el teclado) en una expresión u operación de SymPy.
 
@@ -1618,7 +1919,7 @@ def latex_a_sympy(latex: str, *, reales: bool = True, i_imaginaria: bool = False
     Lanza ErrorLatex (o ErrorNoSoportado) con un mensaje en español si no se puede.
     """
     try:
-        return _Parser(_tokenizar(latex), reales, i_imaginaria, nat0=naturales_con_cero).completo()
+        return _unificar_indexados(_Parser(_tokenizar(latex), reales, i_imaginaria, nat0=naturales_con_cero, promover=promover_curvas).completo())
     except ErrorLatex:
         raise
     except ErrorEstructura as e:
@@ -1797,7 +2098,15 @@ def _env(txt: str, nivel: int, minimo: int = 1) -> str:
     return f"({txt})" if nivel >= minimo else txt
 
 
+_RE_DECOR = re.compile(r"^\\(bar|hat|tilde|vec)\{(.+?)\}(?:_(.+))?$")
+
+
 def _nombre_simbolo(s: sp.Symbol) -> str:
+    m = _RE_DECOR.match(s.name)
+    if m:
+        marca = {"bar": "barra", "hat": "gorro", "tilde": "tilde", "vec": "vector"}[m.group(1)]
+        base = _GRIEGO_TXT.get(m.group(2), m.group(2))
+        return (f"{base} {marca}" if m.group(1) != "vec" else f"el vector {base}") + (f" sub {m.group(3)}" if m.group(3) else "")
     base, _, sub = s.name.partition("_")
     base = _GRIEGO_TXT.get(base, base)
     return f"{base} sub {sub}" if sub else base
@@ -1905,6 +2214,10 @@ def _v_inner(e) -> tuple[str, int]:
         return _nombre_simbolo(e), 0
     if isinstance(e, sp.Tuple):
         return "(" + ", ".join(_v(a)[0] for a in e) + ")", 0
+    if isinstance(e, sp.Indexed):
+        base = _GRIEGO_TXT.get(e.base.label.name, e.base.label.name)
+        idx = [(_v(i)[0] if (i.is_Symbol or i.is_Number) else "(" + _v(i)[0] + ")") for i in e.indices]
+        return f"{base} sub " + ", ".join(idx), 0
     if isinstance(e, Norma):
         return f"la norma del vector {_tup(e.args[0], '⟨', '⟩')}", 2
     if isinstance(e, ProdPunto):
@@ -1934,6 +2247,8 @@ def _v_inner(e) -> tuple[str, int]:
         f, x, a = e.args[0], e.args[1], e.args[2]
         d = str(e.args[3]) if len(e.args) > 3 else "+-"
         lado = {"+": " por la derecha", "-": " por la izquierda"}.get(d, "")
+        if a in (sp.oo, -sp.oo):
+            lado = ""                                            # al tender a ±∞ no hay «lados»
         return (f"el límite de {_env(*_v(f), minimo=3)} cuando {_v(x)[0]} tiende a {_v(a)[0]}{lado}", 5)
     if isinstance(e, LimiteMulti):
         f, xs, as_ = e.args
@@ -1961,6 +2276,10 @@ def _v_inner(e) -> tuple[str, int]:
         que = "la suma" if isinstance(e, sp.Sum) else "el producto"
         infinito = b in (sp.oo, -sp.oo)
         extra = " (una serie infinita)" if (infinito and isinstance(e, sp.Sum)) else ""
+        if len(e.limits) > 1:                                    # suma doble o múltiple (el primer límite es el interior)
+            que = que.replace("la suma", "la suma " + ("doble" if len(e.limits) == 2 else "múltiple")).replace("el producto", "el producto " + ("doble" if len(e.limits) == 2 else "múltiple"))
+            tramos = " y ".join(f"para {_v(kk)[0]} desde {_v(aa)[0]} hasta {_v(bb)[0]}" for kk, aa, bb in e.limits)
+            return (f"{que}, {tramos}, de {_env(*_v(e.function), minimo=3)}", 5)
         return (f"{que}, para {_v(k)[0]} desde {_v(a)[0]} hasta {_v(b)[0]}{extra}, de {_env(*_v(e.function), minimo=3)}", 5)
     if isinstance(e, sp.Derivative):
         vc = list(e.variable_count)
@@ -2093,7 +2412,8 @@ _OPERACIONES = (sp.Limit, LimiteMulti, sp.Integral, sp.Sum, sp.Product, sp.Deriv
 
 
 def _variables(e) -> list[sp.Symbol]:
-    return sorted((s for s in e.free_symbols if isinstance(s, sp.Symbol)), key=lambda s: s.name)
+    etiquetas = {ib.label for ib in e.atoms(sp.IndexedBase)} if isinstance(e, sp.Basic) else set()
+    return sorted((s for s in e.free_symbols if isinstance(s, sp.Symbol) and s not in etiquetas), key=lambda s: s.name)
 
 
 def _describir_funcion(expr, vars_) -> str:
@@ -2214,8 +2534,22 @@ def clasificar_entrada(obj) -> dict:
     if isinstance(obj, Punto):
         info.update(tipo="punto", etiqueta=f"Punto de ℝ^{obj.n}", detalle=f"{obj.n} coordenadas"
                     + (" (si se usa como conjunto, es el intervalo abierto)" if obj.ambiguo else ""))
+    elif isinstance(obj, Vector) and len(_simbolos_de(obj)) >= 2:
+        nv = len(_simbolos_de(obj))
+        if obj.n == nv and obj.n in (2, 3):
+            info.update(tipo="campo", etiqueta=f"Campo vectorial en ℝ^{obj.n} (F: ℝ^{obj.n} → ℝ^{obj.n})", detalle="divergencia, rotacional, potencial",
+                        ambiguo_superficie=(obj.n == 3))
+        else:
+            info.update(tipo="campo", etiqueta=f"Función vectorial ℝ^{nv} → ℝ^{obj.n}", detalle="matriz jacobiana")
     elif isinstance(obj, Vector):
         info.update(tipo="vector", etiqueta=f"Vector de ℝ^{obj.n}", detalle=f"{obj.n} componentes")
+    elif isinstance(obj, Superficie):
+        info.update(tipo="superficie", etiqueta="Superficie paramétrica en ℝ³", detalle="parámetros " + ", ".join(str(p) for p in obj.params),
+                    variables=list(obj.params), n=2)
+    elif isinstance(obj, (Divergencia, Rotacional, Laplaciano)):
+        info.update(tipo="operador_vec", etiqueta="Operador diferencial vectorial (div, rot, ∇²)")
+    elif isinstance(obj, IntegralRegion):
+        info.update(tipo="integral_region", etiqueta=f"Integral {obj.tipo} sobre una región", variables=list(obj.vars), n=len(obj.vars))
     elif isinstance(obj, Lista):
         det = ""
         if obj.patron:
@@ -2223,6 +2557,9 @@ def clasificar_entrada(obj) -> dict:
         info.update(tipo="lista", etiqueta=f"Lista de {obj.n} elemento(s)" + (" (sigue indefinidamente)" if obj.abierta else ""), detalle=det)
     elif isinstance(obj, (Region, Bola, Espacio, ConjuntoImagen, OpTop)) or isinstance(obj, sp.Set):
         info.update(tipo="conjunto", etiqueta=_etiqueta_conjunto(obj))
+    elif isinstance(obj, Curva):
+        info.update(tipo="curva", etiqueta=f"Curva paramétrica en ℝ^{obj.n}", detalle=f"parámetro {obj.param}",
+                    variables=[obj.param], n=1)
     elif isinstance(obj, Funcion):
         info.update(tipo="funcion", etiqueta=f"Función de {obj.n} variable{'s' if obj.n != 1 else ''} ({', '.join(str(v) for v in obj.vars)})"
                     + (f" «{obj.nombre}»" if obj.nombre else ""), detalle=_describir_funcion(obj.expr, list(obj.vars)),
@@ -2252,6 +2589,8 @@ def clasificar_entrada(obj) -> dict:
                     f" ({len(obj.free_symbols)} variable(s) proposicional(es))"))
     elif isinstance(obj, sp.Contains):
         info.update(tipo="relacion", etiqueta="Condición de pertenencia")
+    elif isinstance(obj, sp.Expr) and obj.has(sp.Indexed) and not obj.has(sp.Sum, sp.Product, sp.Limit, sp.Integral, sp.Derivative):
+        info.update(tipo="indexada", etiqueta="Expresión con elementos indexados (x_i, a_{n+1}…)")
     elif isinstance(obj, sp.Basic) and obj.has(Norma, ProdPunto, Distancia, Angulo):
         info.update(tipo="vectorial", etiqueta="Operación entre puntos o vectores (da un número)")
     elif obj in (sp.true, sp.false):
@@ -2603,6 +2942,34 @@ def _diag_estructura(obj, latex: str, r: list) -> None:
             r.append(_a("error", "El centro y el radio deben ser números finitos."))
         if obj.n >= 4:
             r.append(_a("info", f"Es una bola de ℝ^{obj.n}: se pueden calcular sus propiedades, pero no dibujarla."))
+    elif isinstance(obj, Curva):
+        t = obj.param
+        if all(not c.has(t) for c in obj.comps):
+            r.append(_a("aviso", "Ninguna componente depende de " + str(t) + ": en realidad es un solo PUNTO, no una curva."))
+        extra = sorted({v for c in obj.comps for v in c.free_symbols if isinstance(v, sp.Symbol) and v != t}, key=lambda v: v.name)
+        if extra:
+            r.append(_a("aviso", "Hay letras que no son el parámetro (" + ", ".join(str(v) for v in extra) + "): se tratan como constantes."))
+        if obj.dominio is not None and obj.dominio == sp.S.EmptySet:
+            r.append(_a("error", "El intervalo del parámetro es VACÍO: no hay ningún valor de " + str(t) + " que cumpla las condiciones."))
+        if obj.dominio is None or obj.dominio == sp.S.Reals:
+            r.append(_a("info", f"No diste un intervalo para {t}: el análisis es para todo {t} real y la gráfica usa una ventana por defecto "
+                        f"(la puedes cambiar). Para fijarlo escribe, por ejemplo: ⟨…⟩, 0 ≤ {t} ≤ 2π."))
+        if obj.n >= 4:
+            r.append(_a("info", f"Es una curva de ℝ^{obj.n}: se calcula velocidad, longitud y curvatura, pero no se dibuja."))
+    elif isinstance(obj, Superficie):
+        if obj.dominio is None:
+            r.append(_a("info", "No diste el dominio de los parámetros: el análisis es general; para áreas e integrales escríbelo, por ejemplo "
+                        "⟨…⟩, 0 ≤ u ≤ 1, 0 ≤ v ≤ 2π."))
+        if all(not c.has(*obj.params) for c in obj.comps):
+            r.append(_a("aviso", "Ninguna componente depende de los parámetros: es un solo punto."))
+    elif isinstance(obj, (Divergencia, Rotacional, Laplaciano)):
+        r.append(_a("info", "Las variables son x, y, z (en ese orden). La divergencia y el rotacional necesitan tantas variables como componentes tiene el campo."))
+    elif isinstance(obj, IntegralRegion):
+        extra = sorted((v for v in obj.f.free_symbols if isinstance(v, sp.Symbol) and v not in obj.vars), key=lambda v: v.name)
+        if extra:
+            r.append(_a("aviso", "El integrando tiene letras que no son variables de integración (" + ", ".join(str(v) for v in extra) + "): se tratan como constantes."))
+        if obj.region.cond == sp.false:
+            r.append(_a("aviso", "La región es VACÍA: la integral vale 0."))
     elif isinstance(obj, Espacio):
         if obj.dim is None:
             r.append(_a("info", "Con n simbólico solo se pueden dar propiedades generales de ℝⁿ; para operar o dibujar usa un valor concreto (ℝ², ℝ³)."))
