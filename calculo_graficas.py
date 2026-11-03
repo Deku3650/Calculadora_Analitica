@@ -911,3 +911,322 @@ def fig_lista(valores, titulo="Datos de la lista"):
     _titulo(ax, titulo)
     _leyenda(ax, loc="best")
     return fig
+
+
+# ==============================================================================
+# Curvas paramétricas
+# ==============================================================================
+def _muestrear_curva(comps, t, rango, N=900):
+    """Coordenadas de r(t) sobre `rango` (cada componente como arreglo)."""
+    a, b = _f(rango[0]), _f(rango[1])
+    ts = np.linspace(a, b, N)
+    f = sp.lambdify(t, list(comps), modules=["numpy"])
+    with np.errstate(all="ignore"):
+        out = f(ts)
+    arr = [np.broadcast_to(np.asarray(c, dtype=float), ts.shape).copy() for c in out]
+    return ts, arr
+
+
+def _recortar_saltos_curva(arr, limite=1e3):
+    for c in arr:
+        c[np.abs(c) > limite] = np.nan
+    return arr
+
+
+def fig_curva_2d(comps, t, rango, figura=None, evoluta=None, titulo=None):
+    """Curva plana r(t) con, si se da `figura` (dict de calculo_curvas): punto, T, N y circunferencia osculadora."""
+    ts, (x, y) = _muestrear_curva(comps, t, rango)
+    _recortar_saltos_curva([x, y])
+    fig = _fig(7.4, 6.0)
+    ax = fig.add_subplot(111)
+    ok = np.isfinite(x) & np.isfinite(y)
+    if not ok.any():
+        _vacio(ax, "La curva no tiene puntos reales en esa ventana de t.")
+        return fig
+    xmin, xmax, ymin, ymax = x[ok].min(), x[ok].max(), y[ok].min(), y[ok].max()
+    ancho, alto = max(xmax - xmin, 1e-9), max(ymax - ymin, 1e-9)
+    lado = max(ancho, alto)
+    cx, cy = (xmin + xmax) / 2, (ymin + ymax) / 2
+    if figura and figura.get("P"):
+        px, py = figura["P"]
+        xmin, xmax, ymin, ymax = min(xmin, px), max(xmax, px), min(ymin, py), max(ymax, py)
+        cx, cy = (xmin + xmax) / 2, (ymin + ymax) / 2
+        lado = max(xmax - xmin, ymax - ymin, 1e-9)
+    mar = 0.22 * lado
+    vx = (cx - lado / 2 - mar, cx + lado / 2 + mar)
+    vy = (cy - lado / 2 - mar, cy + lado / 2 + mar)
+    _ejes(ax, vx, vy, xl="x", yl="y")
+    ax.set_aspect("equal", adjustable="box")
+    ax.plot(x, y, color=AZUL, lw=2.6, zorder=4, label="la curva")
+    # sentido de recorrido
+    idx = np.where(ok)[0]
+    if len(idx) > 20:
+        k = idx[len(idx) // 2]
+        k2 = min(k + 6, idx[-1])
+        ax.annotate("", xy=(x[k2], y[k2]), xytext=(x[k], y[k]), arrowprops=dict(arrowstyle="-|>", color=AZUL, lw=2), zorder=5)
+    if evoluta is not None:
+        try:
+            ex, ey = _muestrear_curva(evoluta, t, rango)[1]
+            _recortar_saltos_curva([ex, ey], 20 * lado)
+            ax.plot(ex, ey, color=GRIS, lw=1.5, ls="--", zorder=3, label="evoluta (centros de curvatura)")
+        except Exception:  # noqa: BLE001
+            pass
+    if figura and figura.get("P"):
+        px, py = figura["P"]
+        ax.plot([px], [py], "o", color=ROJO, ms=9, mec="white", zorder=8)
+        ax.annotate(f"t = {_num(figura['t0'])}\n({_num(px)}, {_num(py)})", (px, py), xytext=(14, 14), textcoords="offset points", fontsize=8.5, color=OSCURO,
+                    bbox=dict(boxstyle="round,pad=0.25", fc="white", ec=ROJO, lw=0.9), zorder=9)
+        L_ = 0.26 * lado
+        if figura.get("T"):
+            tx, ty = figura["T"]
+            ax.annotate("", xy=(px + L_ * tx, py + L_ * ty), xytext=(px, py), arrowprops=dict(arrowstyle="-|>", color=VERDE, lw=2.6), zorder=7)
+            ax.text(px + 1.12 * L_ * tx, py + 1.12 * L_ * ty, "T", color=VERDE, fontsize=12, fontweight="bold", zorder=9)
+        if figura.get("N"):
+            nx, ny = figura["N"]
+            ax.annotate("", xy=(px + L_ * nx, py + L_ * ny), xytext=(px, py), arrowprops=dict(arrowstyle="-|>", color=NARANJA, lw=2.6), zorder=7)
+            ax.text(px + 1.12 * L_ * nx, py + 1.12 * L_ * ny, "N", color=NARANJA, fontsize=12, fontweight="bold", zorder=9)
+        if figura.get("centro") and figura.get("rho"):
+            ccx, ccy = figura["centro"]
+            rho = figura["rho"]
+            th = np.linspace(0, 2 * np.pi, 400)
+            ax.plot(ccx + rho * np.cos(th), ccy + rho * np.sin(th), color=MORADO, lw=2, ls="-", zorder=6, label=f"circunferencia osculadora (ρ = {_num(rho)})")
+            ax.plot([ccx], [ccy], "+", color=MORADO, ms=11, mew=2, zorder=7)
+            ax.set_xlim(*vx)
+            ax.set_ylim(*vy)
+    _titulo(ax, titulo or "Curva paramétrica y su triedro de Frenet")
+    _leyenda(ax, loc="best")
+    return fig
+
+
+def fig_curva_3d(comps, t, rango, figura=None, titulo=None):
+    """Curva del espacio con (si hay `figura`) T, N, B, circunferencia osculadora y un trozo del plano osculador."""
+    ts, (x, y, z) = _muestrear_curva(comps, t, rango)
+    _recortar_saltos_curva([x, y, z])
+    fig = _fig(7.2, 6.4)
+    ax = fig.add_subplot(111, projection="3d")
+    _ejes3d(ax)
+    ok = np.isfinite(x) & np.isfinite(y) & np.isfinite(z)
+    if not ok.any():
+        ax.text2D(0.5, 0.5, "Sin puntos reales en esa ventana", transform=ax.transAxes, ha="center")
+        return fig
+    ax.plot(x[ok], y[ok], z[ok], color=AZUL, lw=2.6, label="la curva", zorder=3)
+    ext = np.array([[x[ok].min(), x[ok].max()], [y[ok].min(), y[ok].max()], [z[ok].min(), z[ok].max()]])
+    cen = ext.mean(axis=1)
+    medio = max((ext[:, 1] - ext[:, 0]).max(), 1e-9) / 2 * 1.15
+    P = np.array(figura["P"]) if figura and figura.get("P") else None
+    if P is not None:
+        ax.scatter([P[0]], [P[1]], [P[2]], color=ROJO, s=60, depthshade=False, zorder=9)
+        L_ = 0.55 * medio
+        for clave, col, nom in (("T", VERDE, "T"), ("N", NARANJA, "N"), ("B", MORADO, "B")):
+            if figura.get(clave):
+                v = np.array(figura[clave]) * L_
+                ax.quiver(P[0], P[1], P[2], v[0], v[1], v[2], color=col, lw=2.6, arrow_length_ratio=0.18, zorder=8)
+                ax.text(P[0] + 1.12 * v[0], P[1] + 1.12 * v[1], P[2] + 1.12 * v[2], nom, color=col, fontsize=12, fontweight="bold")
+        if figura.get("T") and figura.get("N"):
+            T_, N_ = np.array(figura["T"]), np.array(figura["N"])
+            if figura.get("centro") and figura.get("rho"):
+                C_ = np.array(figura["centro"])
+                rho = figura["rho"]
+                ph = np.linspace(0, 2 * np.pi, 200)
+                pts = C_[:, None] - rho * N_[:, None] * np.cos(ph) + rho * T_[:, None] * np.sin(ph)
+                ax.plot(pts[0], pts[1], pts[2], color=ROJO, lw=2, label=f"circunferencia osculadora (ρ = {_num(rho)})")
+            # trozo del plano osculador (generado por T y N)
+            s_ = min(0.45 * medio, max(2.2 * (figura.get('rho') or 0), 0.12 * medio))
+            uu, vv = np.meshgrid(np.linspace(-s_, s_, 2), np.linspace(-s_, s_, 2))
+            plano = [P[i] + uu * T_[i] + vv * N_[i] for i in range(3)]
+            ax.plot_surface(plano[0], plano[1], plano[2], color=NARANJA, alpha=0.16, linewidth=0, shade=False)
+    # límites cúbicos (que no se deforme)
+    allp = ext if P is None else np.column_stack([ext[:, 0].clip(max=P), ext[:, 1].clip(min=P)])
+    cen = allp.mean(axis=1)
+    medio = max((allp[:, 1] - allp[:, 0]).max() / 2 * 1.1, 1e-9)
+    ax.set_xlim(cen[0] - medio, cen[0] + medio)
+    ax.set_ylim(cen[1] - medio, cen[1] + medio)
+    ax.set_zlim(cen[2] - medio, cen[2] + medio)
+    ax.set_box_aspect((1, 1, 1))
+    _titulo(ax, titulo or "Curva del espacio y su triedro de Frenet")
+    ax.legend(loc="upper left", fontsize=8.5, frameon=True)
+    return fig
+
+
+# ==============================================================================
+# Campos vectoriales, superficies y regiones 3D
+# ==============================================================================
+def _caja_cond(cond, vars_, B=12.0):
+    """Caja envolvente de una región (refinando por pasos), o None si no está acotada."""
+    f = sp.lambdify(vars_, cond, modules=["numpy"])
+    rng = np.random.default_rng(3)
+    n = len(vars_)
+    lo, hi = np.full(n, -B), np.full(n, B)
+    for paso in range(6):
+        P = rng.uniform(lo, hi, size=(200_000, n))
+        with np.errstate(all="ignore"):
+            ok = np.broadcast_to(np.asarray(f(*[P[:, i] for i in range(n)]), dtype=bool), (len(P),))
+        if ok.sum() < 8:
+            return None if paso == 0 else list(zip(lo, hi))
+        d = P[ok]
+        nlo, nhi = d.min(axis=0), d.max(axis=0)
+        if paso == 0 and ((np.abs(nlo) > 0.97 * B).any() or (np.abs(nhi) > 0.97 * B).any()):
+            return None
+        ext = nhi - nlo
+        lo, hi = nlo - 0.15 * ext - 1e-9, nhi + 0.15 * ext + 1e-9
+    return list(zip(lo, hi))
+
+
+def fig_campo_2d(comps, vs, ventana=(-3, 3, -3, 3), potencial=None, titulo=None):
+    """Campo plano F = ⟨P, Q⟩: flechas (color = magnitud), líneas de flujo y, si hay, curvas de nivel del potencial."""
+    x, y = vs
+    fig = _fig(7.2, 6.0)
+    ax = fig.add_subplot(111)
+    ax.set_aspect("equal", adjustable="box")
+    _ejes(ax, (ventana[0], ventana[1]), (ventana[2], ventana[3]), xl=str(x), yl=str(y))
+    fP = sp.lambdify((x, y), comps[0], "numpy")
+    fQ = sp.lambdify((x, y), comps[1], "numpy")
+
+    def campo(Xg, Yg):
+        with np.errstate(all="ignore"):
+            U = np.broadcast_to(np.asarray(fP(Xg, Yg), dtype=float), Xg.shape).copy()
+            V = np.broadcast_to(np.asarray(fQ(Xg, Yg), dtype=float), Xg.shape).copy()
+        U[~np.isfinite(U)], V[~np.isfinite(V)] = np.nan, np.nan
+        return U, V
+
+    Xs, Ys = np.meshgrid(np.linspace(ventana[0], ventana[1], 70), np.linspace(ventana[2], ventana[3], 70))
+    Us, Vs = campo(Xs, Ys)
+    if potencial is not None:
+        try:
+            fphi = sp.lambdify((x, y), potencial, "numpy")
+            with np.errstate(all="ignore"):
+                Z = np.broadcast_to(np.asarray(fphi(Xs, Ys), dtype=float), Xs.shape)
+            cs = ax.contour(Xs, Ys, Z, levels=14, colors=MORADO, linewidths=1.0, linestyles="--", alpha=0.75, zorder=2)
+            ax.plot([], [], color=MORADO, ls="--", lw=1.2, label="curvas de nivel del potencial φ")
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        if np.isfinite(Us).sum() > 100:
+            ax.streamplot(Xs, Ys, np.nan_to_num(Us), np.nan_to_num(Vs), color="#9fb3c8", linewidth=0.9, density=1.1, arrowsize=0.9, zorder=3)
+    except Exception:  # noqa: BLE001
+        pass
+    Xq, Yq = np.meshgrid(np.linspace(ventana[0], ventana[1], 17), np.linspace(ventana[2], ventana[3], 17))
+    Uq, Vq = campo(Xq, Yq)
+    mag = np.hypot(Uq, Vq)
+    with np.errstate(all="ignore"):
+        Un, Vn = Uq / mag, Vq / mag
+    q = ax.quiver(Xq, Yq, Un, Vn, mag, cmap="viridis", pivot="mid", scale=26, width=0.0046, zorder=5)
+    cb = fig.colorbar(q, ax=ax, fraction=0.045, pad=0.02)
+    cb.set_label("‖F‖  (la flecha solo muestra la dirección)", fontsize=8.5)
+    ax.set_xlim(ventana[0], ventana[1])
+    ax.set_ylim(ventana[2], ventana[3])
+    _titulo(ax, titulo or "Campo vectorial F: dirección (flechas), líneas de flujo y magnitud (color)")
+    if potencial is not None:
+        _leyenda(ax, loc="upper right")
+    return fig
+
+
+def fig_campo_3d(comps, vs, medio=2.0, n=5, titulo=None):
+    """Campo de ℝ³: flechas en una malla n×n×n (longitud constante, color = magnitud)."""
+    fig = _fig(7.0, 6.2)
+    ax = fig.add_subplot(111, projection="3d")
+    _ejes3d(ax)
+    g = np.linspace(-medio, medio, n)
+    X, Y, Z = np.meshgrid(g, g, g)
+    f = sp.lambdify(tuple(vs), list(comps), "numpy")
+    with np.errstate(all="ignore"):
+        U, V, W = [np.broadcast_to(np.asarray(c, dtype=float), X.shape).copy() for c in f(X, Y, Z)]
+    mag = np.sqrt(U ** 2 + V ** 2 + W ** 2)
+    ok = np.isfinite(mag) & (mag > 1e-12)
+    Un, Vn, Wn = U[ok] / mag[ok], V[ok] / mag[ok], W[ok] / mag[ok]
+    from matplotlib import colormaps as _cm
+    from matplotlib.colors import Normalize as _Norm
+    cmap = _cm["viridis"]
+    norma = _Norm(vmin=float(mag[ok].min()), vmax=float(mag[ok].max()) + 1e-12)
+    cols = [cmap(norma(m_)) for m_ in mag[ok]]
+    paso = 2 * medio / max(n - 1, 1)
+    ax.quiver(X[ok], Y[ok], Z[ok], Un, Vn, Wn, length=0.7 * paso, normalize=True, colors=cols, arrow_length_ratio=0.3, linewidth=1.4)
+    ax.set_xlim(-medio * 1.1, medio * 1.1)
+    ax.set_ylim(-medio * 1.1, medio * 1.1)
+    ax.set_zlim(-medio * 1.1, medio * 1.1)
+    ax.set_box_aspect((1, 1, 1))
+    _titulo(ax, titulo or "Campo vectorial en ℝ³ (flechas de igual longitud; color = magnitud)")
+    return fig
+
+
+def fig_superficie_3d(comps, params, region=None, figura=None, titulo=None, N=70):
+    """Superficie paramétrica r(u, v) sobre su dominio, con (si hay `figura`) el punto, la normal y un trozo del plano tangente."""
+    u, v = params
+    fig = _fig(7.2, 6.4)
+    ax = fig.add_subplot(111, projection="3d")
+    _ejes3d(ax)
+    caja = _caja_cond(region.cond, [u, v]) if region is not None else None
+    if caja is None:
+        caja = [(-3.0, 3.0), (-3.0, 3.0)] if region is None else [(-3.0, 3.0), (-3.0, 3.0)]
+    (u0, u1), (v0, v1) = caja
+    U, Vv = np.meshgrid(np.linspace(u0, u1, N), np.linspace(v0, v1, N))
+    f = sp.lambdify((u, v), list(comps), "numpy")
+    with np.errstate(all="ignore"):
+        X, Y, Z = [np.broadcast_to(np.asarray(c, dtype=float), U.shape).copy() for c in f(U, Vv)]
+    if region is not None:
+        fc = sp.lambdify((u, v), region.cond, "numpy")
+        with np.errstate(all="ignore"):
+            m = np.broadcast_to(np.asarray(fc(U, Vv), dtype=bool), U.shape)
+        for A in (X, Y, Z):
+            A[~m] = np.nan
+    for A in (X, Y, Z):
+        A[np.abs(A) > 1e3] = np.nan
+    ax.plot_surface(X, Y, Z, cmap="viridis", alpha=0.82, linewidth=0, antialiased=True, rstride=1, cstride=1, zorder=2)
+    todos = np.array([A[np.isfinite(A)] for A in (X, Y, Z)], dtype=object)
+    if all(len(a_) for a_ in todos):
+        lo = np.array([a_.min() for a_ in todos])
+        hi = np.array([a_.max() for a_ in todos])
+    else:
+        lo, hi = np.array([-1.0, -1.0, -1.0]), np.array([1.0, 1.0, 1.0])
+    if figura and figura.get("P"):
+        P = np.array(figura["P"])
+        n = np.array(figura["n"])
+        lo, hi = np.minimum(lo, P), np.maximum(hi, P)
+        medio_ = max((hi - lo).max() / 2, 1e-9)
+        ax.scatter([P[0]], [P[1]], [P[2]], color=ROJO, s=60, depthshade=False, zorder=9)
+        ax.quiver(P[0], P[1], P[2], *(n * 0.55 * medio_), color=NARANJA, lw=2.6, arrow_length_ratio=0.2, zorder=9)
+        ax.text(*(P + n * 0.62 * medio_), "n", color=NARANJA, fontsize=12, fontweight="bold")
+        e1 = np.cross(n, [1.0, 0, 0] if abs(n[0]) < 0.9 else [0, 1.0, 0])
+        e1 /= np.linalg.norm(e1)
+        e2 = np.cross(n, e1)
+        s_ = 0.35 * medio_
+        a_, b_ = np.meshgrid([-s_, s_], [-s_, s_])
+        ax.plot_surface(P[0] + a_ * e1[0] + b_ * e2[0], P[1] + a_ * e1[1] + b_ * e2[1], P[2] + a_ * e1[2] + b_ * e2[2], color=NARANJA, alpha=0.30, linewidth=0, zorder=8)
+    cen = (lo + hi) / 2
+    med = max((hi - lo).max() / 2 * 1.1, 1e-9)
+    ax.set_xlim(cen[0] - med, cen[0] + med)
+    ax.set_ylim(cen[1] - med, cen[1] + med)
+    ax.set_zlim(cen[2] - med, cen[2] + med)
+    ax.set_box_aspect((1, 1, 1))
+    _titulo(ax, titulo or "Superficie paramétrica (con su plano tangente y normal)")
+    return fig
+
+
+def fig_region_3d(cond, vars_, titulo=None, n=34):
+    """Región de ℝ³: nube de puntos del interior (para ver su forma)."""
+    fig = _fig(7.0, 6.2)
+    ax = fig.add_subplot(111, projection="3d")
+    _ejes3d(ax)
+    caja = _caja_cond(cond, list(vars_))
+    if caja is None:
+        ax.text2D(0.5, 0.5, "La región parece no estar acotada (o es vacía):\nno la dibujo.", transform=ax.transAxes, ha="center")
+        return fig
+    g = [np.linspace(a_, b_, n) for a_, b_ in caja]
+    X, Y, Z = np.meshgrid(*g)
+    f = sp.lambdify(tuple(vars_), cond, "numpy")
+    with np.errstate(all="ignore"):
+        m = np.broadcast_to(np.asarray(f(X, Y, Z), dtype=bool), X.shape)
+    pts = np.column_stack([X[m], Y[m], Z[m]])
+    if len(pts) > 5500:
+        pts = pts[np.random.default_rng(1).choice(len(pts), 5500, replace=False)]
+    if len(pts):
+        ax.scatter(pts[:, 0], pts[:, 1], pts[:, 2], c=pts[:, 2], cmap="viridis", s=7, alpha=0.55, depthshade=True, linewidths=0)
+    lo = np.array([c[0] for c in caja])
+    hi = np.array([c[1] for c in caja])
+    cen, med = (lo + hi) / 2, max((hi - lo).max() / 2 * 1.05, 1e-9)
+    ax.set_xlim(cen[0] - med, cen[0] + med)
+    ax.set_ylim(cen[1] - med, cen[1] + med)
+    ax.set_zlim(cen[2] - med, cen[2] + med)
+    ax.set_box_aspect((1, 1, 1))
+    _titulo(ax, titulo or "La región de integración (puntos del interior)")
+    return fig
