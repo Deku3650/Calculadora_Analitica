@@ -29,7 +29,8 @@ import sympy as sp
 
 __all__ = [
     "ErrorEstructura", "Punto", "Vector", "Lista", "Espacio", "Region", "Bola", "Funcion", "Cuantificado",
-    "Argumento", "Equivalencia", "Aproximado", "Congruencia", "Divisibilidad", "RelConj", "OpTop", "Pertenencia",
+    "Argumento", "Equivalencia", "Aproximado", "Congruencia", "Divisibilidad", "RelConj", "OpTop", "Pertenencia", "Curva",
+    "Divergencia", "Rotacional", "Laplaciano", "Superficie", "IntegralRegion", "variables_campo", "variables_escalar", "evaluar_operador",
     "ConjuntoImagen", "Norma", "ProdPunto", "Distancia", "Angulo", "evaluar_nodos", "variables_por_defecto",
     "a_conjunto", "a_region", "operar_conjuntos", "complemento", "producto_cartesiano", "pertenece",
     "es_conjunto", "es_vectorial", "conjunto_nb", "dimension_de", "coords_de", "completar_patron", "texto_valor", "lectura_de", "ELIPSIS",
@@ -542,6 +543,151 @@ class Funcion:
 
     def __eq__(self, o):
         return isinstance(o, Funcion) and self.nombre == o.nombre and self.vars == o.vars and self.expr == o.expr
+
+
+class Curva:
+    """Curva paramétrica r(t) = ⟨x(t), y(t), …⟩ en ℝⁿ, con el intervalo de t (conjunto de ℝ) si se dio."""
+    __slots__ = ("param", "comps", "dominio", "nombre", "lectura")
+
+    def __init__(self, param, comps, dominio=None, nombre=None, lectura=None):
+        self.param = param
+        self.comps = tuple(sp.sympify(c) for c in comps)
+        self.dominio = dominio
+        self.nombre = nombre
+        nms = ["x", "y", "z"] if len(self.comps) <= 3 else [f"x{i + 1}" for i in range(len(self.comps))]
+        cuerpo = ", ".join(f"{nm}({texto_valor(param)}) = {lectura_de(c)}" for nm, c in zip(nms, self.comps))
+        dom = f", para {texto_valor(param)} en {lectura_de(dominio)}" if dominio is not None and dominio != sp.S.Reals else ""
+        self.lectura = lectura or f"la curva paramétrica en ℝ^{len(self.comps)} ({cuerpo}){dom}"
+
+    @property
+    def n(self):
+        return len(self.comps)
+
+    def txt(self):
+        return f"{self.nombre or 'r'}({texto_valor(self.param)}) = ⟨" + ", ".join(texto_valor(c) for c in self.comps) + "⟩"
+
+    def __repr__(self):
+        return f"Curva({self.txt()})"
+
+
+# ==============================================================================
+# Cálculo vectorial: operadores, superficies e integrales sobre regiones
+# ==============================================================================
+def variables_campo(comps):
+    """Variables de un campo con `len(comps)` componentes: x, y, z (en ese orden) o las letras que use."""
+    comps = tuple(sp.sympify(c) for c in comps)
+    libres = {s for c in comps for s in c.free_symbols if isinstance(s, sp.Symbol)}
+    est = variables_por_defecto(min(len(comps), 3)) if len(comps) <= 3 else ()
+    if libres <= set(est) or not libres:
+        return tuple(est)
+    ordenadas = sorted(libres, key=lambda s: (("xyz".index(s.name) if s.name in ("x", "y", "z") else 9), s.name))
+    if len(ordenadas) == len(comps):
+        return tuple(ordenadas)
+    if libres <= set(variables_por_defecto(3)):
+        return tuple(variables_por_defecto(3))[:max(len(comps), len(libres))]
+    return tuple(ordenadas)
+
+
+class _OperadorVec:
+    __slots__ = ("arg", "lectura")
+    _frase = ""
+    _req_vector = True
+
+    def __init__(self, arg):
+        self.arg = arg
+        if self._req_vector and not isinstance(arg, (Vector, Punto)):
+            raise ErrorEstructura(f"{self._frase.capitalize()} se aplica a un CAMPO VECTORIAL, por ejemplo ∇·⟨x², yz, xz⟩.")
+        if not self._req_vector and not isinstance(arg, sp.Expr):
+            raise ErrorEstructura(f"{self._frase.capitalize()} se aplica a un campo ESCALAR (una función), por ejemplo ∇²(x² + y² + z²).")
+        self.lectura = f"{self._frase} de {lectura_de(arg)}"
+
+    @property
+    def comps(self):
+        return self.arg.c if isinstance(self.arg, (Vector, Punto)) else (self.arg,)
+
+
+class Divergencia(_OperadorVec):
+    """∇·F."""
+    _frase = "la divergencia"
+
+
+class Rotacional(_OperadorVec):
+    """∇×F."""
+    _frase = "el rotacional"
+
+
+class Laplaciano(_OperadorVec):
+    """∇²f."""
+    _frase = "el laplaciano"
+    _req_vector = False
+
+
+def variables_escalar(f):
+    """Variables de un campo escalar: x, y, z si f solo usa esas (en ese orden), o las letras que tenga."""
+    libres = {s for s in sp.sympify(f).free_symbols if isinstance(s, sp.Symbol)}
+    xyz = variables_por_defecto(3)
+    if libres <= set(xyz):
+        return tuple(v for v in xyz if v in libres) or xyz[:1]
+    return tuple(sorted(libres, key=lambda s: s.name))
+
+
+def evaluar_operador(op):
+    """Divergencia → expresión; Rotacional → Vector (3D) o expresión (2D); Laplaciano → expresión."""
+    if isinstance(op, Laplaciano):
+        vs = variables_escalar(op.arg)
+        return sp.simplify(sum(sp.diff(op.arg, v, 2) for v in vs))
+    comps = tuple(sp.sympify(c) for c in op.comps)
+    vs = variables_campo(comps)
+    if len(vs) != len(comps):
+        raise ErrorEstructura(f"El campo tiene {len(comps)} componentes pero {len(vs)} variable(s): para ∇· y ∇× hacen falta tantas variables como componentes.")
+    if isinstance(op, Divergencia):
+        return sp.simplify(sum(sp.diff(c, v) for c, v in zip(comps, vs)))
+    if len(comps) == 2:
+        return sp.simplify(sp.diff(comps[1], vs[0]) - sp.diff(comps[0], vs[1]))
+    if len(comps) == 3:
+        P, Q, R = comps
+        x, y, z = vs
+        return Vector([sp.simplify(sp.diff(R, y) - sp.diff(Q, z)), sp.simplify(sp.diff(P, z) - sp.diff(R, x)), sp.simplify(sp.diff(Q, x) - sp.diff(P, y))])
+    raise ErrorEstructura("El rotacional existe en ℝ² (escalar) y en ℝ³ (vector).")
+
+
+class Superficie:
+    """Superficie paramétrica r(u, v) = ⟨x, y, z⟩ con su dominio (Region de los parámetros) si se dio."""
+    __slots__ = ("params", "comps", "dominio", "nombre", "lectura")
+
+    def __init__(self, params, comps, dominio=None, nombre=None, lectura=None):
+        self.params = tuple(params)
+        self.comps = tuple(sp.sympify(c) for c in comps)
+        self.dominio = dominio
+        self.nombre = nombre
+        nms = ["x", "y", "z"]
+        pa = ", ".join(texto_valor(p) for p in self.params)
+        cuerpo = ", ".join(f"{nm}({pa}) = {lectura_de(c)}" for nm, c in zip(nms, self.comps))
+        dom = f", con ({pa}) en {lectura_de(dominio)}" if dominio is not None else ""
+        self.lectura = lectura or f"la superficie paramétrica ({cuerpo}){dom}"
+
+    @property
+    def n(self):
+        return len(self.comps)
+
+    def txt(self):
+        return f"{self.nombre or 'r'}(" + ", ".join(texto_valor(p) for p in self.params) + ") = ⟨" + ", ".join(texto_valor(c) for c in self.comps) + "⟩"
+
+    def __repr__(self):
+        return f"Superficie({self.txt()})"
+
+
+class IntegralRegion:
+    """∬_D f dA, ∭_E f dV (o con dx dy…): integral sobre una REGIÓN. `orden` = variables en el orden en que se escribieron los diferenciales."""
+    __slots__ = ("f", "region", "vars", "orden", "tipo", "lectura", "origen_div")
+
+    def __init__(self, f, region, vars_, orden, origen_div=None):
+        self.f, self.region, self.vars, self.orden = f, region, tuple(vars_), tuple(orden)
+        self.tipo = {1: "simple", 2: "doble", 3: "triple"}.get(len(self.vars), "múltiple")
+        self.origen_div = origen_div           # el campo F si el integrando era ∇·F (para verificar Gauss)
+        integrando = "1 (se calcula el área o el volumen)" if f == 1 else lectura_de(f)
+        self.lectura = (f"la integral {self.tipo} de {integrando} sobre {lectura_de(region)}, "
+                        + (f"con diferenciales {', '.join('d' + texto_valor(v) for v in self.orden)}" if self.orden else f"(elemento de {'área' if len(self.vars) == 2 else 'volumen'})"))
 
 
 class Cuantificado:
