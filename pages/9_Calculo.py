@@ -17,6 +17,7 @@ import re
 import threading
 from collections import OrderedDict
 
+import matplotlib.pyplot as plt
 import streamlit as st
 
 st.set_page_config(page_title="Cálculo", page_icon="∑", layout="wide")
@@ -25,6 +26,7 @@ import sympy as sp  # noqa: E402
 
 import calculo_graficas as G  # noqa: E402
 import calculo_motor as M  # noqa: E402
+from estilos import cargar_estilos_globales, encabezado_pagina  # noqa: E402
 from interprete_latex import (  # noqa: E402
     ErrorLatex, ErrorNoSoportado, ascii_a_sympy, ascii_lista, clasificar_entrada,
     diagnosticar, latex_a_sympy, leer_en_espanol,
@@ -32,6 +34,10 @@ from interprete_latex import (  # noqa: E402
 from estructuras import (Bola, Curva, Divergencia, Funcion, IntegralRegion, Laplaciano, Pertenencia, Region, Rotacional, Superficie, Vector,  # noqa: E402
                          dimension_de, variables_campo)
 from teclado_matematico import teclado_matematico  # noqa: E402
+from utils import inicializar_estado  # noqa: E402
+
+cargar_estilos_globales()
+inicializar_estado()
 
 
 # ==============================================================================
@@ -112,7 +118,12 @@ def mostrar(r):
 
 
 def figura(f):
-    st.pyplot(f)
+    if f is not None:
+        st.pyplot(f)
+        try:
+            plt.close(f)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def hay_error(*rs) -> bool:
@@ -178,9 +189,11 @@ def _discontinuidades(r, tipos):
 # ==============================================================================
 # Encabezado, opciones y teclado
 # ==============================================================================
-st.title("∑ Cálculo")
-st.caption("Escribe con el teclado y pulsa **↵**. La app te dice **qué entendió**, comprueba que **tenga sentido** "
-           "y te ofrece el análisis que corresponde.")
+encabezado_pagina(
+    "∑ Cálculo",
+    "Escribe con el teclado y pulsa **↵**. La app te dice **qué entendió**, comprueba que **tenga sentido** "
+    "y te ofrece el análisis que corresponde.",
+)
 
 with st.expander("⚙️ Opciones", expanded=False):
     c1, c2, c3, c4 = st.columns(4)
