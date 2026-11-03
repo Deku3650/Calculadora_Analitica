@@ -29,7 +29,8 @@ from interprete_latex import (  # noqa: E402
     ErrorLatex, ErrorNoSoportado, ascii_a_sympy, ascii_lista, clasificar_entrada,
     diagnosticar, latex_a_sympy, leer_en_espanol,
 )
-from estructuras import Funcion, Pertenencia, dimension_de  # noqa: E402
+from estructuras import (Bola, Curva, Divergencia, Funcion, IntegralRegion, Laplaciano, Pertenencia, Region, Rotacional, Superficie, Vector,  # noqa: E402
+                         dimension_de, variables_campo)
 from teclado_matematico import teclado_matematico  # noqa: E402
 
 
@@ -54,6 +55,9 @@ def _clave(o) -> str:
         return "[" + ",".join(_clave(i) for i in o) + "]"
     if isinstance(o, dict):
         return "{" + ",".join(f"{_clave(k)}:{_clave(v)}" for k, v in sorted(o.items(), key=lambda kv: str(kv[0]))) + "}"
+    campos = [c for k in type(o).__mro__ for c in getattr(k, "__slots__", ()) if c != "lectura"]
+    if campos:                              # Curva, Superficie, Region, IntegralRegion…: la clave sale de TODO su contenido (nunca de su dirección en memoria)
+        return type(o).__name__ + "(" + ",".join(_clave(getattr(o, c, None)) for c in campos) + ")"
     return repr(o)
 
 
@@ -138,13 +142,13 @@ def leer_punto(texto, n_, que="El punto"):
     return vals, None
 
 
-def ventana_1d(clave, a0=-6.0, b0=6.0):
+def ventana_1d(clave, a0=-6.0, b0=6.0, nombre="x"):
     with st.expander("🔧 Ventana de la gráfica"):
         c1, c2 = st.columns(2)
         with c1:
-            a = st.number_input("x mínimo", value=float(a0), key=f"{clave}_a_{a0}_{b0}")
+            a = st.number_input(f"{nombre} mínimo", value=float(a0), key=f"{clave}_a_{a0}_{b0}")
         with c2:
-            b = st.number_input("x máximo", value=float(b0), key=f"{clave}_b_{a0}_{b0}")
+            b = st.number_input(f"{nombre} máximo", value=float(b0), key=f"{clave}_b_{a0}_{b0}")
     if a >= b:
         st.warning("El mínimo debe ser menor que el máximo; se usa la ventana por defecto.")
         return (a0, b0)
@@ -193,6 +197,7 @@ with st.expander("⚙️ Opciones", expanded=False):
         nat0 = st.toggle("ℕ incluye el 0", value=False, help="Por defecto ℕ = {1, 2, 3, …}. Actívalo si en tu curso ℕ = {0, 1, 2, …}.")
 
 with st.expander("📖 Qué puedes escribir (guía rápida)"):
+    st.page_link("pages/9_Calculo_Guia.py", label="📖 Abrir la guía de uso completa (con ejemplos que se prueban con un clic)")
     st.markdown(
         """
 **Una función** (la app te ofrece su análisis completo):
@@ -214,11 +219,20 @@ with st.expander("📖 Qué puedes escribir (guía rápida)"):
 
 **Funciones**: `f(x) = x² + 1` o `(x, y) ↦ x² + y²` (así eliges tú el orden de las variables).
 
+**Cálculo vectorial** (pestaña ℝⁿ, última fila): curvas `⟨cos t, sin t, t⟩, 0 ≤ t ≤ 4π`, superficies `⟨u cos v, u sin v, u²⟩, 0 ≤ u ≤ 1, 0 ≤ v ≤ 2π`, `∇·F`, `∇×F`, `∇²f`, `∬_{región} f dA`, `∭_{región} f dV`; derivación implícita en las ecuaciones.
+
 💡 Si dudas de cómo la leyó la app, mira el recuadro **«Lo que entendí»**: ahí aparece la frase en español.
         """
     )
 
-latex = teclado_matematico("calculo_f", acoplado=acoplado, en_vivo=en_vivo)
+# Un ejemplo de la guía (pages/9_Calculo_Guia.py) llega por session_state y se carga ya escrito en el teclado.
+_ej = st.session_state.pop("calculo_ejemplo", None)
+if _ej is not None:
+    st.session_state["calculo_ej_n"] = st.session_state.get("calculo_ej_n", 0) + 1
+    st.session_state["calculo_ej_valor"] = _ej
+_n_ej = st.session_state.get("calculo_ej_n", 0)
+latex = teclado_matematico(f"calculo_f_{_n_ej}" if _n_ej else "calculo_f", acoplado=acoplado, en_vivo=en_vivo,
+                           valor_inicial=st.session_state.get("calculo_ej_valor", ""))
 
 if not latex:
     st.info("Aún no hay nada confirmado. Escribe una expresión y pulsa **↵**.")
@@ -325,9 +339,11 @@ def sec_analisis_1d(f, x):
 
 
 def sec_derivadas(f, vs_):
-    modos = ["Derivada", "Gradiente y Hessiana", "Recta / plano tangente"] + (["Derivada direccional"] if n >= 2 else [])
+    modos = ["Derivada", "Gradiente y Hessiana", "Recta / plano tangente"] + (["Derivada direccional", "Regla de la cadena"] if n >= 2 else [])
     modo = st.radio("Calcular", modos, horizontal=True, key=f"calc_der_{n}")
     nombres = ", ".join(str(v) for v in vs_)
+    if modo == "Regla de la cadena":
+        return sec_cadena(f, vs_)
     if modo == "Derivada":
         if n == 1:
             orden = st.slider("Orden de la derivada", 1, 6, 1, key="calc_der_orden")
@@ -730,6 +746,10 @@ def sec_niveles(f, vs_):
 # 3 · Otras entradas: relaciones y operaciones escritas directamente
 # ==============================================================================
 def sec_relacion(rel, vs_):
+    if isinstance(rel, sp.Equality) and len(vs_) >= 2:
+        modo_r = st.radio("¿Qué quieres hacer?", ["Resolver y graficar", "Derivación implícita (dy/dx, ∂z/∂x…)"], horizontal=True, key="calc_rel_modo")
+        if modo_r.startswith("Deriv"):
+            return sec_implicita(rel, vs_)
     mostrar(calcular("resolver_relacion", rel))
     if len(vs_) == 2:
         figura(G.fig_region(rel, vs_[0], vs_[1], ventana_2d("rel")))
@@ -738,8 +758,46 @@ def sec_relacion(rel, vs_):
                                 titulo="g(x) = (lado izquierdo) − (lado derecho): el eje x marca g = 0"))
 
 
+def _leer_valores(texto):
+    """«2, 4.5, 1/3» → lista de números exactos (o un mensaje de error)."""
+    import re as _re
+    vals = []
+    for trozo in _re.split(r"[;,]", texto):
+        if not trozo.strip():
+            continue
+        v = ascii_a_sympy(trozo.strip())
+        if not isinstance(v, sp.Expr) or v.free_symbols:
+            raise ValueError(f"«{trozo.strip()}» no es un número.")
+        vals.append(v)
+    return vals
+
+
+def _pedir_valores(obj_):
+    """Cajas para dar valores a los elementos x_i de una suma o producto. Devuelve (valores, inicio) o (None, 1)."""
+    bases = sorted({ib.label.name for ib in obj_.atoms(sp.IndexedBase)})
+    if not bases:
+        return None, 1
+    st.markdown("##### Dar valores a los elementos (opcional)")
+    st.caption("Escribe los datos separados por comas para obtener un número. Si lo dejas vacío, el resultado queda en términos de los elementos.")
+    ini = st.number_input("El primer dato corresponde al índice", value=1, step=1, key="calc_suma_ini")
+    valores = {}
+    for nm in bases:
+        t = st.text_input(f"Valores de {nm}", "", key=f"calc_suma_val_{nm}", help="Por ejemplo: 2, 4, 4, 5, 7, 9")
+        if t.strip():
+            try:
+                valores[nm] = _leer_valores(t)
+            except ValueError as e:
+                st.error(str(e))
+                return None, int(ini)
+    return (valores or None), int(ini)
+
+
 def seccion_operacion(obj_, tipo_):
-    r = calcular("evaluar_operacion", obj_, timeout=40)
+    if isinstance(obj_, (sp.Sum, sp.Product)) and obj_.atoms(sp.Indexed):
+        valores, ini = _pedir_valores(obj_)
+        r = calcular("evaluar_suma", obj_, valores, ini, timeout=40)
+    else:
+        r = calcular("evaluar_operacion", obj_, timeout=40)
     mostrar(r)
     if hay_error(r):
         return
@@ -860,13 +918,290 @@ def seccion_estructura(o, info_):
     if info_["tipo"] == "conjunto" and d.get("conjunto") is not None and not (isinstance(d.get("conjunto"), (int, float)) or getattr(d.get("conjunto"), "is_number", False) and not isinstance(d.get("conjunto"), sp.Set)):
         _probador_de_puntos(d["conjunto"])
 
+
+# ==============================================================================
+# 3c · Curvas paramétricas (y curvatura de la gráfica de una función)
+# ==============================================================================
+def seccion_curva(C, clave="curva"):
+    """Análisis de una curva paramétrica: figura con el triedro de Frenet y todo el detalle debajo."""
+    from estructuras import Curva  # noqa: F401
+    dom = C.dominio if C.dominio is not None else sp.S.Reals
+    finito = isinstance(dom, (sp.Interval, sp.Union)) and dom.inf.is_finite and dom.sup.is_finite
+    if finito:
+        a_, b_ = float(sp.N(dom.inf)), float(sp.N(dom.sup))
+        defecto = str(sp.nsimplify(dom.inf + (dom.sup - dom.inf) / 3))
+    else:
+        trig = any(c.has(sp.sin, sp.cos, sp.tan) for c in C.comps)
+        a_, b_ = (-6.28, 6.28) if trig else (-3.0, 3.0)
+        defecto = "1"
+    st.markdown("##### Elige el punto de la curva")
+    t_txt = st.text_input(f"Valor de {C.param}₀ (puedes escribir pi/4, 2, 1/3…)", defecto, key=f"{clave}_t0",
+                          help="Ahí se calcula el triedro de Frenet, la circunferencia osculadora y los planos.")
+    t0 = ascii_a_sympy(t_txt) if t_txt.strip() else None
+    if t0 is not None and (not isinstance(t0, sp.Expr) or t0.free_symbols):
+        st.error("El valor de t₀ debe ser un número (por ejemplo 1, pi/4 o 2/3).")
+        t0 = None
+    rango = (a_, b_) if finito else ventana_1d(f"{clave}_rango", a_, b_, nombre=str(C.param))
+    r = calcular("analizar_curva", C, t0, timeout=60)
+    if hay_error(r):
+        mostrar(r)
+        return
+    d = r["datos"]
+    try:
+        if C.n == 2:
+            figura(G.fig_curva_2d(C.comps, C.param, rango, d.get("figura"), d.get("evoluta")))
+        elif C.n == 3:
+            figura(G.fig_curva_3d(C.comps, C.param, rango, d.get("figura")))
+        else:
+            st.caption(f"Es una curva de ℝ^{C.n}: no se dibuja, pero el análisis de abajo sí es válido.")
+    except Exception:  # noqa: BLE001
+        st.caption("(No pude dibujar la figura de este caso; el análisis de abajo sigue siendo válido.)")
+    mostrar(r)
+    _caja_integral_linea(C, clave)
+
+
+def sec_curvatura(f, vs_):
+    """Curvatura de la gráfica y = f(x): se trata como la curva ⟨x, f(x)⟩."""
+    from estructuras import Curva
+    x = vs_[0]
+    st.markdown("La gráfica $y=f(x)$ es la curva $\\mathbf{r}(x)=\\langle x,\\,f(x)\\rangle$. Su curvatura es $\\kappa=\\dfrac{|f''|}{(1+f'^2)^{3/2}}$.")
+    seccion_curva(Curva(x, (x, f)), clave="curv_graf")
+
+
+# ==============================================================================
+# 3d · Campos, superficies, regiones de integración, líneas, implícita, cadena
+# ==============================================================================
+def _leer_obj_latex(clave, placeholder):
+    """Un segundo teclado para escribir un campo o una función. Devuelve (objeto, latex) o (None, None)."""
+    lat = teclado_matematico(clave, acoplado=acoplado, placeholder=placeholder)
+    if not lat or not lat.strip():
+        return None, None
+    try:
+        return latex_a_sympy(lat, promover_curvas=False), lat
+    except (ErrorLatex, ErrorNoSoportado) as e:
+        st.error(str(e))
+        return None, None
+
+
+def _numeros(campos, clave):
+    """Una fila de number_input: campos = [(etiqueta, valor_inicial)] → lista de valores."""
+    cols = st.columns(len(campos))
+    out = []
+    for i, (et, v0) in enumerate(campos):
+        with cols[i]:
+            out.append(st.number_input(et, value=float(v0), key=f"{clave}_{et}"))
+    return out
+
+
+def _caja_integral_linea(C, clave):
+    with st.expander("∫ Integral de línea a lo largo de esta curva", expanded=False):
+        opciones = ["Campo escalar:  ∫ f ds", "Campo vectorial:  ∫ F·dr  (trabajo, circulación)"] + (["Flujo plano:  ∮ F·n ds"] if C.n == 2 else [])
+        modo_t = st.radio("¿Qué integral quieres?", opciones, key=f"{clave}_il_modo")
+        modo = "escalar" if modo_t.startswith("Campo escalar") else ("trabajo" if "vectorial" in modo_t else "flujo")
+        st.caption(("Escribe la función f(x, y" + (", z" if C.n == 3 else "") + "), por ejemplo x² + y²." if modo == "escalar" else
+                    "Escribe el campo con corchetes angulares: ⟨P, Q" + (", R" if C.n == 3 else "") + "⟩, por ejemplo ⟨−y, x⟩.")
+                   + " Usa las letras x, y" + (", z" if C.n == 3 else "") + " (no el parámetro).")
+        obj, _ = _leer_obj_latex(f"{clave}_il_campo", "f(x, y, z)" if modo == "escalar" else "F = ⟨P, Q⟩")
+        if obj is None:
+            return
+        if modo == "escalar" and not isinstance(obj, sp.Expr):
+            st.error("Para ∫ f ds escribe una función (una expresión), no un vector.")
+            return
+        if modo != "escalar" and not isinstance(obj, (Vector,)):
+            st.error("Escribe un campo vectorial con ⟨ , ⟩, por ejemplo ⟨−y, x⟩.")
+            return
+        mostrar(calcular("integral_linea", C, obj, modo, timeout=45))
+
+
+def seccion_campo(F, info_):
+    n_c = F.n
+    vs_ = variables_campo(F.c)
+    if info_.get("n") == 2 and n_c == 3:
+        lec = st.radio("Un vector de tres componentes con dos variables puede ser…", ["Campo vectorial F(x, y)", "Superficie paramétrica r(u, v)"], horizontal=True, key="calc_campo_o_sup")
+        if lec.startswith("Superficie"):
+            ps = sorted(info_["variables"], key=lambda v: v.name)
+            return seccion_superficie(Superficie(ps, F.c))
+    r = calcular("analizar_campo", F, timeout=45)
+    d = r["datos"]
+    try:
+        if n_c == 2 and len(vs_) == 2:
+            figura(G.fig_campo_2d(F.c, vs_, ventana_2d("campo"), d.get("potencial")))
+        elif n_c == 3 and len(vs_) == 3:
+            m_ = st.number_input("Tamaño de la caja que se dibuja", 0.5, 20.0, 2.0, key="campo3d_med")
+            figura(G.fig_campo_3d(F.c, vs_, medio=float(m_)))
+    except Exception:  # noqa: BLE001
+        st.caption("(No pude dibujar este campo; el análisis de abajo sigue siendo válido.)")
+    mostrar(r)
+    if n_c in (2, 3) and len(vs_) == n_c:
+        with st.expander("🔁 Verificar un teorema (Green, Gauss, Stokes)"):
+            if n_c == 2:
+                forma = st.radio("Región D", ["Círculo", "Rectángulo"], horizontal=True, key="th_green_forma")
+                if forma == "Círculo":
+                    cx, cy, rr = _numeros([("centro x", 0.0), ("centro y", 0.0), ("radio", 1.0)], "th_g")
+                    if rr <= 0:
+                        st.error("El radio debe ser positivo.")
+                        return
+                    reg = Bola(__import__("estructuras").Punto((sp.nsimplify(cx), sp.nsimplify(cy))), sp.nsimplify(rr))
+                else:
+                    a_, b_, c_, d_ = _numeros([("x mín", 0.0), ("x máx", 1.0), ("y mín", 0.0), ("y máx", 1.0)], "th_g")
+                    if a_ >= b_ or c_ >= d_:
+                        st.error("Los mínimos deben ser menores que los máximos.")
+                        return
+                    x_, y_ = variables_campo(F.c)
+                    reg = Region((x_, y_), sp.And(x_ >= sp.nsimplify(a_), x_ <= sp.nsimplify(b_), y_ >= sp.nsimplify(c_), y_ <= sp.nsimplify(d_)), "un rectángulo")
+                if st.button("Verificar el teorema de Green", key="th_green_btn"):
+                    mostrar(calcular("teorema_green", F, reg, timeout=60))
+            else:
+                modo = st.radio("Teorema", ["Divergencia (Gauss) en una bola", "Stokes en una superficie"], horizontal=True, key="th_3d_modo")
+                if modo.startswith("Divergencia"):
+                    cx, cy, cz, rr = _numeros([("centro x", 0.0), ("centro y", 0.0), ("centro z", 0.0), ("radio", 1.0)], "th_gs")
+                    if rr <= 0:
+                        st.error("El radio debe ser positivo.")
+                        return
+                    if st.button("Verificar el teorema de la divergencia", key="th_gauss_btn"):
+                        mostrar(calcular("teorema_gauss", F, Bola(__import__("estructuras").Punto((sp.nsimplify(cx), sp.nsimplify(cy), sp.nsimplify(cz))), sp.nsimplify(rr)), timeout=80))
+                else:
+                    st.caption("Escribe la superficie con su dominio rectangular, por ejemplo ⟨sin φ cos θ, sin φ sin θ, cos φ⟩, 0 ≤ φ ≤ π/2, 0 ≤ θ ≤ 2π.")
+                    lat = teclado_matematico("th_stokes_sup", acoplado=acoplado, placeholder="superficie con su dominio")
+                    if lat and lat.strip():
+                        try:
+                            sup = latex_a_sympy(lat)
+                        except (ErrorLatex, ErrorNoSoportado) as e:
+                            st.error(str(e))
+                            sup = None
+                        if isinstance(sup, Superficie) and st.button("Verificar el teorema de Stokes", key="th_stokes_btn"):
+                            mostrar(calcular("teorema_stokes", F, sup, timeout=80))
+                        elif sup is not None and not isinstance(sup, Superficie):
+                            st.error("Eso no es una superficie paramétrica con dominio.")
+
+
+def seccion_superficie(S, clave="sup"):
+    u, v = S.params
+    caja = G._caja_cond(S.dominio.cond, [u, v]) if S.dominio is not None else None
+    defecto = "1, 1" if caja is None else ", ".join(str(sp.nsimplify(round((a_ + b_) / 2, 3), rational=True)) for a_, b_ in caja)
+    st.markdown("##### Elige un punto de la superficie")
+    t = st.text_input(f"({u}₀, {v}₀) separados por una coma (puedes escribir pi/2, 1/3…)", defecto, key=f"{clave}_p0")
+    pt, err = leer_punto(t, 2, "El punto")
+    if err:
+        st.error(err)
+        pt = None
+    r = calcular("analizar_superficie", S, pt, timeout=60)
+    try:
+        figura(G.fig_superficie_3d(S.comps, S.params, S.dominio, r["datos"].get("figura")))
+    except Exception:  # noqa: BLE001
+        st.caption("(No pude dibujar la superficie; el análisis de abajo sigue siendo válido.)")
+    mostrar(r)
+    with st.expander("∬ Integral de superficie y flujo"):
+        modo_t = st.radio("¿Qué calcular?", ["Área de la superficie", "Campo escalar:  ∬ f dS", "Flujo de un campo:  ∬ F·dS"], key=f"{clave}_is_modo")
+        if modo_t.startswith("Área"):
+            mostrar(calcular("integral_superficie", S, None, "area", timeout=60))
+        else:
+            esc = modo_t.startswith("Campo escalar")
+            st.caption("Escribe " + ("la función f(x, y, z)." if esc else "el campo ⟨P, Q, R⟩ (con las letras x, y, z)."))
+            obj, _ = _leer_obj_latex(f"{clave}_is_campo", "f(x, y, z)" if esc else "F = ⟨P, Q, R⟩")
+            if obj is not None:
+                if esc and not isinstance(obj, sp.Expr):
+                    st.error("Escribe una función, no un vector.")
+                elif not esc and not isinstance(obj, Vector):
+                    st.error("Escribe un campo con ⟨ , , ⟩.")
+                else:
+                    mostrar(calcular("integral_superficie", S, obj, "escalar" if esc else "flujo", timeout=70))
+    with st.expander("🔁 Teorema de Stokes sobre esta superficie"):
+        st.caption("Se calculan los dos lados: el flujo del rotacional por la superficie y la circulación sobre su borde (el dominio debe ser un rectángulo en los parámetros).")
+        obj, _ = _leer_obj_latex(f"{clave}_stk", "F = ⟨P, Q, R⟩")
+        if isinstance(obj, Vector) and obj.n == 3 and st.button("Verificar Stokes", key=f"{clave}_stk_btn"):
+            mostrar(calcular("teorema_stokes", obj, S, timeout=80))
+
+
+def seccion_operador(op):
+    r = calcular("evaluar_operador_vec", op, timeout=40)
+    d = r["datos"]
+    try:
+        if d.get("campo") is not None and d.get("vars") is not None:
+            c_, v_ = d["campo"], d["vars"]
+            if len(c_) == 2 and len(v_) == 2:
+                figura(G.fig_campo_2d(c_, v_, ventana_2d("op_campo")))
+            elif len(c_) == 3 and len(v_) == 3:
+                figura(G.fig_campo_3d(c_, v_, medio=2.0))
+    except Exception:  # noqa: BLE001
+        pass
+    mostrar(r)
+
+
+def seccion_integral_region(IR):
+    r = calcular("integral_region", IR, timeout=90)
+    k = len(IR.vars)
+    try:
+        if k == 2:
+            figura(G.fig_region(IR.region.cond, IR.vars[0], IR.vars[1], ventana_2d("ir_" + "".join(str(v) for v in IR.vars)), titulo="La región de integración D"))
+        elif k == 3:
+            figura(G.fig_region_3d(IR.region.cond, IR.vars))
+    except Exception:  # noqa: BLE001
+        st.caption("(No pude dibujar la región; el cálculo de abajo sigue siendo válido.)")
+    mostrar(r)
+    if IR.origen_div is not None and k == 3 and not hay_error(r):
+        with st.expander("🔁 Comprobar con el teorema de la divergencia (Gauss)"):
+            rg = calcular("gauss_desde_region", IR, timeout=90)
+            mostrar(rg)
+
+
+def sec_implicita(rel, vs_):
+    nombres = [str(v) for v in vs_]
+    dep = st.selectbox("¿Qué variable depende de las demás?", nombres, index=len(nombres) - 1, key="imp_dep")
+    t = st.text_input("Punto donde evaluar (opcional): " + ", ".join(nombres), "", key="imp_pt", help="Por ejemplo 3, 4. Da la pendiente y la recta (o plano) tangente.")
+    punto = None
+    if t.strip():
+        pt, err = leer_punto(t, len(vs_), "El punto")
+        if err:
+            st.error(err)
+        else:
+            punto = {vs_[i]: pt[i] for i in range(len(vs_))}
+    mostrar(calcular("derivada_implicita", rel, dep, punto, timeout=40))
+
+
+def sec_cadena(f, vs_):
+    st.markdown("Escribe cada variable como función de uno o más **parámetros** (por ejemplo, $x = t^2$, $y = s + t$).")
+    subs = []
+    for v in vs_:
+        t = st.text_input(f"{v} =", "", key=f"calc_cad_{v}", placeholder="por ejemplo t^2  ó  s+t")
+        if not t.strip():
+            st.info("Escribe una expresión para cada variable.")
+            return
+        try:
+            e = ascii_a_sympy(t.strip())
+        except Exception:  # noqa: BLE001
+            st.error(f"No entendí «{t}».")
+            return
+        if not isinstance(e, sp.Expr):
+            st.error("Cada variable debe ser una fórmula en los parámetros.")
+            return
+        subs.append(e)
+    params = sorted({s_ for e in subs for s_ in e.free_symbols if isinstance(s_, sp.Symbol)}, key=lambda q: q.name)
+    if not params:
+        st.warning("Las variables no dependen de ningún parámetro (todas son constantes).")
+        return
+    mostrar(calcular("regla_cadena", f, list(vs_), subs, params, timeout=45))
+
 # ==============================================================================
 # 4 · Despacho según el tipo de entrada
 # ==============================================================================
 tipo = info["tipo"]
 st.subheader("2 · Análisis")
 
-if isinstance(obj_original, Pertenencia) or tipo in ("punto", "vector", "lista", "conjunto", "logica", "cuantificada", "argumento",
+if tipo == "curva":
+    seccion_curva(obj_original)
+elif tipo == "campo":
+    seccion_campo(obj_original, info)
+elif tipo == "superficie":
+    seccion_superficie(obj_original)
+elif tipo == "operador_vec":
+    seccion_operador(obj_original)
+elif tipo == "integral_region":
+    seccion_integral_region(obj_original)
+elif tipo == "indexada":
+    r_ = calcular("evaluar_indexada", obj, timeout=30)
+    mostrar(r_)
+elif isinstance(obj_original, Pertenencia) or tipo in ("punto", "vector", "lista", "conjunto", "logica", "cuantificada", "argumento",
                                                       "comparacion", "vectorial"):
     seccion_estructura(obj_original, info)
 elif tipo == "constante" and isinstance(obj, sp.Expr):
@@ -878,7 +1213,7 @@ elif tipo == "relacion":
 elif tipo == "funcion":
     if n > 4:
         st.warning("Con más de 4 variables solo se ofrecen derivadas, gradiente y extremos; las gráficas no están disponibles.")
-    opciones = ["📋 Resumen y dominio"] + (["📈 Análisis completo"] if n == 1 else []) + [
+    opciones = ["📋 Resumen y dominio"] + (["📈 Análisis completo", "🌀 Curvatura de la gráfica"] if n == 1 else []) + [
         "∂ Derivadas", "→ Límites", "🔗 Continuidad", "⛰️ Extremos", "∫ Integrales", "Σ Series y sucesiones",
         "🧮 Taylor", "🗺️ Niveles y gráficas"]
     sec = st.radio("¿Qué quieres estudiar?", opciones, horizontal=True, key=f"calc_sec_{n}")
@@ -887,6 +1222,8 @@ elif tipo == "funcion":
         sec_resumen(obj, vs)
     elif sec.startswith("📈"):
         sec_analisis_1d(obj, vs[0])
+    elif sec.startswith("🌀"):
+        sec_curvatura(obj, vs)
     elif sec.startswith("∂"):
         sec_derivadas(obj, vs)
     elif sec.startswith("→"):
